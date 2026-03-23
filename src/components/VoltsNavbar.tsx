@@ -1,0 +1,38 @@
+import { Zap } from 'lucide-react';
+
+interface VoltsNavbarProps {
+  showActions?: boolean;
+  onHistoryClick?: () => void;
+  onLogout?: () => void;
+}
+
+export default function VoltsNavbar({ showActions, onHistoryClick, onLogout }: VoltsNavbarProps) {
+  return (
+    <nav className="w-full border-b bg-card px-6 py-3 flex items-center justify-between">
+      <div className={showActions ? '' : 'mx-auto'}>
+        <div className="flex items-center gap-2">
+          <div className="volts-gradient rounded-lg p-1.5">
+            <Zap className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <span className="text-lg font-bold tracking-tight">VOLTS</span>
+        </div>
+      </div>
+      {showActions && (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onHistoryClick}
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            History
+          </button>
+          <button
+            onClick={onLogout}
+            className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+          >
+            Logout
+          </button>
+        </div>
+      )}
+    </nav>
+  );
+}
