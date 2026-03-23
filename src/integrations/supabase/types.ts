@@ -14,7 +14,108 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      room_participants: {
+        Row: {
+          created_at: string
+          id: string
+          room_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          room_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          room_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      rooms: {
+        Row: {
+          created_at: string
+          host_id: string
+          id: string
+          room_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          host_id: string
+          id?: string
+          room_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          host_id?: string
+          id?: string
+          room_id?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      sessions: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transfer_history: {
+        Row: {
+          file_name: string
+          file_type: string
+          id: string
+          recipient_name: string
+          sender_id: string
+          sender_name: string
+          transferred_at: string
+        }
+        Insert: {
+          file_name: string
+          file_type?: string
+          id?: string
+          recipient_name: string
+          sender_id: string
+          sender_name: string
+          transferred_at?: string
+        }
+        Update: {
+          file_name?: string
+          file_type?: string
+          id?: string
+          recipient_name?: string
+          sender_id?: string
+          sender_name?: string
+          transferred_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
