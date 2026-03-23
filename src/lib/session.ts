@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'crypto';
-
 const SESSION_KEY = 'volts_user_id';
 const SESSION_NAME_KEY = 'volts_user_name';
 
