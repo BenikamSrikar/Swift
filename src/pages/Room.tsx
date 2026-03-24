@@ -521,6 +521,7 @@ export default function Room() {
                 showHostControls={isHost}
                 onRequestFile={() => handleRequestFile(p.user_id)}
                 onRequestFolder={() => handleRequestFolder(p.user_id)}
+                onRequestVideo={() => handleRequestVideo(p.user_id)}
                 onRemove={() => handleRemoveUser(p.user_id)}
               />
             </div>
