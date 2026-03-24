@@ -422,7 +422,7 @@ export default function Room() {
       .update({ status: 'blocked' })
       .eq('room_id', roomId!)
       .eq('user_id', targetUserId);
-    toast.success('User removed');
+    toast.error('User removed');
   };
 
   const handleLogout = async () => {
