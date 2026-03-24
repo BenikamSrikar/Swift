@@ -289,7 +289,7 @@ export default function Room() {
           offset += chunkSize;
         }
         dc.send(JSON.stringify({ type: 'done' }));
-        toast.success(`Sent: ${file.name}`);
+        toast.success(`Sent: ${file.name}`, { duration: 4000 });
       };
       sendChunk();
     };
