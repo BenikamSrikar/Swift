@@ -28,7 +28,7 @@ export default function TransferRequestDialog({
     <AlertDialog open={open}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{type === 'file' ? 'File' : 'Folder'} Request</AlertDialogTitle>
+          <AlertDialogTitle>{type === 'file' ? 'File' : type === 'video' ? 'Video' : 'Folder'} Request</AlertDialogTitle>
           <AlertDialogDescription>
             <span className="font-medium text-foreground">{requesterName}</span>{' '}
             is requesting a {type} from you. Would you like to select and send?
