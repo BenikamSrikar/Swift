@@ -20,7 +20,7 @@ const SHIFT_ITEMS = [
     image: shiftSecure,
     brief: 'Your privacy is non-negotiable.',
     description:
-      'Every transfer in SHIFT is peer-to-peer using WebRTC — your files never pass through any server. With end-to-end encryption baked into the protocol, only the sender and receiver can access the data. No cloud storage, no logs, no traces. It's as if the transfer never happened — except you have the file.',
+      "Every transfer in SHIFT is peer-to-peer using WebRTC \u2014 your files never pass through any server. With end-to-end encryption baked into the protocol, only the sender and receiver can access the data. No cloud storage, no logs, no traces. It's as if the transfer never happened \u2014 except you have the file.",
   },
   {
     letter: 'H',
