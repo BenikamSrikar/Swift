@@ -32,18 +32,21 @@ function drawLaptop(
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x - w / 2, y - h / 2, w, h, [r, r, 0, 0]);
-  ctx.fillStyle = COLORS.dark;
+  ctx.fillStyle = COLORS.white;
   ctx.fill();
-  ctx.strokeStyle = COLORS.darkMuted;
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = COLORS.red;
+  ctx.lineWidth = 2;
   ctx.stroke();
 
   // Screen inner
   const pad = 5 * scale;
   ctx.beginPath();
   ctx.roundRect(x - w / 2 + pad, y - h / 2 + pad, w - pad * 2, h - pad * 2 - 2, [3, 3, 0, 0]);
-  ctx.fillStyle = 'hsl(0, 0%, 6%)';
+  ctx.fillStyle = 'hsl(0, 0%, 96%)';
   ctx.fill();
+  ctx.strokeStyle = COLORS.red;
+  ctx.lineWidth = 1;
+  ctx.stroke();
 
   // Icon on screen
   ctx.fillStyle = COLORS.red;
@@ -56,8 +59,11 @@ function drawLaptop(
   // Base
   ctx.beginPath();
   ctx.roundRect(x - w / 2 - 6 * scale, y + h / 2, w + 12 * scale, baseH, [0, 0, r, r]);
-  ctx.fillStyle = COLORS.darkMuted;
+  ctx.fillStyle = COLORS.white;
   ctx.fill();
+  ctx.strokeStyle = COLORS.red;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
   ctx.restore();
 }
 
