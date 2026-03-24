@@ -39,21 +39,34 @@ function drawChromeLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r
 }
 
 function drawEdgeLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  // Base circle with gradient
   const grad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
   grad.addColorStop(0, '#0078D4');
-  grad.addColorStop(1, '#50E6FF');
+  grad.addColorStop(0.5, '#0093E9');
+  grad.addColorStop(1, '#80D0C7');
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fillStyle = grad;
   ctx.fill();
+
+  // Stylized "e" — a white crescent/wave
+  ctx.save();
   ctx.beginPath();
-  ctx.arc(cx + r * 0.1, cy - r * 0.05, r * 0.55, 0, Math.PI * 1.6);
+  // Main white arc (bottom-right portion)
+  ctx.arc(cx, cy + r * 0.08, r * 0.7, Math.PI * 0.15, Math.PI * 1.85);
   ctx.fillStyle = '#fff';
   ctx.fill();
+
+  // Cut out inner to form the "e" hole
   ctx.beginPath();
-  ctx.arc(cx + r * 0.1, cy - r * 0.05, r * 0.3, 0, Math.PI * 2);
+  ctx.arc(cx - r * 0.05, cy + r * 0.12, r * 0.42, 0, Math.PI * 2);
   ctx.fillStyle = '#0078D4';
   ctx.fill();
+
+  // Horizontal bar of the "e"
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(cx - r * 0.05, cy - r * 0.05, r * 0.75, r * 0.15);
+  ctx.restore();
 }
 
 function drawSafariLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
