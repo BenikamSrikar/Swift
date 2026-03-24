@@ -45,6 +45,7 @@ export default function Room() {
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
+  const transferChannelRef = useRef<any>(null);
 
   const isHost = room?.host_id === userId;
 
