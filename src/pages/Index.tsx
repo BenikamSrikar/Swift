@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { generateUserId, storeSession } from '@/lib/session';
 import { ArrowRight } from 'lucide-react';
 import ParticleField from '@/components/ParticleField';
+import NetworkAnimation from '@/components/NetworkAnimation';
 
 import shiftSecure from '@/assets/shift-secure.png';
 import shiftHighspeed from '@/assets/shift-highspeed.png';
