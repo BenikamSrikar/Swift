@@ -199,44 +199,44 @@ export default function Connection() {
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={handleHistory} />
 
       <main className="flex-1 flex items-center justify-center px-4">
-        <div className="w-full max-w-sm space-y-6 animate-fade-up">
+        <div className="w-full max-w-2xl space-y-6 animate-fade-up">
           <div className="text-center">
             <p className="text-sm text-muted-foreground mb-1">Logged in as</p>
             <p className="font-semibold text-lg">{userName}</p>
           </div>
 
-          <div className="space-y-3">
-            <Button
-              onClick={handleCreateRoom}
-              disabled={creating}
-              className="w-full h-12 text-base font-semibold gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              {creating ? 'Creating…' : 'Create Room'}
-            </Button>
-
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <div className="flex-1 h-px bg-border" />
-              <span>or</span>
-              <div className="flex-1 h-px bg-border" />
+          <div className="flex gap-4 items-stretch">
+            {/* Create Room */}
+            <div className="flex-1 border rounded-xl p-6 bg-card flex flex-col items-center justify-center gap-3">
+              <Plus className="h-6 w-6 text-primary" />
+              <Button
+                onClick={handleCreateRoom}
+                disabled={creating}
+                className="w-full h-12 text-base font-semibold gap-2"
+              >
+                {creating ? 'Creating…' : 'Create Room'}
+              </Button>
             </div>
 
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter Room ID"
-                value={roomInput}
-                onChange={(e) => setRoomInput(e.target.value)}
-                className="h-12 font-mono text-sm"
-              />
-              <Button
-                onClick={handleJoinRoom}
-                disabled={!roomInput.trim() || joining}
-                variant="outline"
-                className="h-12 px-6 gap-2 shrink-0"
-              >
-                <LogIn className="h-4 w-4" />
-                Join
-              </Button>
+            {/* Join Room */}
+            <div className="flex-1 border rounded-xl p-6 bg-card flex flex-col items-center justify-center gap-3">
+              <LogIn className="h-6 w-6 text-primary" />
+              <div className="flex gap-2 w-full">
+                <Input
+                  placeholder="Enter Room ID"
+                  value={roomInput}
+                  onChange={(e) => setRoomInput(e.target.value)}
+                  className="h-12 font-mono text-sm"
+                />
+                <Button
+                  onClick={handleJoinRoom}
+                  disabled={!roomInput.trim() || joining}
+                  variant="outline"
+                  className="h-12 px-6 shrink-0"
+                >
+                  Join
+                </Button>
+              </div>
             </div>
           </div>
 
