@@ -9,6 +9,12 @@ const COLORS = {
   edge: 'hsla(355, 82%, 56%, 0.4)',
 };
 
+const LOGO_URLS: Record<string, string> = {
+  chrome: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Google_Chrome_icon_%28February_2022%29.svg/120px-Google_Chrome_icon_%28February_2022%29.svg.png',
+  firefox: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Firefox_logo%2C_2019.svg/120px-Firefox_logo%2C_2019.svg.png',
+  safari: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Safari_browser_logo.svg/120px-Safari_browser_logo.svg.png',
+};
+
 interface Laptop {
   x: number;
   y: number;
