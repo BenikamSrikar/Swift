@@ -162,8 +162,8 @@ export default function Index() {
             </p>
           </div>
 
-          {/* Right: network animation */}
-          <div className="flex-1 w-full min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+          {/* Right: network animation — hidden on mobile */}
+          <div className="hidden lg:flex flex-1 w-full min-h-[400px] lg:min-h-[500px]">
             <NetworkAnimation />
           </div>
         </div>
