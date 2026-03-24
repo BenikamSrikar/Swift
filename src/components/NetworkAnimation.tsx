@@ -243,12 +243,69 @@ export default function NetworkAnimation() {
         drawLaptop(ctx, l.x, l.y, l.icon, scale);
       });
 
-      // Labels
-      ctx.fillStyle = COLORS.dark;
-      ctx.font = `${11 * scale}px sans-serif`;
-      ctx.textAlign = 'center';
-      laptops.forEach((l) => {
-        ctx.fillText(l.label, l.x, l.y + 38 * scale);
+      // Callout labels with circuit path animation
+      const calloutProgress = Math.min(1, (t % 8) / 1.5); // animate in first 1.5s of each 8s cycle
+      const calloutOffsets = [
+        { dx: 50 * scale, dy: -30 * scale },   // Chrome: top-right callout
+        { dx: -55 * scale, dy: 25 * scale },   // Firefox: bottom-left callout
+        { dx: 55 * scale, dy: 25 * scale },    // Safari: bottom-right callout
+      ];
+
+      laptops.forEach((l, i) => {
+        const offset = calloutOffsets[i];
+        const startX = l.x;
+        const startY = l.y + 28 * scale;
+        const elbowX = startX + offset.dx * 0.4;
+        const elbowY = startY + offset.dy;
+        const endX = startX + offset.dx;
+        const endY = elbowY;
+
+        // Draw circuit path
+        ctx.save();
+        ctx.strokeStyle = COLORS.red;
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([3, 3]);
+
+        // Vertical segment
+        const seg1End = Math.min(1, calloutProgress * 2);
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(startX, startY + (elbowY - startY) * seg1End);
+        ctx.stroke();
+
+        // Horizontal segment
+        if (calloutProgress > 0.5) {
+          const seg2End = Math.min(1, (calloutProgress - 0.5) * 2);
+          ctx.beginPath();
+          ctx.moveTo(elbowX * 0 + startX, elbowY); // from elbow point (straight down from start)
+          ctx.lineTo(startX + (endX - startX) * seg2End, endY);
+          ctx.stroke();
+        }
+
+        ctx.setLineDash([]);
+
+        // Circuit dot at start
+        ctx.beginPath();
+        ctx.arc(startX, startY, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = COLORS.red;
+        ctx.fill();
+
+        // Label text at the end
+        if (calloutProgress >= 1) {
+          ctx.fillStyle = COLORS.dark;
+          ctx.font = `600 ${10 * scale}px sans-serif`;
+          ctx.textAlign = offset.dx > 0 ? 'left' : 'right';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(l.label, endX + (offset.dx > 0 ? 4 : -4) * scale, endY);
+
+          // Small dot at end
+          ctx.beginPath();
+          ctx.arc(endX, endY, 2, 0, Math.PI * 2);
+          ctx.fillStyle = COLORS.red;
+          ctx.fill();
+        }
+
+        ctx.restore();
       });
 
       animRef.current = requestAnimationFrame(draw);
