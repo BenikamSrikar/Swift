@@ -260,7 +260,7 @@ export default function NetworkAnimation() {
       // Triangle positions (top, bottom-left, bottom-right)
       const laptops: Laptop[] = [
         { x: cx, y: cy - radius, label: 'Chrome', icon: 'chrome' },
-        { x: cx - radius * 0.87, y: cy + radius * 0.5, label: 'Edge', icon: 'edge' },
+        { x: cx - radius * 0.87, y: cy + radius * 0.5, label: 'Firefox', icon: 'firefox' },
         { x: cx + radius * 0.87, y: cy + radius * 0.5, label: 'Safari', icon: 'safari' },
       ];
 
