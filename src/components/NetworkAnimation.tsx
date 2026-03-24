@@ -22,87 +22,34 @@ interface Laptop {
   icon: 'chrome' | 'firefox' | 'safari';
 }
 
-function drawChromeLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
-  const colors = ['#EA4335', '#34A853', '#FBBC05'];
-  for (let i = 0; i < 3; i++) {
-    ctx.beginPath();
-    const sa = (i * 2 * Math.PI) / 3 - Math.PI / 2;
-    const ea = ((i + 1) * 2 * Math.PI) / 3 - Math.PI / 2;
-    ctx.arc(cx, cy, r, sa, ea);
-    ctx.lineTo(cx, cy);
-    ctx.closePath();
-    ctx.fillStyle = colors[i];
-    ctx.fill();
-  }
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.42, 0, Math.PI * 2);
-  ctx.fillStyle = '#4285F4';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.28, 0, Math.PI * 2);
-  ctx.fillStyle = '#fff';
-  ctx.fill();
-}
+// Pre-load logo images
+const logoImages: Record<string, HTMLImageElement> = {};
+let logosLoaded = false;
 
-function drawFirefoxLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
-  // Orange-yellow globe
-  const grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
-  grad.addColorStop(0, '#FFBD4F');
-  grad.addColorStop(0.5, '#FF980E');
-  grad.addColorStop(1, '#FF3750');
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // Inner blue-purple globe
-  const inner = ctx.createRadialGradient(cx + r * 0.1, cy + r * 0.1, 0, cx, cy, r * 0.65);
-  inner.addColorStop(0, '#510097');
-  inner.addColorStop(1, '#351377');
-  ctx.beginPath();
-  ctx.arc(cx + r * 0.05, cy + r * 0.05, r * 0.55, 0, Math.PI * 2);
-  ctx.fillStyle = inner;
-  ctx.fill();
-
-  // Fox tail wrap (orange arc)
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.85, -Math.PI * 0.3, Math.PI * 1.2);
-  ctx.strokeStyle = '#FF6611';
-  ctx.lineWidth = r * 0.25;
-  ctx.lineCap = 'round';
-  ctx.stroke();
-}
-
-function drawSafariLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
-  const grad = ctx.createLinearGradient(cx, cy - r, cx, cy + r);
-  grad.addColorStop(0, '#5AC8FA');
-  grad.addColorStop(1, '#007AFF');
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = grad;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.82, 0, Math.PI * 2);
-  ctx.fillStyle = '#fff';
-  ctx.fill();
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(-Math.PI / 4);
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 0.65);
-  ctx.lineTo(r * 0.12, 0);
-  ctx.lineTo(-r * 0.12, 0);
-  ctx.closePath();
-  ctx.fillStyle = '#FF3B30';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(0, r * 0.65);
-  ctx.lineTo(r * 0.12, 0);
-  ctx.lineTo(-r * 0.12, 0);
-  ctx.closePath();
-  ctx.fillStyle = '#ccc';
-  ctx.fill();
-  ctx.restore();
+function preloadLogos(onLoad: () => void) {
+  if (logosLoaded) return;
+  let count = 0;
+  const total = Object.keys(LOGO_URLS).length;
+  Object.entries(LOGO_URLS).forEach(([key, url]) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      logoImages[key] = img;
+      count++;
+      if (count >= total) {
+        logosLoaded = true;
+        onLoad();
+      }
+    };
+    img.onerror = () => {
+      count++;
+      if (count >= total) {
+        logosLoaded = true;
+        onLoad();
+      }
+    };
+    img.src = url;
+  });
 }
 
 function drawLaptop(
