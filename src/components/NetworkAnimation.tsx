@@ -85,14 +85,11 @@ function drawLaptop(
   ctx.stroke();
 
   // Browser logo on screen
-  const logoSize = 10 * scale;
+  const logoSize = 16 * scale;
   const ly = y - 4 * scale;
-  if (icon === 'chrome') {
-    drawChromeLogo(ctx, x, ly, logoSize);
-  } else if (icon === 'firefox') {
-    drawFirefoxLogo(ctx, x, ly, logoSize);
-  } else {
-    drawSafariLogo(ctx, x, ly, logoSize);
+  const logoImg = logoImages[icon];
+  if (logoImg) {
+    ctx.drawImage(logoImg, x - logoSize / 2, ly - logoSize / 2, logoSize, logoSize);
   }
 
   // Base
