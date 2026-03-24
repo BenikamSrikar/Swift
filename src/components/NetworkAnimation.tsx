@@ -254,6 +254,7 @@ export default function NetworkAnimation() {
       animRef.current = requestAnimationFrame(draw);
     };
 
+    preloadLogos(() => {});
     animRef.current = requestAnimationFrame(draw);
 
     return () => {
