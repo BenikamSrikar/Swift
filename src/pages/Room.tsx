@@ -237,7 +237,7 @@ export default function Room() {
         const msg = JSON.parse(event.data);
         if (msg.type === 'metadata') {
           metadata = msg;
-          toast.info(`Receiving: ${msg.name}`);
+          toast.info(`Receiving: ${msg.name}`, { duration: 3000 });
         } else if (msg.type === 'done') {
           const blob = new Blob(chunks);
           const url = URL.createObjectURL(blob);
