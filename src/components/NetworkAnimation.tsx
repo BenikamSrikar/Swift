@@ -38,35 +38,33 @@ function drawChromeLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r
   ctx.fill();
 }
 
-function drawEdgeLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
-  // Base circle with gradient
-  const grad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
-  grad.addColorStop(0, '#0078D4');
-  grad.addColorStop(0.5, '#0093E9');
-  grad.addColorStop(1, '#80D0C7');
+function drawFirefoxLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  // Orange-yellow globe
+  const grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
+  grad.addColorStop(0, '#FFBD4F');
+  grad.addColorStop(0.5, '#FF980E');
+  grad.addColorStop(1, '#FF3750');
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fillStyle = grad;
   ctx.fill();
 
-  // Stylized "e" — a white crescent/wave
-  ctx.save();
+  // Inner blue-purple globe
+  const inner = ctx.createRadialGradient(cx + r * 0.1, cy + r * 0.1, 0, cx, cy, r * 0.65);
+  inner.addColorStop(0, '#510097');
+  inner.addColorStop(1, '#351377');
   ctx.beginPath();
-  // Main white arc (bottom-right portion)
-  ctx.arc(cx, cy + r * 0.08, r * 0.7, Math.PI * 0.15, Math.PI * 1.85);
-  ctx.fillStyle = '#fff';
+  ctx.arc(cx + r * 0.05, cy + r * 0.05, r * 0.55, 0, Math.PI * 2);
+  ctx.fillStyle = inner;
   ctx.fill();
 
-  // Cut out inner to form the "e" hole
+  // Fox tail wrap (orange arc)
   ctx.beginPath();
-  ctx.arc(cx - r * 0.05, cy + r * 0.12, r * 0.42, 0, Math.PI * 2);
-  ctx.fillStyle = '#0078D4';
-  ctx.fill();
-
-  // Horizontal bar of the "e"
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(cx - r * 0.05, cy - r * 0.05, r * 0.75, r * 0.15);
-  ctx.restore();
+  ctx.arc(cx, cy, r * 0.85, -Math.PI * 0.3, Math.PI * 1.2);
+  ctx.strokeStyle = '#FF6611';
+  ctx.lineWidth = r * 0.25;
+  ctx.lineCap = 'round';
+  ctx.stroke();
 }
 
 function drawSafariLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
