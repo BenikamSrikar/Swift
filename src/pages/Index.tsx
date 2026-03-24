@@ -52,7 +52,7 @@ const SHIFT_ITEMS = [
     image: shiftTransfer,
     brief: 'Ephemeral by design.',
     description:
-      'SHIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history exists only for the sender during the active session and can be exported as a PDF. Once you log out or close the tab — it's gone. This is file transfer distilled to its purest form.',
+      "SHIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history exists only for the sender during the active session and can be exported as a PDF. Once you log out or close the tab \u2014 it's gone. This is file transfer distilled to its purest form.",
   },
 ];
 
