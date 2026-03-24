@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getStoredUserId, getStoredUserName, clearSession } from '@/lib/session';
 import { Plus, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
+import { generateRoomId } from '@/lib/roomId';
 
 export default function Connection() {
   const [searchParams] = useSearchParams();
