@@ -53,7 +53,7 @@ function drawLaptop(
   ctx.font = `bold ${14 * scale}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const iconChar = icon === 'windows' ? '⊞' : icon === 'mac' ? '' : '◆';
+  const iconChar = icon === 'chrome' ? '◉' : icon === 'edge' ? '◈' : '◎';
   ctx.fillText(iconChar, x, y - 4 * scale);
 
   // Base
