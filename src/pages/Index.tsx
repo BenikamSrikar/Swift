@@ -183,7 +183,7 @@ export default function Index() {
           <section
             key={letter}
             ref={(el: HTMLDivElement | null) => { sectionRefs.current[i] = el; }}
-            className="scroll-section min-h-screen flex items-center justify-center px-6 sm:px-12"
+            className={`scroll-section ${style.anim} min-h-screen flex items-center justify-center px-6 sm:px-12`}
             style={{ backgroundColor: style.custom }}
           >
             <div
