@@ -208,7 +208,7 @@ export default function NetworkAnimation() {
       });
 
       // Labels
-      ctx.fillStyle = COLORS.white;
+      ctx.fillStyle = COLORS.dark;
       ctx.font = `${11 * scale}px sans-serif`;
       ctx.textAlign = 'center';
       laptops.forEach((l) => {
