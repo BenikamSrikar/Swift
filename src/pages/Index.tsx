@@ -5,14 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { generateUserId, storeSession } from '@/lib/session';
-import { ArrowRight, Shield, Zap, Timer, FolderOpen, ArrowRightLeft } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+
+import shiftSecure from '@/assets/shift-secure.png';
+import shiftHighspeed from '@/assets/shift-highspeed.png';
+import shiftInstant from '@/assets/shift-instant.png';
+import shiftFiles from '@/assets/shift-files.png';
+import shiftTransfer from '@/assets/shift-transfer.png';
 
 const SHIFT_ITEMS = [
-  { letter: 'S', word: 'Secure', icon: Shield, description: 'End-to-end encrypted peer-to-peer transfers with no data stored on servers' },
-  { letter: 'H', word: 'High-speed', icon: Zap, description: 'Direct WebRTC connections for maximum transfer speed without bottlenecks' },
-  { letter: 'I', word: 'Instant', icon: Timer, description: 'No signup, no waiting — create a session and start transferring immediately' },
-  { letter: 'F', word: 'Files or Folders', icon: FolderOpen, description: 'Transfer individual files, entire folders, or video files seamlessly' },
-  { letter: 'T', word: 'Transfer', icon: ArrowRightLeft, description: 'Peer-to-peer delivery with real-time progress and download notifications' },
+  { letter: 'S', word: 'Secure', image: shiftSecure, description: 'End-to-end encrypted peer-to-peer transfers. Your data never touches a server — it goes directly to the recipient.' },
+  { letter: 'H', word: 'High-speed', image: shiftHighspeed, description: 'Direct WebRTC connections eliminate middlemen, giving you the fastest possible transfer speeds.' },
+  { letter: 'I', word: 'Instant', image: shiftInstant, description: 'No signups, no waiting. Enter your name, create a room, and start transferring in seconds.' },
+  { letter: 'F', word: 'Files or Folders', image: shiftFiles, description: 'Send individual files, entire folders compressed as ZIP, or video files — all seamlessly.' },
+  { letter: 'T', word: 'Transfer', image: shiftTransfer, description: 'Real-time peer-to-peer delivery with download notifications. Ephemeral sessions — nothing stored permanently.' },
 ];
 
 export default function Index() {
@@ -82,25 +88,29 @@ export default function Index() {
           </p>
         </div>
 
-        {/* SHIFT Acronym Cards */}
-        <div className="w-full max-w-4xl mt-12 animate-fade-up" style={{ animationDelay: '300ms' }}>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            {SHIFT_ITEMS.map(({ letter, word, icon: Icon, description }) => (
-              <div
-                key={letter}
-                className="border rounded-xl p-4 bg-card hover:border-primary/50 transition-colors text-center flex flex-col items-center gap-2"
-              >
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Icon className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <span className="text-xl font-bold text-primary">{letter}</span>
-                  <span className="text-sm font-semibold text-foreground ml-0.5">— {word}</span>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+        {/* SHIFT Acronym Sections */}
+        <div className="w-full max-w-3xl mt-16 space-y-10 animate-fade-up" style={{ animationDelay: '300ms' }}>
+          {SHIFT_ITEMS.map(({ letter, word, image, description }, i) => (
+            <div
+              key={letter}
+              className={`flex flex-col sm:flex-row items-center gap-6 ${i % 2 !== 0 ? 'sm:flex-row-reverse' : ''}`}
+            >
+              <img
+                src={image}
+                alt={word}
+                width={120}
+                height={120}
+                loading="lazy"
+                className="shrink-0"
+              />
+              <div className={`text-center sm:text-left ${i % 2 !== 0 ? 'sm:text-right' : ''}`}>
+                <h2 className="text-xl font-bold mb-1">
+                  <span className="text-primary">{letter}</span> — {word}
+                </h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </main>
     </div>
