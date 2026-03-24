@@ -237,7 +237,7 @@ export default function Room() {
         const msg = JSON.parse(event.data);
         if (msg.type === 'metadata') {
           metadata = msg;
-          toast.info(`Receiving: ${msg.name}`);
+          toast.info(`Receiving: ${msg.name}`, { duration: 3000 });
         } else if (msg.type === 'done') {
           const blob = new Blob(chunks);
           const url = URL.createObjectURL(blob);
@@ -289,7 +289,7 @@ export default function Room() {
           offset += chunkSize;
         }
         dc.send(JSON.stringify({ type: 'done' }));
-        toast.success(`Sent: ${file.name}`);
+        toast.success(`Sent: ${file.name}`, { duration: 4000 });
       };
       sendChunk();
     };
@@ -422,7 +422,7 @@ export default function Room() {
       .update({ status: 'blocked' })
       .eq('room_id', roomId!)
       .eq('user_id', targetUserId);
-    toast.success('User removed');
+    toast.error('User removed');
   };
 
   const handleLogout = async () => {
