@@ -86,7 +86,7 @@ function drawCenterHub(
   // Circle
   ctx.beginPath();
   ctx.arc(cx, cy, 22 * scale, 0, Math.PI * 2);
-  ctx.fillStyle = COLORS.dark;
+  ctx.fillStyle = COLORS.white;
   ctx.fill();
   ctx.strokeStyle = COLORS.red;
   ctx.lineWidth = 2.5 * scale;
