@@ -240,7 +240,7 @@ export default function Connection() {
           </div>
 
           <p className="text-center text-xs text-muted-foreground">
-            Your Room ID is your User ID. Share it with others to let them join.
+            Create a room or enter a 6-character Room ID to join.
           </p>
         </div>
       </main>
