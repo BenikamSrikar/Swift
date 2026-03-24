@@ -45,7 +45,6 @@ export default function Connection() {
       return;
     }
 
-    // Add host as participant
     await supabase.from('room_participants').insert({
       room_id: roomId,
       user_id: userId,
@@ -59,7 +58,6 @@ export default function Connection() {
     if (!userId || !roomInput.trim()) return;
     setJoining(true);
 
-    // Check room exists
     const { data: room } = await supabase
       .from('rooms')
       .select('*')
@@ -78,7 +76,6 @@ export default function Connection() {
       return;
     }
 
-    // Check if blocked
     const { data: existing } = await supabase
       .from('room_participants')
       .select('status')
@@ -97,7 +94,6 @@ export default function Connection() {
       return;
     }
 
-    // Add as pending
     if (!existing) {
       await supabase.from('room_participants').insert({
         room_id: roomInput.trim(),
@@ -106,7 +102,6 @@ export default function Connection() {
       });
     }
 
-    // Subscribe to status changes
     setWaitingApproval(true);
 
     const channel = supabase
@@ -158,7 +153,6 @@ export default function Connection() {
       return;
     }
 
-    // Generate simple PDF
     const { generateHistoryPdf } = await import('@/lib/pdfExport');
     generateHistoryPdf(userName || 'Unknown', data);
   };
@@ -203,10 +197,12 @@ export default function Connection() {
             <p className="font-semibold text-lg">{userName}</p>
           </div>
 
-          <div className="flex gap-4 items-stretch">
+          {/* Horizontal on desktop/tablet, stacked on mobile */}
+          <div className="flex flex-col sm:flex-row gap-4 items-stretch">
             {/* Create Room */}
             <div className="flex-1 border rounded-xl p-6 bg-card flex flex-col items-center justify-center gap-3">
               <Plus className="h-6 w-6 text-primary" />
+              <p className="text-sm font-medium text-muted-foreground">Start a new room</p>
               <Button
                 onClick={handleCreateRoom}
                 disabled={creating}
@@ -216,9 +212,18 @@ export default function Connection() {
               </Button>
             </div>
 
+            {/* Divider */}
+            <div className="hidden sm:flex items-center">
+              <span className="text-xs text-muted-foreground font-medium">OR</span>
+            </div>
+            <div className="flex sm:hidden items-center justify-center">
+              <span className="text-xs text-muted-foreground font-medium">— OR —</span>
+            </div>
+
             {/* Join Room */}
             <div className="flex-1 border rounded-xl p-6 bg-card flex flex-col items-center justify-center gap-3">
               <LogIn className="h-6 w-6 text-primary" />
+              <p className="text-sm font-medium text-muted-foreground">Join with Room ID</p>
               <div className="flex gap-2 w-full">
                 <Input
                   placeholder="e.g. A1B2C3"

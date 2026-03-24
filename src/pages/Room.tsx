@@ -505,8 +505,8 @@ export default function Room() {
           </div>
         )}
 
-        {/* Participants */}
-        <div className="space-y-3">
+        {/* Participants — grid on desktop/tablet, stacked on mobile */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {participants
           .filter((p) => p.user_id !== userId)
           .map((p, i) => (
