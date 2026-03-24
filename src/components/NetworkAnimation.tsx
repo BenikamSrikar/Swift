@@ -136,8 +136,8 @@ function drawLaptop(
   const ly = y - 4 * scale;
   if (icon === 'chrome') {
     drawChromeLogo(ctx, x, ly, logoSize);
-  } else if (icon === 'edge') {
-    drawEdgeLogo(ctx, x, ly, logoSize);
+  } else if (icon === 'firefox') {
+    drawFirefoxLogo(ctx, x, ly, logoSize);
   } else {
     drawSafariLogo(ctx, x, ly, logoSize);
   }
