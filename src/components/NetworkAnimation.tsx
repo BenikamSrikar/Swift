@@ -6,7 +6,7 @@ const COLORS = {
   dark: 'hsl(0, 0%, 10%)',
   darkMuted: 'hsl(0, 0%, 25%)',
   white: 'hsl(0, 0%, 95%)',
-  edge: 'hsl(0, 0%, 15%)',
+  edge: 'hsla(355, 82%, 56%, 0.4)',
 };
 
 interface Laptop {
