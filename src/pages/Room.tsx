@@ -27,7 +27,7 @@ interface PendingRequest {
 interface TransferRequest {
   fromUserId: string;
   fromName: string;
-  type: 'file' | 'folder';
+  type: 'file' | 'folder' | 'video';
 }
 
 export default function Room() {
