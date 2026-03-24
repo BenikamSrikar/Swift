@@ -241,12 +241,19 @@ export default function Room() {
         } else if (msg.type === 'done') {
           const blob = new Blob(chunks);
           const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = metadata?.name || 'download';
-          a.click();
-          URL.revokeObjectURL(url);
-          toast.success(`Received: ${metadata?.name}`);
+          toast.success(`File received: ${metadata?.name}`, {
+            action: {
+              label: 'Download',
+              onClick: () => {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = metadata?.name || 'download';
+                a.click();
+                URL.revokeObjectURL(url);
+              },
+            },
+            duration: 15000,
+          });
           dc.close();
         }
       } else {

@@ -1,5 +1,3 @@
-import { ArrowRightLeft } from 'lucide-react';
-
 interface VoltsNavbarProps {
   showActions?: boolean;
   onHistoryClick?: () => void;
@@ -10,11 +8,9 @@ export default function VoltsNavbar({ showActions, onHistoryClick, onLogout }: V
   return (
     <nav className="w-full border-b bg-card px-6 py-3 flex items-center justify-between">
       <div className={showActions ? '' : 'mx-auto'}>
-        <div className="flex items-center gap-2">
-          <div className="volts-gradient rounded-lg p-1.5">
-            <ArrowRightLeft className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-bold tracking-tight">SHIFT</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-lg font-bold tracking-tight text-primary">SHIFT</span>
+          <span className="text-xs font-medium text-foreground">v1.0</span>
         </div>
       </div>
       {showActions && (
