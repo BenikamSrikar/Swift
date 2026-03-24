@@ -271,26 +271,39 @@ export default function Room() {
   };
 
   const sendFileViaPeer = async (targetUserId: string, file: File) => {
-    const channel = supabase.channel(`transfers-${roomId}`);
+    const channel = transferChannelRef.current;
+    if (!channel) {
+      toast.error('Channel not ready, try again');
+      return;
+    }
 
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ],
     });
     peerConnections.current.set(targetUserId, pc);
 
     const dc = pc.createDataChannel('file-transfer');
     dataChannels.current.set(targetUserId, dc);
 
+    dc.binaryType = 'arraybuffer';
+    dc.bufferedAmountLowThreshold = 65536;
+
     dc.onopen = async () => {
       dc.send(JSON.stringify({ type: 'metadata', name: file.name, size: file.size }));
-      const chunkSize = 16384;
+      const chunkSize = 65536; // 64KB chunks for faster transfer
       const buffer = await file.arrayBuffer();
       let offset = 0;
 
       const sendChunk = () => {
         while (offset < buffer.byteLength) {
-          if (dc.bufferedAmount > chunkSize * 8) {
-            setTimeout(sendChunk, 50);
+          if (dc.bufferedAmount > chunkSize * 4) {
+            dc.onbufferedamountlow = () => {
+              dc.onbufferedamountlow = null;
+              sendChunk();
+            };
             return;
           }
           dc.send(buffer.slice(offset, offset + chunkSize));
