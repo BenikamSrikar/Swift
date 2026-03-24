@@ -36,7 +36,7 @@ const SHIFT_ITEMS = [
     image: shiftInstant,
     brief: 'Zero friction, zero accounts.',
     description:
-      'No sign-ups, no email verification, no passwords to remember. Just type your name and you're in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds. SHIFT is designed for the moments when you need to move a file right now — not after filling out three forms.',
+      "No sign-ups, no email verification, no passwords to remember. Just type your name and you're in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds. SHIFT is designed for the moments when you need to move a file right now \u2014 not after filling out three forms.",
   },
   {
     letter: 'F',
