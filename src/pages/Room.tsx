@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import VoltsNavbar from '@/components/VoltsNavbar';
 import UserCard from '@/components/UserCard';
+import UserAvatar from '@/components/UserAvatar';
+import SignalStrength from '@/components/SignalStrength';
 import JoinRequestDialog from '@/components/JoinRequestDialog';
 import TransferRequestDialog from '@/components/TransferRequestDialog';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,7 +48,7 @@ export default function Room() {
 
   const isHost = room?.host_id === userId;
 
-  // Load room + participants
+  // Load room initially
   useEffect(() => {
     if (!userId || !userName || !roomId) {
       navigate('/');
@@ -67,12 +69,12 @@ export default function Room() {
       }
 
       setRoom(roomData);
-      await loadParticipants();
     };
 
     loadRoom();
   }, [roomId, userId, userName, navigate]);
 
+  // Load participants - no dependency on currentRequest to avoid stale closures
   const loadParticipants = useCallback(async () => {
     if (!roomId) return;
 
@@ -83,11 +85,16 @@ export default function Room() {
 
     if (!parts) return;
 
-    // Get names for accepted participants
     const accepted = parts.filter((p) => p.status === 'accepted');
     const pending = parts.filter((p) => p.status === 'pending');
 
     const userIds = [...accepted, ...pending].map((p) => p.user_id);
+    if (userIds.length === 0) {
+      setParticipants([]);
+      setPendingRequests([]);
+      return;
+    }
+
     const { data: sessions } = await supabase
       .from('sessions')
       .select('user_id, name')
@@ -103,24 +110,31 @@ export default function Room() {
       }))
     );
 
-    // Update pending requests for host
     const newPending = pending.map((p) => ({
       userId: p.user_id,
       name: nameMap.get(p.user_id) || 'Unknown',
     }));
 
     setPendingRequests(newPending);
-    if (newPending.length > 0 && !currentRequest) {
-      setCurrentRequest(newPending[0]);
+    // Show the first pending request if any
+    if (newPending.length > 0) {
+      setCurrentRequest((prev) => prev ?? newPending[0]);
+    } else {
+      setCurrentRequest(null);
     }
-  }, [roomId, currentRequest]);
+  }, [roomId]);
 
-  // Subscribe to participant changes
+  // Initial load of participants
+  useEffect(() => {
+    if (roomId) loadParticipants();
+  }, [roomId, loadParticipants]);
+
+  // Subscribe to participant changes - REAL-TIME fix
   useEffect(() => {
     if (!roomId) return;
 
     const channel = supabase
-      .channel(`room-${roomId}`)
+      .channel(`room-participants-${roomId}`)
       .on(
         'postgres_changes',
         {
@@ -130,13 +144,14 @@ export default function Room() {
           filter: `room_id=eq.${roomId}`,
         },
         () => {
+          // Reload participants on ANY change (insert, update, delete)
           loadParticipants();
         }
       )
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [roomId, loadParticipants]);
 
@@ -178,7 +193,7 @@ export default function Room() {
     channel.subscribe();
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [roomId, userId]);
 
@@ -189,8 +204,7 @@ export default function Room() {
     peerConnections.current.set(fromUserId, pc);
 
     pc.ondatachannel = (event) => {
-      const dc = event.channel;
-      receiveFile(dc);
+      receiveFile(event.channel);
     };
 
     pc.onicecandidate = (event) => {
@@ -198,11 +212,7 @@ export default function Room() {
         channel.send({
           type: 'broadcast',
           event: 'webrtc-signal',
-          payload: {
-            targetUserId: fromUserId,
-            fromUserId: userId,
-            signal: event.candidate.toJSON(),
-          },
+          payload: { targetUserId: fromUserId, fromUserId: userId, signal: event.candidate.toJSON() },
         });
       }
     };
@@ -214,11 +224,7 @@ export default function Room() {
     channel.send({
       type: 'broadcast',
       event: 'webrtc-signal',
-      payload: {
-        targetUserId: fromUserId,
-        fromUserId: userId,
-        signal: answer,
-      },
+      payload: { targetUserId: fromUserId, fromUserId: userId, signal: answer },
     });
   };
 
@@ -262,7 +268,6 @@ export default function Room() {
 
     dc.onopen = async () => {
       dc.send(JSON.stringify({ type: 'metadata', name: file.name, size: file.size }));
-
       const chunkSize = 16384;
       const buffer = await file.arrayBuffer();
       let offset = 0;
@@ -273,14 +278,12 @@ export default function Room() {
             setTimeout(sendChunk, 50);
             return;
           }
-          const chunk = buffer.slice(offset, offset + chunkSize);
-          dc.send(chunk);
+          dc.send(buffer.slice(offset, offset + chunkSize));
           offset += chunkSize;
         }
         dc.send(JSON.stringify({ type: 'done' }));
         toast.success(`Sent: ${file.name}`);
       };
-
       sendChunk();
     };
 
@@ -289,11 +292,7 @@ export default function Room() {
         channel.send({
           type: 'broadcast',
           event: 'webrtc-signal',
-          payload: {
-            targetUserId,
-            fromUserId: userId,
-            signal: event.candidate.toJSON(),
-          },
+          payload: { targetUserId, fromUserId: userId, signal: event.candidate.toJSON() },
         });
       }
     };
@@ -304,14 +303,9 @@ export default function Room() {
     channel.send({
       type: 'broadcast',
       event: 'webrtc-signal',
-      payload: {
-        targetUserId,
-        fromUserId: userId,
-        signal: offer,
-      },
+      payload: { targetUserId, fromUserId: userId, signal: offer },
     });
 
-    // Log transfer history
     const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
     await supabase.from('transfer_history').insert({
       sender_id: userId!,
@@ -327,12 +321,7 @@ export default function Room() {
     channel.send({
       type: 'broadcast',
       event: 'transfer-request',
-      payload: {
-        targetUserId,
-        fromUserId: userId,
-        fromName: userName,
-        type: 'file',
-      },
+      payload: { targetUserId, fromUserId: userId, fromName: userName, type: 'file' },
     });
     toast.info('File request sent');
   };
@@ -342,21 +331,14 @@ export default function Room() {
     channel.send({
       type: 'broadcast',
       event: 'transfer-request',
-      payload: {
-        targetUserId,
-        fromUserId: userId,
-        fromName: userName,
-        type: 'folder',
-      },
+      payload: { targetUserId, fromUserId: userId, fromName: userName, type: 'folder' },
     });
     toast.info('Folder request sent');
   };
 
   const handleTransferAccept = async () => {
     if (!transferRequest) return;
-
-    const type = transferRequest.type;
-    const fromUserId = transferRequest.fromUserId;
+    const { type, fromUserId } = transferRequest;
     setTransferRequest(null);
 
     if (type === 'file') {
@@ -364,13 +346,10 @@ export default function Room() {
       input.type = 'file';
       input.onchange = async () => {
         const file = input.files?.[0];
-        if (file) {
-          await sendFileViaPeer(fromUserId, file);
-        }
+        if (file) await sendFileViaPeer(fromUserId, file);
       };
       input.click();
     } else {
-      // Folder: select multiple files, zip them
       const input = document.createElement('input');
       input.type = 'file';
       input.multiple = true;
@@ -378,17 +357,14 @@ export default function Room() {
       input.onchange = async () => {
         const files = input.files;
         if (!files || files.length === 0) return;
-
         toast.info('Compressing folder…');
         const zip = new JSZip();
         for (let i = 0; i < files.length; i++) {
           const f = files[i];
-          const path = (f as any).webkitRelativePath || f.name;
-          zip.file(path, f);
+          zip.file((f as any).webkitRelativePath || f.name, f);
         }
         const blob = await zip.generateAsync({ type: 'blob' });
-        const zipFile = new File([blob], 'folder.zip', { type: 'application/zip' });
-        await sendFileViaPeer(fromUserId, zipFile);
+        await sendFileViaPeer(fromUserId, new File([blob], 'folder.zip', { type: 'application/zip' }));
       };
       input.click();
     }
@@ -396,7 +372,6 @@ export default function Room() {
 
   const handleAcceptJoin = async () => {
     if (!currentRequest) return;
-
     await supabase
       .from('room_participants')
       .update({ status: 'accepted' })
@@ -410,7 +385,6 @@ export default function Room() {
 
   const handleRejectJoin = async () => {
     if (!currentRequest) return;
-
     await supabase
       .from('room_participants')
       .update({ status: 'blocked' })
@@ -428,7 +402,6 @@ export default function Room() {
       .update({ status: 'blocked' })
       .eq('room_id', roomId!)
       .eq('user_id', targetUserId);
-
     toast.success('User removed');
   };
 
@@ -436,24 +409,19 @@ export default function Room() {
     if (isHost && roomId) {
       await supabase.from('rooms').update({ status: 'locked' }).eq('room_id', roomId);
     }
-
     if (userId) {
       await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
       await supabase.from('sessions').delete().eq('user_id', userId);
       await supabase.from('transfer_history').delete().eq('sender_id', userId);
     }
-
-    // Cleanup peer connections
     peerConnections.current.forEach((pc) => pc.close());
     peerConnections.current.clear();
-
     clearSession();
     navigate('/');
   };
 
   const handleHistory = async () => {
     if (!userId) return;
-
     const { data } = await supabase
       .from('transfer_history')
       .select('*')
@@ -464,7 +432,6 @@ export default function Room() {
       toast.info('No transfer history yet');
       return;
     }
-
     const { generateHistoryPdf } = await import('@/lib/pdfExport');
     generateHistoryPdf(userName || 'Unknown', data);
   };
@@ -480,30 +447,43 @@ export default function Room() {
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={handleHistory} />
 
       <main className="flex-1 px-4 py-6 max-w-2xl mx-auto w-full">
-        {/* Room header */}
+        {/* Top bar: user badge left, room live center, signal right */}
         <div className="flex items-center justify-between mb-6 animate-fade-up">
-          <div>
-            <h2 className="text-lg font-bold">Room</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <code className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
-                {roomId?.slice(0, 8)}…
-              </code>
-              <button onClick={copyRoomId} className="text-muted-foreground hover:text-foreground transition-colors">
-                {copied ? <Check className="h-3.5 w-3.5 text-signal-strong" /> : <Copy className="h-3.5 w-3.5" />}
-              </button>
+          {/* Left: current user badge */}
+          <div className="flex items-center gap-2">
+            <UserAvatar name={userName || '?'} size="sm" />
+            <div>
+              <span className="text-sm font-semibold">{userName}</span>
+              {isHost && (
+                <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+                  Host
+                </span>
+              )}
             </div>
           </div>
-          {room?.status === 'locked' && (
-            <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded">
-              Locked
+
+          {/* Center: room live badge */}
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-signal-strong animate-pulse" />
+            <span className="text-xs font-mono text-muted-foreground">
+              Room {roomId?.slice(0, 8)}… is live
             </span>
-          )}
-          {isHost && (
-            <span className="text-xs font-bold uppercase tracking-wider bg-primary text-primary-foreground px-2 py-1 rounded">
-              Host
-            </span>
-          )}
+            <button onClick={copyRoomId} className="text-muted-foreground hover:text-foreground transition-colors">
+              {copied ? <Check className="h-3.5 w-3.5 text-signal-strong" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+
+          {/* Right: signal strength */}
+          <SignalStrength />
         </div>
+
+        {room?.status === 'locked' && (
+          <div className="text-center mb-4 animate-fade-up">
+            <span className="text-xs font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
+              Room Locked — Host has left
+            </span>
+          </div>
+        )}
 
         {/* Participants */}
         <div className="space-y-3">
@@ -537,7 +517,6 @@ export default function Room() {
         </div>
       </main>
 
-      {/* Join request dialog (host only) */}
       <JoinRequestDialog
         open={!!currentRequest && isHost}
         requesterName={currentRequest?.name || ''}
@@ -545,7 +524,6 @@ export default function Room() {
         onReject={handleRejectJoin}
       />
 
-      {/* Transfer request dialog */}
       <TransferRequestDialog
         open={!!transferRequest}
         requesterName={transferRequest?.fromName || ''}

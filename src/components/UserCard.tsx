@@ -1,5 +1,4 @@
 import UserAvatar from './UserAvatar';
-import SignalStrength from './SignalStrength';
 import { Button } from '@/components/ui/button';
 import { File, FolderOpen, X } from 'lucide-react';
 
@@ -23,53 +22,31 @@ export default function UserCard({
   onRemove,
 }: UserCardProps) {
   return (
-    <div className="volts-card p-4 flex items-center gap-4">
-      <UserAvatar name={name} size="lg" />
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold truncate">{name}</span>
-          {isHost && (
-            <span className="text-[10px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
-              Host
-            </span>
-          )}
-          {isCurrentUser && !isHost && (
-            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              You
-            </span>
-          )}
+    <div className="volts-card p-4 rounded-xl border bg-card">
+      {/* Top row: avatar + name left, host badge or remove right */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <UserAvatar name={name} size="lg" />
+          <div className="min-w-0">
+            <span className="font-semibold text-base truncate block">{name}</span>
+            {isHost && (
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-1.5 py-0.5 rounded inline-block mt-0.5">
+                Host
+              </span>
+            )}
+            {isCurrentUser && !isHost && (
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground inline-block mt-0.5">
+                You
+              </span>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="flex items-center gap-2">
-        {!isCurrentUser && (
-          <>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1 text-xs"
-              onClick={onRequestFile}
-            >
-              <File className="h-3 w-3" />
-              File
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1 text-xs"
-              onClick={onRequestFolder}
-            >
-              <FolderOpen className="h-3 w-3" />
-              Folder
-            </Button>
-          </>
-        )}
         {showHostControls && !isCurrentUser && (
           <Button
             size="sm"
             variant="ghost"
-            className="text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive shrink-0"
             onClick={onRemove}
           >
             <X className="h-4 w-4" />
@@ -77,7 +54,29 @@ export default function UserCard({
         )}
       </div>
 
-      <SignalStrength />
+      {/* Bottom row: transfer buttons */}
+      {!isCurrentUser && (
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 gap-1.5 text-xs"
+            onClick={onRequestFile}
+          >
+            <File className="h-3.5 w-3.5" />
+            Request File
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 gap-1.5 text-xs"
+            onClick={onRequestFolder}
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+            Request Folder
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
