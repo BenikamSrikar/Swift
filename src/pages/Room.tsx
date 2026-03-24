@@ -487,7 +487,9 @@ export default function Room() {
 
         {/* Participants */}
         <div className="space-y-3">
-          {participants.map((p, i) => (
+        {participants
+          .filter((p) => p.user_id !== userId)
+          .map((p, i) => (
             <div
               key={p.user_id}
               className="animate-fade-up"
@@ -495,7 +497,6 @@ export default function Room() {
             >
               <UserCard
                 name={p.name}
-                isCurrentUser={p.user_id === userId}
                 isHost={p.user_id === room?.host_id}
                 showHostControls={isHost}
                 onRequestFile={() => handleRequestFile(p.user_id)}
