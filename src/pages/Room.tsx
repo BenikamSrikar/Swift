@@ -343,15 +343,8 @@ export default function Room() {
     toast.info('Folder request sent');
   };
 
-  const handleRequestVideo = (targetUserId: string) => {
-    const channel = supabase.channel(`transfers-${roomId}`);
-    channel.send({
-      type: 'broadcast',
-      event: 'transfer-request',
-      payload: { targetUserId, fromUserId: userId, fromName: userName, type: 'video' },
-    });
-    toast.info('Video request sent');
-  };
+
+
 
   const handleTransferAccept = async () => {
     if (!transferRequest) return;
@@ -521,7 +514,7 @@ export default function Room() {
                 showHostControls={isHost}
                 onRequestFile={() => handleRequestFile(p.user_id)}
                 onRequestFolder={() => handleRequestFolder(p.user_id)}
-                onRequestVideo={() => handleRequestVideo(p.user_id)}
+                
                 onRemove={() => handleRemoveUser(p.user_id)}
               />
             </div>

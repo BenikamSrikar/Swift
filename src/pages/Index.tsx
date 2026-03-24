@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { generateUserId, storeSession } from '@/lib/session';
 import { ArrowRight } from 'lucide-react';
 import ParticleField from '@/components/ParticleField';
+import NetworkAnimation from '@/components/NetworkAnimation';
 
 import shiftSecure from '@/assets/shift-secure.png';
 import shiftHighspeed from '@/assets/shift-highspeed.png';
@@ -125,45 +126,51 @@ export default function Index() {
       <VoltsNavbar />
 
       {/* Hero Section with particles */}
-      <section className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
+      <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden">
         <ParticleField />
-        <div className="w-full max-w-md relative z-10 animate-fade-up" style={{ animationDelay: '100ms' }}>
-          <div className="text-center mb-8">
-            <h1 className="text-5xl sm:text-6xl font-bold tracking-tight mb-4">
+        <div className="w-full max-w-7xl mx-auto relative z-10 flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
+          {/* Left: text + form */}
+          <div className="flex-1 animate-fade-up" style={{ animationDelay: '100ms' }}>
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4">
               <span className="text-primary">SHIFT</span>
             </h1>
-            <p className="text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
+            <p className="text-base lg:text-lg text-muted-foreground leading-relaxed max-w-md mb-8">
               Peer-to-peer file transfer built for speed and privacy. No accounts, no cloud — just a direct connection between you and the recipient.
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-4 max-w-sm">
+              <Input
+                placeholder="Your full name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="h-12 text-base"
+                autoFocus
+                maxLength={40}
+              />
+              <Button
+                type="submit"
+                disabled={!name.trim() || loading}
+                className="w-full h-12 text-base font-semibold gap-2"
+              >
+                {loading ? 'Creating session\u2026' : 'Get Started'}
+                {!loading && <ArrowRight className="h-4 w-4" />}
+              </Button>
+            </form>
+
+            <p className="text-xs text-muted-foreground mt-6">
+              Sessions are ephemeral — your data is never stored permanently.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              placeholder="Your full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="h-12 text-center text-base"
-              autoFocus
-              maxLength={40}
-            />
-            <Button
-              type="submit"
-              disabled={!name.trim() || loading}
-              className="w-full h-12 text-base font-semibold gap-2"
-            >
-              {loading ? 'Creating session\u2026' : 'Get Started'}
-              {!loading && <ArrowRight className="h-4 w-4" />}
-            </Button>
-          </form>
+          {/* Right: network animation */}
+          <div className="flex-1 w-full min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+            <NetworkAnimation />
+          </div>
+        </div>
 
-          <p className="text-center text-xs text-muted-foreground mt-6">
-            Sessions are ephemeral — your data is never stored permanently.
-          </p>
-
-          <div className="flex justify-center mt-12 animate-bounce">
-            <div className="w-6 h-10 rounded-full border-2 border-muted-foreground/30 flex justify-center pt-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            </div>
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce z-10">
+          <div className="w-6 h-10 rounded-full border-2 border-muted-foreground/30 flex justify-center pt-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
           </div>
         </div>
       </section>
