@@ -358,9 +358,12 @@ export default function Room() {
     const { type, fromUserId } = transferRequest;
     setTransferRequest(null);
 
-    if (type === 'file') {
+    if (type === 'file' || type === 'video') {
       const input = document.createElement('input');
       input.type = 'file';
+      if (type === 'video') {
+        input.accept = 'video/*';
+      }
       input.onchange = async () => {
         const file = input.files?.[0];
         if (file) await sendFileViaPeer(fromUserId, file);
