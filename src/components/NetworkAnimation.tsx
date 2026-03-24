@@ -48,13 +48,16 @@ function drawLaptop(
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // Icon on screen
-  ctx.fillStyle = COLORS.red;
-  ctx.font = `bold ${14 * scale}px monospace`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const iconChar = icon === 'chrome' ? '◉' : icon === 'edge' ? '◈' : '◎';
-  ctx.fillText(iconChar, x, y - 4 * scale);
+  // Browser logo on screen
+  const logoSize = 10 * scale;
+  const ly = y - 4 * scale;
+  if (icon === 'chrome') {
+    drawChromeLogo(ctx, x, ly, logoSize);
+  } else if (icon === 'edge') {
+    drawEdgeLogo(ctx, x, ly, logoSize);
+  } else {
+    drawSafariLogo(ctx, x, ly, logoSize);
+  }
 
   // Base
   ctx.beginPath();
