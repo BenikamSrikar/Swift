@@ -521,8 +521,8 @@ export default function Room() {
           </div>
         )}
 
-        {/* Participants — grid on desktop/tablet, stacked on mobile */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Participants — centered stacked rectangles */}
+        <div className="flex flex-col items-center gap-3 max-w-lg mx-auto w-full">
         {participants
           .filter((p) => p.user_id !== userId)
           .map((p, i) => (
