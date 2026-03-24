@@ -16,6 +16,78 @@ interface Laptop {
   icon: 'chrome' | 'edge' | 'safari';
 }
 
+function drawChromeLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  const colors = ['#EA4335', '#34A853', '#FBBC05'];
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    const sa = (i * 2 * Math.PI) / 3 - Math.PI / 2;
+    const ea = ((i + 1) * 2 * Math.PI) / 3 - Math.PI / 2;
+    ctx.arc(cx, cy, r, sa, ea);
+    ctx.lineTo(cx, cy);
+    ctx.closePath();
+    ctx.fillStyle = colors[i];
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.42, 0, Math.PI * 2);
+  ctx.fillStyle = '#4285F4';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.28, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+}
+
+function drawEdgeLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  const grad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+  grad.addColorStop(0, '#0078D4');
+  grad.addColorStop(1, '#50E6FF');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + r * 0.1, cy - r * 0.05, r * 0.55, 0, Math.PI * 1.6);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + r * 0.1, cy - r * 0.05, r * 0.3, 0, Math.PI * 2);
+  ctx.fillStyle = '#0078D4';
+  ctx.fill();
+}
+
+function drawSafariLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  const grad = ctx.createLinearGradient(cx, cy - r, cx, cy + r);
+  grad.addColorStop(0, '#5AC8FA');
+  grad.addColorStop(1, '#007AFF');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.82, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-Math.PI / 4);
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.65);
+  ctx.lineTo(r * 0.12, 0);
+  ctx.lineTo(-r * 0.12, 0);
+  ctx.closePath();
+  ctx.fillStyle = '#FF3B30';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0, r * 0.65);
+  ctx.lineTo(r * 0.12, 0);
+  ctx.lineTo(-r * 0.12, 0);
+  ctx.closePath();
+  ctx.fillStyle = '#ccc';
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawLaptop(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -48,13 +120,16 @@ function drawLaptop(
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // Icon on screen
-  ctx.fillStyle = COLORS.red;
-  ctx.font = `bold ${14 * scale}px monospace`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const iconChar = icon === 'chrome' ? '◉' : icon === 'edge' ? '◈' : '◎';
-  ctx.fillText(iconChar, x, y - 4 * scale);
+  // Browser logo on screen
+  const logoSize = 10 * scale;
+  const ly = y - 4 * scale;
+  if (icon === 'chrome') {
+    drawChromeLogo(ctx, x, ly, logoSize);
+  } else if (icon === 'edge') {
+    drawEdgeLogo(ctx, x, ly, logoSize);
+  } else {
+    drawSafariLogo(ctx, x, ly, logoSize);
+  }
 
   // Base
   ctx.beginPath();
