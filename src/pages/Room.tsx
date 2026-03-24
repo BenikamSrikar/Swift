@@ -45,6 +45,7 @@ export default function Room() {
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
+  const transferChannelRef = useRef<any>(null);
 
   const isHost = room?.host_id === userId;
 
@@ -155,22 +156,21 @@ export default function Room() {
     };
   }, [roomId, loadParticipants]);
 
-  // Listen for transfer requests via Realtime broadcast
+  // Single shared transfer/signaling channel
   useEffect(() => {
     if (!roomId || !userId) return;
 
-    const channel = supabase.channel(`transfers-${roomId}`).on(
-      'broadcast',
-      { event: 'transfer-request' },
-      (payload) => {
-        const { targetUserId, fromUserId, fromName, type } = payload.payload;
-        if (targetUserId === userId) {
-          setTransferRequest({ fromUserId, fromName, type });
-        }
-      }
-    );
+    const channel = supabase.channel(`transfers-${roomId}`, {
+      config: { broadcast: { self: false } },
+    });
 
-    // Listen for WebRTC signaling
+    channel.on('broadcast', { event: 'transfer-request' }, (payload) => {
+      const { targetUserId, fromUserId, fromName, type } = payload.payload;
+      if (targetUserId === userId) {
+        setTransferRequest({ fromUserId, fromName, type });
+      }
+    });
+
     channel.on('broadcast', { event: 'webrtc-signal' }, async (payload) => {
       const { targetUserId, fromUserId, signal } = payload.payload;
       if (targetUserId !== userId) return;
@@ -190,16 +190,24 @@ export default function Room() {
       }
     });
 
-    channel.subscribe();
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        transferChannelRef.current = channel;
+      }
+    });
 
     return () => {
+      transferChannelRef.current = null;
       supabase.removeChannel(channel);
     };
   }, [roomId, userId]);
 
   const handleIncomingOffer = async (fromUserId: string, offer: RTCSessionDescriptionInit, channel: any) => {
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ],
     });
     peerConnections.current.set(fromUserId, pc);
 
@@ -263,26 +271,39 @@ export default function Room() {
   };
 
   const sendFileViaPeer = async (targetUserId: string, file: File) => {
-    const channel = supabase.channel(`transfers-${roomId}`);
+    const channel = transferChannelRef.current;
+    if (!channel) {
+      toast.error('Channel not ready, try again');
+      return;
+    }
 
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ],
     });
     peerConnections.current.set(targetUserId, pc);
 
     const dc = pc.createDataChannel('file-transfer');
     dataChannels.current.set(targetUserId, dc);
 
+    dc.binaryType = 'arraybuffer';
+    dc.bufferedAmountLowThreshold = 65536;
+
     dc.onopen = async () => {
       dc.send(JSON.stringify({ type: 'metadata', name: file.name, size: file.size }));
-      const chunkSize = 16384;
+      const chunkSize = 65536; // 64KB chunks for faster transfer
       const buffer = await file.arrayBuffer();
       let offset = 0;
 
       const sendChunk = () => {
         while (offset < buffer.byteLength) {
-          if (dc.bufferedAmount > chunkSize * 8) {
-            setTimeout(sendChunk, 50);
+          if (dc.bufferedAmount > chunkSize * 4) {
+            dc.onbufferedamountlow = () => {
+              dc.onbufferedamountlow = null;
+              sendChunk();
+            };
             return;
           }
           dc.send(buffer.slice(offset, offset + chunkSize));
@@ -324,7 +345,8 @@ export default function Room() {
   };
 
   const handleRequestFile = (targetUserId: string) => {
-    const channel = supabase.channel(`transfers-${roomId}`);
+    const channel = transferChannelRef.current;
+    if (!channel) { toast.error('Channel not ready'); return; }
     channel.send({
       type: 'broadcast',
       event: 'transfer-request',
@@ -334,7 +356,8 @@ export default function Room() {
   };
 
   const handleRequestFolder = (targetUserId: string) => {
-    const channel = supabase.channel(`transfers-${roomId}`);
+    const channel = transferChannelRef.current;
+    if (!channel) { toast.error('Channel not ready'); return; }
     channel.send({
       type: 'broadcast',
       event: 'transfer-request',
