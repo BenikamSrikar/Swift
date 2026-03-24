@@ -221,10 +221,11 @@ export default function Connection() {
               <LogIn className="h-6 w-6 text-primary" />
               <div className="flex gap-2 w-full">
                 <Input
-                  placeholder="Enter Room ID"
+                  placeholder="e.g. A1B2C3"
                   value={roomInput}
-                  onChange={(e) => setRoomInput(e.target.value)}
-                  className="h-12 font-mono text-sm"
+                  onChange={(e) => setRoomInput(e.target.value.toUpperCase().slice(0, 6))}
+                  className="h-12 font-mono text-sm uppercase tracking-widest"
+                  maxLength={6}
                 />
                 <Button
                   onClick={handleJoinRoom}
