@@ -30,32 +30,29 @@ export default function Connection() {
     if (!userId) return;
     setCreating(true);
 
+    const roomId = generateRoomId();
+
     const { error } = await supabase.from('rooms').insert({
-      room_id: userId,
+      room_id: roomId,
       host_id: userId,
       status: 'active',
     });
 
     if (error) {
-      if (error.code === '23505') {
-        // Room already exists, navigate to it
-        navigate(`/room/${userId}`);
-      } else {
-        toast.error('Failed to create room');
-        console.error(error);
-      }
+      toast.error('Failed to create room');
+      console.error(error);
       setCreating(false);
       return;
     }
 
     // Add host as participant
     await supabase.from('room_participants').insert({
-      room_id: userId,
+      room_id: roomId,
       user_id: userId,
       status: 'accepted',
     });
 
-    navigate(`/room/${userId}`);
+    navigate(`/room/${roomId}`);
   };
 
   const handleJoinRoom = async () => {
