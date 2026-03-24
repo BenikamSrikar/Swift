@@ -127,7 +127,7 @@ export default function Index() {
       {SHIFT_ITEMS.map(({ letter, word, image, description }, i) => (
         <section
           key={letter}
-          ref={(el) => { sectionRefs.current[i] = el; }}
+          ref={(el: HTMLDivElement | null) => { sectionRefs.current[i] = el; }}
           className={`scroll-section min-h-screen flex items-center justify-center px-6 sm:px-12 ${
             i % 2 === 0 ? 'bg-background' : 'bg-muted/30'
           }`}
