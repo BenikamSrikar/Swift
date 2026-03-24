@@ -244,7 +244,7 @@ export default function NetworkAnimation() {
       });
 
       // Callout labels with circuit path animation
-      const calloutProgress = Math.min(1, (t % 8) / 1.5); // animate in first 1.5s of each 8s cycle
+      const calloutProgress = Math.min(1, t / 1.5); // animate once at start, then stay
       const calloutOffsets = [
         { dx: 50 * scale, dy: -30 * scale },   // Chrome: top-right callout
         { dx: -55 * scale, dy: 25 * scale },   // Firefox: bottom-left callout
