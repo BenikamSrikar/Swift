@@ -13,7 +13,7 @@ interface Laptop {
   x: number;
   y: number;
   label: string;
-  icon: 'windows' | 'mac' | 'linux';
+  icon: 'chrome' | 'edge' | 'safari';
 }
 
 function drawLaptop(
@@ -53,7 +53,7 @@ function drawLaptop(
   ctx.font = `bold ${14 * scale}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const iconChar = icon === 'windows' ? '⊞' : icon === 'mac' ? '' : '◆';
+  const iconChar = icon === 'chrome' ? '◉' : icon === 'edge' ? '◈' : '◎';
   ctx.fillText(iconChar, x, y - 4 * scale);
 
   // Base
@@ -173,9 +173,9 @@ export default function NetworkAnimation() {
 
       // Triangle positions (top, bottom-left, bottom-right)
       const laptops: Laptop[] = [
-        { x: cx, y: cy - radius, label: 'Windows', icon: 'windows' },
-        { x: cx - radius * 0.87, y: cy + radius * 0.5, label: 'Mac', icon: 'mac' },
-        { x: cx + radius * 0.87, y: cy + radius * 0.5, label: 'Linux', icon: 'linux' },
+        { x: cx, y: cy - radius, label: 'Chrome', icon: 'chrome' },
+        { x: cx - radius * 0.87, y: cy + radius * 0.5, label: 'Edge', icon: 'edge' },
+        { x: cx + radius * 0.87, y: cy + radius * 0.5, label: 'Safari', icon: 'safari' },
       ];
 
       frame++;
