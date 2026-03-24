@@ -1,4 +1,4 @@
-import { Zap } from 'lucide-react';
+import { ArrowRightLeft } from 'lucide-react';
 
 interface VoltsNavbarProps {
   showActions?: boolean;
@@ -12,9 +12,9 @@ export default function VoltsNavbar({ showActions, onHistoryClick, onLogout }: V
       <div className={showActions ? '' : 'mx-auto'}>
         <div className="flex items-center gap-2">
           <div className="volts-gradient rounded-lg p-1.5">
-            <Zap className="h-5 w-5 text-primary-foreground" />
+            <ArrowRightLeft className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="text-lg font-bold tracking-tight">VOLTS</span>
+          <span className="text-lg font-bold tracking-tight">SHIFT</span>
         </div>
       </div>
       {showActions && (
