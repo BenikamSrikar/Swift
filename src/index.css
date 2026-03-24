@@ -87,4 +87,29 @@
   .volts-card:hover {
     box-shadow: 0 4px 24px 0 hsla(355, 82%, 56%, 0.08);
   }
+
+  /* Scroll reveal animations */
+  .scroll-section .scroll-image,
+  .scroll-section .scroll-text {
+    opacity: 0;
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+  }
+
+  .scroll-section .scroll-image {
+    transform: scale(0.8);
+  }
+
+  .scroll-section .scroll-text {
+    transform: translateY(40px);
+  }
+
+  .scroll-section.revealed .scroll-image {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .scroll-section.revealed .scroll-text {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
