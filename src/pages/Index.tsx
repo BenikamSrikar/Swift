@@ -42,9 +42,9 @@ const SHIFT_ITEMS = [
     letter: 'F',
     word: 'Files & Folders',
     image: shiftFiles,
-    brief: 'Send anything — files, folders, or videos.',
+    brief: 'Send anything \u2014 files, folders, or videos.',
     description:
-      'Whether it's a single document, an entire project folder, or a large video file, SHIFT handles it all. Folders are automatically compressed into ZIP archives before transfer, preserving directory structure. Video files get their own dedicated transfer mode. The recipient gets a download notification with one-click save — clean and simple.',
+      "Whether it's a single document, an entire project folder, or a large video file, SHIFT handles it all. Folders are automatically compressed into ZIP archives before transfer, preserving directory structure. Video files get their own dedicated transfer mode. The recipient gets a download notification with one-click save \u2014 clean and simple.",
   },
   {
     letter: 'T',
