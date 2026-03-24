@@ -13,7 +13,7 @@ interface Laptop {
   x: number;
   y: number;
   label: string;
-  icon: 'windows' | 'mac' | 'linux';
+  icon: 'chrome' | 'edge' | 'safari';
 }
 
 function drawLaptop(
