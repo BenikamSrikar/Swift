@@ -345,7 +345,8 @@ export default function Room() {
   };
 
   const handleRequestFile = (targetUserId: string) => {
-    const channel = supabase.channel(`transfers-${roomId}`);
+    const channel = transferChannelRef.current;
+    if (!channel) { toast.error('Channel not ready'); return; }
     channel.send({
       type: 'broadcast',
       event: 'transfer-request',
@@ -355,7 +356,8 @@ export default function Room() {
   };
 
   const handleRequestFolder = (targetUserId: string) => {
-    const channel = supabase.channel(`transfers-${roomId}`);
+    const channel = transferChannelRef.current;
+    if (!channel) { toast.error('Channel not ready'); return; }
     channel.send({
       type: 'broadcast',
       event: 'transfer-request',
