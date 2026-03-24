@@ -156,22 +156,21 @@ export default function Room() {
     };
   }, [roomId, loadParticipants]);
 
-  // Listen for transfer requests via Realtime broadcast
+  // Single shared transfer/signaling channel
   useEffect(() => {
     if (!roomId || !userId) return;
 
-    const channel = supabase.channel(`transfers-${roomId}`).on(
-      'broadcast',
-      { event: 'transfer-request' },
-      (payload) => {
-        const { targetUserId, fromUserId, fromName, type } = payload.payload;
-        if (targetUserId === userId) {
-          setTransferRequest({ fromUserId, fromName, type });
-        }
-      }
-    );
+    const channel = supabase.channel(`transfers-${roomId}`, {
+      config: { broadcast: { self: false } },
+    });
 
-    // Listen for WebRTC signaling
+    channel.on('broadcast', { event: 'transfer-request' }, (payload) => {
+      const { targetUserId, fromUserId, fromName, type } = payload.payload;
+      if (targetUserId === userId) {
+        setTransferRequest({ fromUserId, fromName, type });
+      }
+    });
+
     channel.on('broadcast', { event: 'webrtc-signal' }, async (payload) => {
       const { targetUserId, fromUserId, signal } = payload.payload;
       if (targetUserId !== userId) return;
@@ -191,9 +190,14 @@ export default function Room() {
       }
     });
 
-    channel.subscribe();
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        transferChannelRef.current = channel;
+      }
+    });
 
     return () => {
+      transferChannelRef.current = null;
       supabase.removeChannel(channel);
     };
   }, [roomId, userId]);
