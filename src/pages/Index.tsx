@@ -58,13 +58,13 @@ const SHIFT_ITEMS = [
   },
 ];
 
-// Progressively darker backgrounds
+// Progressively darker backgrounds + unique animation variant per section
 const SECTION_STYLES = [
-  { custom: 'hsl(0 0% 97%)', textColor: 'hsl(0 0% 8%)', mutedColor: 'hsl(0 0% 40%)' },
-  { custom: 'hsl(0 0% 82%)', textColor: 'hsl(0 0% 8%)', mutedColor: 'hsl(0 0% 30%)' },
-  { custom: 'hsl(0 0% 55%)', textColor: 'hsl(0 0% 5%)', mutedColor: 'hsl(0 0% 20%)' },
-  { custom: 'hsl(0 0% 25%)', textColor: 'hsl(0 0% 95%)', mutedColor: 'hsl(0 0% 70%)' },
-  { custom: 'hsl(0 0% 8%)', textColor: 'hsl(0 0% 95%)', mutedColor: 'hsl(0 0% 60%)' },
+  { custom: 'hsl(0 0% 97%)', textColor: 'hsl(0 0% 8%)', mutedColor: 'hsl(0 0% 40%)', anim: 'anim-scale' },
+  { custom: 'hsl(0 0% 82%)', textColor: 'hsl(0 0% 8%)', mutedColor: 'hsl(0 0% 30%)', anim: 'anim-slide-left' },
+  { custom: 'hsl(0 0% 55%)', textColor: 'hsl(0 0% 5%)', mutedColor: 'hsl(0 0% 20%)', anim: 'anim-slide-right' },
+  { custom: 'hsl(0 0% 25%)', textColor: 'hsl(0 0% 95%)', mutedColor: 'hsl(0 0% 70%)', anim: 'anim-flip' },
+  { custom: 'hsl(0 0% 8%)', textColor: 'hsl(0 0% 95%)', mutedColor: 'hsl(0 0% 60%)', anim: 'anim-rise' },
 ];
 
 function useElasticScrollReveal() {
