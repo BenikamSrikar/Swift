@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getStoredUserId, getStoredUserName, clearSession } from '@/lib/session';
 import { Plus, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
+import { generateRoomId } from '@/lib/roomId';
 
 export default function Connection() {
   const [searchParams] = useSearchParams();
@@ -29,32 +30,29 @@ export default function Connection() {
     if (!userId) return;
     setCreating(true);
 
+    const roomId = generateRoomId();
+
     const { error } = await supabase.from('rooms').insert({
-      room_id: userId,
+      room_id: roomId,
       host_id: userId,
       status: 'active',
     });
 
     if (error) {
-      if (error.code === '23505') {
-        // Room already exists, navigate to it
-        navigate(`/room/${userId}`);
-      } else {
-        toast.error('Failed to create room');
-        console.error(error);
-      }
+      toast.error('Failed to create room');
+      console.error(error);
       setCreating(false);
       return;
     }
 
     // Add host as participant
     await supabase.from('room_participants').insert({
-      room_id: userId,
+      room_id: roomId,
       user_id: userId,
       status: 'accepted',
     });
 
-    navigate(`/room/${userId}`);
+    navigate(`/room/${roomId}`);
   };
 
   const handleJoinRoom = async () => {
@@ -223,10 +221,11 @@ export default function Connection() {
               <LogIn className="h-6 w-6 text-primary" />
               <div className="flex gap-2 w-full">
                 <Input
-                  placeholder="Enter Room ID"
+                  placeholder="e.g. A1B2C3"
                   value={roomInput}
-                  onChange={(e) => setRoomInput(e.target.value)}
-                  className="h-12 font-mono text-sm"
+                  onChange={(e) => setRoomInput(e.target.value.toUpperCase().slice(0, 6))}
+                  className="h-12 font-mono text-sm uppercase tracking-widest"
+                  maxLength={6}
                 />
                 <Button
                   onClick={handleJoinRoom}
@@ -241,7 +240,7 @@ export default function Connection() {
           </div>
 
           <p className="text-center text-xs text-muted-foreground">
-            Your Room ID is your User ID. Share it with others to let them join.
+            Create a room or enter a 6-character Room ID to join.
           </p>
         </div>
       </main>

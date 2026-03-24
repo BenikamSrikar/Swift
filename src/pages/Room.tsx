@@ -27,7 +27,7 @@ interface PendingRequest {
 interface TransferRequest {
   fromUserId: string;
   fromName: string;
-  type: 'file' | 'folder';
+  type: 'file' | 'folder' | 'video';
 }
 
 export default function Room() {
@@ -343,14 +343,27 @@ export default function Room() {
     toast.info('Folder request sent');
   };
 
+  const handleRequestVideo = (targetUserId: string) => {
+    const channel = supabase.channel(`transfers-${roomId}`);
+    channel.send({
+      type: 'broadcast',
+      event: 'transfer-request',
+      payload: { targetUserId, fromUserId: userId, fromName: userName, type: 'video' },
+    });
+    toast.info('Video request sent');
+  };
+
   const handleTransferAccept = async () => {
     if (!transferRequest) return;
     const { type, fromUserId } = transferRequest;
     setTransferRequest(null);
 
-    if (type === 'file') {
+    if (type === 'file' || type === 'video') {
       const input = document.createElement('input');
       input.type = 'file';
+      if (type === 'video') {
+        input.accept = 'video/*';
+      }
       input.onchange = async () => {
         const file = input.files?.[0];
         if (file) await sendFileViaPeer(fromUserId, file);
@@ -453,9 +466,9 @@ export default function Room() {
     <div className="min-h-screen flex flex-col bg-background">
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={handleHistory} />
 
-      <main className="flex-1 px-4 py-6 max-w-2xl mx-auto w-full">
+      <main className="flex-1 px-4 py-6 max-w-3xl mx-auto w-full">
         {/* Top bar: user badge left, room live center, signal right */}
-        <div className="flex items-center justify-between mb-6 animate-fade-up">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 animate-fade-up">
           {/* Left: current user badge */}
           <div className="flex items-center gap-2">
             <UserAvatar name={userName || '?'} size="sm" />
@@ -473,7 +486,7 @@ export default function Room() {
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-signal-strong animate-pulse" />
             <span className="text-xs font-mono text-muted-foreground">
-              Room {roomId?.slice(0, 8)}… is live
+              Room {roomId} is live
             </span>
             <button onClick={copyRoomId} className="text-muted-foreground hover:text-foreground transition-colors">
               {copied ? <Check className="h-3.5 w-3.5 text-signal-strong" /> : <Copy className="h-3.5 w-3.5" />}
@@ -508,6 +521,7 @@ export default function Room() {
                 showHostControls={isHost}
                 onRequestFile={() => handleRequestFile(p.user_id)}
                 onRequestFolder={() => handleRequestFolder(p.user_id)}
+                onRequestVideo={() => handleRequestVideo(p.user_id)}
                 onRemove={() => handleRemoveUser(p.user_id)}
               />
             </div>
