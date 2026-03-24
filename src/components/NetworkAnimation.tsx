@@ -13,7 +13,7 @@ interface Laptop {
   x: number;
   y: number;
   label: string;
-  icon: 'chrome' | 'edge' | 'safari';
+  icon: 'chrome' | 'firefox' | 'safari';
 }
 
 function drawChromeLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
