@@ -8,12 +8,7 @@ import { generateUserId, storeSession } from '@/lib/session';
 import { ArrowRight } from 'lucide-react';
 import ParticleField from '@/components/ParticleField';
 import NetworkAnimation from '@/components/NetworkAnimation';
-
-import shiftSecure from '@/assets/shift-secure.png';
-import shiftHighspeed from '@/assets/shift-highspeed.png';
-import shiftInstant from '@/assets/shift-instant.png';
-import shiftFiles from '@/assets/shift-files.png';
-import shiftTransfer from '@/assets/shift-transfer.png';
+import { SecureIcon, HighSpeedIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
 
 const SHIFT_ITEMS = [
   {
