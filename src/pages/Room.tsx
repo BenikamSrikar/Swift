@@ -482,7 +482,7 @@ export default function Room() {
     <div className="min-h-screen flex flex-col bg-background">
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={handleHistory} />
 
-      <main className="flex-1 px-4 py-6 max-w-3xl mx-auto w-full">
+      <main className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full">
         {/* Top bar: user badge left, room live center, signal right */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 animate-fade-up">
           {/* Left: current user badge */}
@@ -521,15 +521,15 @@ export default function Room() {
           </div>
         )}
 
-        {/* Participants — centered stacked rectangles */}
-        <div className="flex flex-col items-center gap-3 max-w-lg mx-auto w-full">
+        {/* Participants — horizontal grid on desktop, vertical stack on mobile */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
         {participants
           .filter((p) => p.user_id !== userId)
           .map((p, i) => (
             <div
               key={p.user_id}
-              className="animate-fade-up"
-              style={{ animationDelay: `${i * 80}ms` }}
+              className="animate-scale-in"
+              style={{ animationDelay: `${i * 100}ms` }}
             >
               <UserCard
                 name={p.name}
@@ -537,14 +537,13 @@ export default function Room() {
                 showHostControls={isHost}
                 onRequestFile={() => handleRequestFile(p.user_id)}
                 onRequestFolder={() => handleRequestFolder(p.user_id)}
-                
                 onRemove={() => handleRemoveUser(p.user_id)}
               />
             </div>
           ))}
 
           {participants.length === 1 && isHost && (
-            <div className="text-center py-12 text-muted-foreground text-sm animate-fade-up" style={{ animationDelay: '200ms' }}>
+            <div className="col-span-full text-center py-12 text-muted-foreground text-sm animate-fade-up" style={{ animationDelay: '200ms' }}>
               <p>Share your Room ID to invite others</p>
               <Button variant="outline" size="sm" className="mt-3 gap-2" onClick={copyRoomId}>
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
