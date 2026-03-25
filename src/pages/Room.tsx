@@ -400,14 +400,25 @@ export default function Room() {
       input.onchange = async () => {
         const files = input.files;
         if (!files || files.length === 0) return;
-        toast.info('Compressing folder…');
+        toast.info('Packing folder…');
         const zip = new JSZip();
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i];
-          zip.file((f as any).webkitRelativePath || f.name, f);
-        }
-        const blob = await zip.generateAsync({ type: 'blob' });
-        await sendFileViaPeer(fromUserId, new File([blob], 'folder.zip', { type: 'application/zip' }));
+        const fileArray = Array.from(files);
+        // Add all files in parallel for speed
+        await Promise.all(
+          fileArray.map(async (f) => {
+            const path = (f as any).webkitRelativePath || f.name;
+            const buf = await f.arrayBuffer();
+            zip.file(path, buf);
+          })
+        );
+        // STORE mode = no compression = much faster packing
+        const blob = await zip.generateAsync({
+          type: 'blob',
+          compression: 'STORE',
+          streamFiles: true,
+        });
+        const folderName = (fileArray[0] as any).webkitRelativePath?.split('/')[0] || 'folder';
+        await sendFileViaPeer(fromUserId, new File([blob], `${folderName}.zip`, { type: 'application/zip' }));
       };
       input.click();
     }
