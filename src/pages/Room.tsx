@@ -482,7 +482,7 @@ export default function Room() {
     <div className="min-h-screen flex flex-col bg-background">
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={handleHistory} />
 
-      <main className="flex-1 px-4 py-6 max-w-3xl mx-auto w-full">
+      <main className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full">
         {/* Top bar: user badge left, room live center, signal right */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 animate-fade-up">
           {/* Left: current user badge */}
