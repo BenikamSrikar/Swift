@@ -8,18 +8,12 @@ import { generateUserId, storeSession } from '@/lib/session';
 import { ArrowRight } from 'lucide-react';
 import ParticleField from '@/components/ParticleField';
 import NetworkAnimation from '@/components/NetworkAnimation';
-
-import shiftSecure from '@/assets/shift-secure.png';
-import shiftHighspeed from '@/assets/shift-highspeed.png';
-import shiftInstant from '@/assets/shift-instant.png';
-import shiftFiles from '@/assets/shift-files.png';
-import shiftTransfer from '@/assets/shift-transfer.png';
+import { SecureIcon, HighSpeedIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
 
 const SHIFT_ITEMS = [
   {
     letter: 'S',
     word: 'Secure',
-    image: shiftSecure,
     brief: 'Your privacy is non-negotiable.',
     description:
       "Every transfer in SHIFT is peer-to-peer using WebRTC \u2014 your files never pass through any server. With end-to-end encryption baked into the protocol, only the sender and receiver can access the data. No cloud storage, no logs, no traces. It\u2019s as if the transfer never happened \u2014 except you have the file.",
@@ -27,7 +21,6 @@ const SHIFT_ITEMS = [
   {
     letter: 'H',
     word: 'High-speed',
-    image: shiftHighspeed,
     brief: 'Direct connections, zero bottlenecks.',
     description:
       'Traditional file sharing uploads to a server, then downloads to the recipient \u2014 doubling the time. SHIFT eliminates the middleman entirely. WebRTC establishes a direct tunnel between devices, meaning your transfer speed is limited only by the network between you and the other person. Large videos, hefty archives \u2014 they move at full throttle.',
@@ -35,7 +28,6 @@ const SHIFT_ITEMS = [
   {
     letter: 'I',
     word: 'Instant',
-    image: shiftInstant,
     brief: 'Zero friction, zero accounts.',
     description:
       "No sign-ups, no email verification, no passwords to remember. Just type your name and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds. SHIFT is designed for the moments when you need to move a file right now \u2014 not after filling out three forms.",
@@ -43,7 +35,6 @@ const SHIFT_ITEMS = [
   {
     letter: 'F',
     word: 'Files & Folders',
-    image: shiftFiles,
     brief: 'Send anything \u2014 files, folders, or videos.',
     description:
       "Whether it\u2019s a single document, an entire project folder, or a large video file, SHIFT handles it all. Folders are automatically compressed into ZIP archives before transfer, preserving directory structure. Video files get their own dedicated transfer mode. The recipient gets a download notification with one-click save \u2014 clean and simple.",
@@ -51,12 +42,13 @@ const SHIFT_ITEMS = [
   {
     letter: 'T',
     word: 'Transfer',
-    image: shiftTransfer,
     brief: 'Ephemeral by design.',
     description:
       "SHIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history exists only for the sender during the active session and can be exported as a PDF. Once you log out or close the tab \u2014 it\u2019s gone. This is file transfer distilled to its purest form.",
   },
 ];
+
+const SHIFT_ICON_COMPONENTS = [SecureIcon, HighSpeedIcon, InstantIcon, FilesIcon, TransferIcon];
 
 // Progressively darker backgrounds + unique animation variant per section
 const SECTION_STYLES = [
@@ -69,6 +61,7 @@ const SECTION_STYLES = [
 
 function useElasticScrollReveal() {
   const refs = useRef<(HTMLDivElement | null)[]>([]);
+  const [revealedSet, setRevealedSet] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -76,6 +69,10 @@ function useElasticScrollReveal() {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add('revealed');
+            const idx = refs.current.indexOf(entry.target as HTMLDivElement);
+            if (idx >= 0) {
+              setRevealedSet((prev) => new Set(prev).add(idx));
+            }
           }
         });
       },
@@ -89,14 +86,14 @@ function useElasticScrollReveal() {
     return () => observer.disconnect();
   }, []);
 
-  return refs;
+  return { refs, revealedSet };
 }
 
 export default function Index() {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const sectionRefs = useElasticScrollReveal();
+  const { refs: sectionRefs, revealedSet } = useElasticScrollReveal();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,8 +173,10 @@ export default function Index() {
       </section>
 
       {/* SHIFT Sections — elastic scroll reveal, progressively darker */}
-      {SHIFT_ITEMS.map(({ letter, word, image, brief, description }, i) => {
+      {SHIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
         const style = SECTION_STYLES[i];
+        const IconComponent = SHIFT_ICON_COMPONENTS[i];
+        const isSectionRevealed = revealedSet.has(i);
 
         return (
           <section
@@ -191,16 +190,8 @@ export default function Index() {
                 i % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'
               } items-center gap-10 md:gap-20`}
             >
-              <div className={`scroll-image shrink-0 relative group shift-live-icon shift-live-${i}`}>
-                <img
-                  src={image}
-                  alt={word}
-                  width={512}
-                  height={512}
-                  loading="lazy"
-                  className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 object-contain drop-shadow-xl transition-transform duration-500 group-hover:scale-110"
-                  style={{ imageRendering: 'auto' }}
-                />
+              <div className="scroll-image shrink-0 w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 transition-transform duration-500 hover:scale-110">
+                <IconComponent revealed={isSectionRevealed} />
               </div>
 
               <div className={`scroll-text text-center ${i % 2 === 0 ? 'md:text-left' : 'md:text-right'} max-w-xl`}>

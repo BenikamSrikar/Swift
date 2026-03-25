@@ -154,53 +154,121 @@
     transform: translateY(0) translateX(0) scale(1);
   }
 
-  /* Per-section live animations for images */
-
-  /* Div 1 (Secure) — gentle shield pulse */
-  .shift-live-0 img {
-    animation: secure-glow 3s ease-in-out infinite;
+  /* ═══ SECURE: shackle unlock → lock ═══ */
+  .secure-shackle {
+    transform-origin: 130px 95px;
+    transform: rotate(20deg) translateY(-8px);
+    transition: transform 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
-  @keyframes secure-glow {
-    0%, 100% { filter: drop-shadow(0 0 6px hsl(355 82% 56% / 0.2)); }
-    50% { filter: drop-shadow(0 0 20px hsl(355 82% 56% / 0.5)); }
-  }
-
-  /* Div 2 (High-speed) — continuous float + subtle rotate */
-  .shift-live-1 img {
-    animation: highspeed-float 2.5s ease-in-out infinite;
-  }
-  @keyframes highspeed-float {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    25% { transform: translateY(-8px) rotate(1deg); }
-    75% { transform: translateY(4px) rotate(-1deg); }
+  .secure-shackle.secure-lock {
+    transform: rotate(0deg) translateY(0);
   }
 
-  /* Div 3 (Instant) — electric pulse scale */
-  .shift-live-2 img {
-    animation: instant-zap 2s ease-in-out infinite;
+  /* ═══ HIGH-SPEED: concentric rings ═══ */
+  .concentric-ring {
+    transform-origin: center;
+    opacity: 0;
+    animation: ring-expand 2.4s ease-out infinite;
   }
-  @keyframes instant-zap {
-    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px hsl(355 82% 56% / 0.15)); }
-    15% { transform: scale(1.06); filter: drop-shadow(0 0 16px hsl(355 82% 56% / 0.6)); }
-    30% { transform: scale(1); filter: drop-shadow(0 0 4px hsl(355 82% 56% / 0.15)); }
+  .ring-1 { animation-delay: 0s; }
+  .ring-2 { animation-delay: 0.8s; }
+  .ring-3 { animation-delay: 1.6s; }
+
+  @keyframes ring-expand {
+    0% { transform: scale(1); opacity: 0.7; }
+    100% { transform: scale(4); opacity: 0; }
   }
 
-  /* Div 4 (Files & Folders) — gentle bounce */
-  .shift-live-3 img {
-    animation: files-bounce 3s ease-in-out infinite;
+  /* Needle sweep */
+  .speed-needle {
+    transform-origin: 100px 140px;
+    animation: needle-sweep 2s ease-in-out infinite alternate;
   }
-  @keyframes files-bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
+  @keyframes needle-sweep {
+    0% { transform: rotate(-50deg); }
+    100% { transform: rotate(40deg); }
   }
 
-  /* Div 5 (Transfer) — slide shimmer */
-  .shift-live-4 img {
-    animation: transfer-slide 3.5s ease-in-out infinite;
+  /* Gauge fill */
+  .gauge-fill {
+    stroke-dasharray: 235;
+    stroke-dashoffset: 235;
+    animation: gauge-draw 2s ease-in-out infinite alternate;
   }
-  @keyframes transfer-slide {
-    0%, 100% { transform: translateX(0); filter: drop-shadow(0 0 6px hsl(355 82% 56% / 0.2)); }
-    50% { transform: translateX(8px); filter: drop-shadow(0 0 14px hsl(355 82% 56% / 0.45)); }
+  @keyframes gauge-draw {
+    0% { stroke-dashoffset: 235; }
+    100% { stroke-dashoffset: 40; }
+  }
+
+  /* Speed lines */
+  .speed-line {
+    animation: speed-flash 1.5s ease-in-out infinite;
+  }
+  .sl-1 { animation-delay: 0s; }
+  .sl-2 { animation-delay: 0.3s; }
+  .sl-3 { animation-delay: 0.6s; }
+  @keyframes speed-flash {
+    0%, 100% { opacity: 0.2; transform: translateY(0); }
+    50% { opacity: 0.8; transform: translateY(-6px); }
+  }
+
+  /* ═══ INSTANT: ticking timer hand ═══ */
+  .timer-hand {
+    transform-origin: 100px 115px;
+    animation: tick-hand 4s linear infinite;
+  }
+  @keyframes tick-hand {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .instant-bolt {
+    animation: bolt-flash 2s ease-in-out infinite;
+  }
+  @keyframes bolt-flash {
+    0%, 70%, 100% { opacity: 1; }
+    80% { opacity: 0.3; }
+    85% { opacity: 1; }
+    90% { opacity: 0.3; }
+  }
+
+  /* ═══ FILES: pop-up files from folder ═══ */
+  .file-pop {
+    opacity: 0;
+    animation: pop-up 3s ease-out infinite;
+  }
+  .file-pop-1 { animation-delay: 0s; }
+  .file-pop-2 { animation-delay: 0.6s; }
+  .file-pop-3 { animation-delay: 1.2s; }
+
+  @keyframes pop-up {
+    0% { opacity: 0; transform: translateY(30px) scale(0.7); }
+    20% { opacity: 1; transform: translateY(0) scale(1); }
+    80% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-10px) scale(0.9); }
+  }
+
+  /* ═══ TRANSFER: file moving between laptops ═══ */
+  .transfer-file-move {
+    animation: file-fly 3s ease-in-out infinite;
+  }
+  @keyframes file-fly {
+    0% { transform: translate(90px, 75px) scale(1); opacity: 1; }
+    50% { transform: translate(120px, 50px) scale(0.9); opacity: 1; }
+    100% { transform: translate(170px, 75px) scale(0.8); opacity: 0.5; }
+  }
+
+  .transfer-particle {
+    opacity: 0;
+    animation: particle-trail 3s ease-out infinite;
+  }
+  .tp-1 { animation-delay: 0.3s; }
+  .tp-2 { animation-delay: 0.6s; }
+  .tp-3 { animation-delay: 0.9s; }
+  @keyframes particle-trail {
+    0% { transform: translate(95px, 72px); opacity: 0.8; }
+    50% { transform: translate(125px, 50px); opacity: 0.5; }
+    100% { transform: translate(165px, 72px); opacity: 0; }
   }
 
   /* Room card scale-in animation */
