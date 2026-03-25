@@ -11,6 +11,7 @@ import { getStoredUserId, getStoredUserName, clearSession } from '@/lib/session'
 import { toast } from 'sonner';
 import { Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import JSZip from 'jszip';
 
 const DATA_CHANNEL_CHUNK_SIZE = 262144;
@@ -47,6 +48,12 @@ interface IncomingFolderTransfer {
   currentFile: IncomingFolderFile | null;
 }
 
+interface TransferProgress {
+  label: string;
+  percent: number;
+  direction: 'sending' | 'receiving';
+}
+
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
@@ -59,6 +66,7 @@ export default function Room() {
   const [currentRequest, setCurrentRequest] = useState<PendingRequest | null>(null);
   const [transferRequest, setTransferRequest] = useState<TransferRequest | null>(null);
   const [copied, setCopied] = useState(false);
+  const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
@@ -281,7 +289,7 @@ export default function Room() {
             currentFile: null,
           };
           metadata = null;
-          toast.info(`Receiving folder: ${msg.name}`, { duration: 3000 });
+          setTransferProgress({ label: msg.name, percent: 0, direction: 'receiving' });
         } else if (msg.type === 'file-start' && folderTransfer) {
           folderTransfer.currentFile = {
             path: msg.path,
@@ -295,9 +303,12 @@ export default function Room() {
           );
           folderTransfer.receivedFiles += 1;
           folderTransfer.currentFile = null;
+          const pct = Math.round((folderTransfer.receivedFiles / folderTransfer.totalFiles) * 100);
+          setTransferProgress({ label: folderTransfer.folderName, percent: pct, direction: 'receiving' });
         } else if (msg.type === 'folder-end' && folderTransfer) {
           const completedTransfer = folderTransfer;
           folderTransfer = null;
+          setTransferProgress(null);
           void completedTransfer.zip
             .generateAsync({
               type: 'blob',
@@ -461,7 +472,8 @@ export default function Room() {
         })
       );
 
-      for (const file of fileArray) {
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
         const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
         dc.send(
           JSON.stringify({
@@ -472,9 +484,12 @@ export default function Room() {
         );
         await sendBlobInChunks(dc, file);
         dc.send(JSON.stringify({ type: 'file-end' }));
+        const pct = Math.round(((i + 1) / fileArray.length) * 100);
+        setTransferProgress({ label: folderName, percent: pct, direction: 'sending' });
       }
 
       dc.send(JSON.stringify({ type: 'folder-end' }));
+      setTransferProgress(null);
       toast.success(`Sent folder: ${folderName}`, { duration: 4000 });
     });
 
@@ -540,7 +555,7 @@ export default function Room() {
         const files = input.files;
         if (!files || files.length === 0) return;
         const folderName = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0] || 'folder';
-        toast.info(`Streaming folder: ${folderName}`);
+        setTransferProgress({ label: folderName, percent: 0, direction: 'sending' });
         await sendFolderViaPeer(fromUserId, files, folderName);
       };
       input.click();
@@ -661,6 +676,26 @@ export default function Room() {
               {/* Right: signal strength */}
               <SignalStrength />
             </div>
+
+            {/* Transfer progress bar */}
+            {transferProgress && (
+              <div className="mb-4 animate-fade-up">
+                <div className="flex items-center gap-3 bg-muted/60 rounded-lg px-4 py-3 border border-border">
+                  <div className="h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium truncate">
+                        {transferProgress.direction === 'sending' ? 'Sending' : 'Receiving'}: {transferProgress.label}
+                      </span>
+                      <span className="text-xs font-mono text-muted-foreground ml-2">
+                        {transferProgress.percent}%
+                      </span>
+                    </div>
+                    <Progress value={transferProgress.percent} className="h-2" />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {room?.status === 'locked' && (
               <div className="text-center mb-4 animate-fade-up">
