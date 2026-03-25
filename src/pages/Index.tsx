@@ -191,7 +191,7 @@ export default function Index() {
               } items-center gap-10 md:gap-20`}
             >
               <div className="scroll-image shrink-0 w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 transition-transform duration-500 hover:scale-110">
-                <IconComponent revealed={isRevealed} />
+                <IconComponent revealed={isSectionRevealed} />
               </div>
 
               <div className={`scroll-text text-center ${i % 2 === 0 ? 'md:text-left' : 'md:text-right'} max-w-xl`}>
