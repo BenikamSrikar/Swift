@@ -17,6 +17,20 @@ import JSZip from 'jszip';
 const DATA_CHANNEL_CHUNK_SIZE = 262144;
 const DATA_CHANNEL_BUFFER_LIMIT = DATA_CHANNEL_CHUNK_SIZE * 8;
 
+type WritableFileStreamLike = {
+  write: (data: BlobPart) => Promise<void>;
+  close: () => Promise<void>;
+};
+
+type FileSystemFileHandleLike = {
+  createWritable: () => Promise<WritableFileStreamLike>;
+};
+
+type FileSystemDirectoryHandleLike = {
+  getDirectoryHandle: (name: string, options?: { create?: boolean }) => Promise<FileSystemDirectoryHandleLike>;
+  getFileHandle: (name: string, options?: { create?: boolean }) => Promise<FileSystemFileHandleLike>;
+};
+
 interface Participant {
   user_id: string;
   name: string;
@@ -38,6 +52,7 @@ interface IncomingFolderFile {
   path: string;
   size: number;
   chunks: BlobPart[];
+  writer?: WritableFileStreamLike | null;
 }
 
 interface IncomingFolderTransfer {
@@ -46,6 +61,9 @@ interface IncomingFolderTransfer {
   totalFiles: number;
   receivedFiles: number;
   currentFile: IncomingFolderFile | null;
+  mode: 'stream' | 'zip';
+  rootDirectoryHandle: FileSystemDirectoryHandleLike | null;
+  directoryCache: Map<string, FileSystemDirectoryHandleLike>;
 }
 
 interface TransferProgress {
@@ -71,6 +89,7 @@ export default function Room() {
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
   const transferChannelRef = useRef<any>(null);
+  const folderReceiveTargets = useRef<Map<string, FileSystemDirectoryHandleLike>>(new Map());
 
   const isHost = room?.host_id === userId;
   const [removedByHost, setRemovedByHost] = useState(false);
@@ -244,7 +263,7 @@ export default function Room() {
     peerConnections.current.set(fromUserId, pc);
 
     pc.ondatachannel = (event) => {
-      receiveFile(event.channel);
+      receiveFile(event.channel, fromUserId);
     };
 
     pc.onicecandidate = (event) => {
@@ -268,39 +287,94 @@ export default function Room() {
     });
   };
 
-  const receiveFile = (dc: RTCDataChannel) => {
+  const getNestedDirectoryHandle = async (
+    rootHandle: FileSystemDirectoryHandleLike,
+    relativePath: string,
+    cache: Map<string, FileSystemDirectoryHandleLike>
+  ) => {
+    if (!relativePath) return rootHandle;
+
+    let current = rootHandle;
+    let composedPath = '';
+
+    for (const segment of relativePath.split('/').filter(Boolean)) {
+      composedPath = composedPath ? `${composedPath}/${segment}` : segment;
+      const cached = cache.get(composedPath);
+
+      if (cached) {
+        current = cached;
+        continue;
+      }
+
+      current = await current.getDirectoryHandle(segment, { create: true });
+      cache.set(composedPath, current);
+    }
+
+    return current;
+  };
+
+  const receiveFile = (dc: RTCDataChannel, fromUserId: string) => {
     const chunks: BlobPart[] = [];
     let metadata: { name: string; size: number } | null = null;
     let folderTransfer: IncomingFolderTransfer | null = null;
+    let messageQueue = Promise.resolve();
 
-    dc.onmessage = (event) => {
-      if (typeof event.data === 'string') {
-        const msg = JSON.parse(event.data);
+    const processIncomingData = async (data: string | Blob | ArrayBuffer) => {
+      if (typeof data === 'string') {
+        const msg = JSON.parse(data);
         if (msg.type === 'metadata') {
           metadata = msg;
           folderTransfer = null;
           toast.info(`Receiving: ${msg.name}`, { duration: 3000 });
         } else if (msg.type === 'folder-start') {
+          const selectedTarget = folderReceiveTargets.current.get(fromUserId) || null;
+          const rootDirectoryHandle = selectedTarget
+            ? await selectedTarget.getDirectoryHandle(msg.name, { create: true })
+            : null;
+
           folderTransfer = {
             zip: new JSZip(),
             folderName: msg.name,
             totalFiles: msg.totalFiles,
             receivedFiles: 0,
             currentFile: null,
+            mode: rootDirectoryHandle ? 'stream' : 'zip',
+            rootDirectoryHandle,
+            directoryCache: new Map(),
           };
           metadata = null;
           setTransferProgress({ label: msg.name, percent: 0, direction: 'receiving' });
         } else if (msg.type === 'file-start' && folderTransfer) {
+          let writer: WritableFileStreamLike | null = null;
+
+          if (folderTransfer.mode === 'stream' && folderTransfer.rootDirectoryHandle) {
+            const parts = msg.path.split('/').filter(Boolean);
+            const fileName = parts.pop() || 'file';
+            const parentDirectory = await getNestedDirectoryHandle(
+              folderTransfer.rootDirectoryHandle,
+              parts.join('/'),
+              folderTransfer.directoryCache
+            );
+            const fileHandle = await parentDirectory.getFileHandle(fileName, { create: true });
+            writer = await fileHandle.createWritable();
+          }
+
           folderTransfer.currentFile = {
             path: msg.path,
             size: msg.size,
             chunks: [],
+            writer,
           };
         } else if (msg.type === 'file-end' && folderTransfer?.currentFile) {
-          folderTransfer.zip.file(
-            folderTransfer.currentFile.path,
-            new Blob(folderTransfer.currentFile.chunks)
-          );
+          if (folderTransfer.mode === 'stream') {
+            await folderTransfer.currentFile.writer?.close();
+          } else {
+            folderTransfer.zip.file(
+              folderTransfer.currentFile.path,
+              new Blob(folderTransfer.currentFile.chunks)
+            );
+          }
+
           folderTransfer.receivedFiles += 1;
           folderTransfer.currentFile = null;
           const pct = Math.round((folderTransfer.receivedFiles / folderTransfer.totalFiles) * 100);
@@ -308,30 +382,46 @@ export default function Room() {
         } else if (msg.type === 'folder-end' && folderTransfer) {
           const completedTransfer = folderTransfer;
           folderTransfer = null;
-          setTransferProgress(null);
-          void completedTransfer.zip
-            .generateAsync({
-              type: 'blob',
-              compression: 'STORE',
-              streamFiles: true,
-            })
-            .then((blob) => {
-              const url = URL.createObjectURL(blob);
-              toast.success(`Folder received: ${completedTransfer.folderName}`, {
-                action: {
-                  label: 'Download',
-                  onClick: () => {
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${completedTransfer.folderName}.zip`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  },
-                },
-                duration: 15000,
-              });
-              dc.close();
+          folderReceiveTargets.current.delete(fromUserId);
+
+          if (completedTransfer.mode === 'stream') {
+            setTransferProgress(null);
+            toast.success(`Folder received: ${completedTransfer.folderName}`, {
+              description: 'Saved directly to your selected folder.',
+              duration: 6000,
             });
+            dc.close();
+            return;
+          }
+
+          setTransferProgress({
+            label: `${completedTransfer.folderName} • finalizing`,
+            percent: 99,
+            direction: 'receiving',
+          });
+
+          const blob = await completedTransfer.zip.generateAsync({
+            type: 'blob',
+            compression: 'STORE',
+            streamFiles: true,
+          });
+
+          setTransferProgress(null);
+          const url = URL.createObjectURL(blob);
+          toast.success(`Folder received: ${completedTransfer.folderName}`, {
+            action: {
+              label: 'Download',
+              onClick: () => {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${completedTransfer.folderName}.zip`;
+                a.click();
+                URL.revokeObjectURL(url);
+              },
+            },
+            duration: 15000,
+          });
+          dc.close();
         } else if (msg.type === 'done') {
           const blob = new Blob(chunks);
           const url = URL.createObjectURL(blob);
@@ -352,11 +442,26 @@ export default function Room() {
         }
       } else {
         if (folderTransfer?.currentFile) {
-          folderTransfer.currentFile.chunks.push(event.data);
+          if (folderTransfer.mode === 'stream' && folderTransfer.currentFile.writer) {
+            await folderTransfer.currentFile.writer.write(data);
+          } else {
+            folderTransfer.currentFile.chunks.push(data);
+          }
         } else {
-          chunks.push(event.data);
+          chunks.push(data);
         }
       }
+    };
+
+    dc.onmessage = (event) => {
+      messageQueue = messageQueue
+        .then(() => processIncomingData(event.data))
+        .catch(() => {
+          setTransferProgress(null);
+          folderReceiveTargets.current.delete(fromUserId);
+          toast.error('Transfer failed');
+          dc.close();
+        });
     };
   };
 
@@ -516,9 +621,27 @@ export default function Room() {
     toast.info('File request sent');
   };
 
-  const handleRequestFolder = (targetUserId: string) => {
+  const handleRequestFolder = async (targetUserId: string) => {
     const channel = transferChannelRef.current;
     if (!channel) { toast.error('Channel not ready'); return; }
+
+    const pickerHost = window as Window & {
+      showDirectoryPicker?: () => Promise<FileSystemDirectoryHandleLike>;
+    };
+
+    if (pickerHost.showDirectoryPicker) {
+      try {
+        const directoryHandle = await pickerHost.showDirectoryPicker();
+        folderReceiveTargets.current.set(targetUserId, directoryHandle);
+      } catch {
+        toast.info('Folder request cancelled');
+        return;
+      }
+    } else {
+      folderReceiveTargets.current.delete(targetUserId);
+      toast.info('Direct folder save is not supported here, so a ZIP will be prepared after transfer');
+    }
+
     channel.send({
       type: 'broadcast',
       event: 'transfer-request',
