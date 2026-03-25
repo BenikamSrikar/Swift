@@ -168,8 +168,10 @@ export default function Index() {
       </section>
 
       {/* SHIFT Sections — elastic scroll reveal, progressively darker */}
-      {SHIFT_ITEMS.map(({ letter, word, image, brief, description }, i) => {
+      {SHIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
         const style = SECTION_STYLES[i];
+        const IconComponent = SHIFT_ICON_COMPONENTS[i];
+        const isRevealed = sectionRefs.current[i]?.classList.contains('revealed') ?? false;
 
         return (
           <section
@@ -183,16 +185,8 @@ export default function Index() {
                 i % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'
               } items-center gap-10 md:gap-20`}
             >
-              <div className={`scroll-image shrink-0 relative group shift-live-icon shift-live-${i}`}>
-                <img
-                  src={image}
-                  alt={word}
-                  width={512}
-                  height={512}
-                  loading="lazy"
-                  className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 object-contain drop-shadow-xl transition-transform duration-500 group-hover:scale-110"
-                  style={{ imageRendering: 'auto' }}
-                />
+              <div className="scroll-image shrink-0 w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 transition-transform duration-500 hover:scale-110">
+                <IconComponent revealed={isRevealed} />
               </div>
 
               <div className={`scroll-text text-center ${i % 2 === 0 ? 'md:text-left' : 'md:text-right'} max-w-xl`}>
