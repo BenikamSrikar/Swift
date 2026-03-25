@@ -191,23 +191,16 @@ export default function Index() {
                 i % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'
               } items-center gap-10 md:gap-20`}
             >
-              <div className="scroll-image shrink-0 relative group">
+              <div className={`scroll-image shrink-0 relative group shift-live-icon shift-live-${i}`}>
                 <img
                   src={image}
                   alt={word}
-                  width={240}
-                  height={240}
+                  width={512}
+                  height={512}
                   loading="lazy"
-                  className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 object-contain drop-shadow-lg transition-transform duration-500 group-hover:scale-110"
+                  className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 object-contain drop-shadow-xl transition-transform duration-500 group-hover:scale-110"
+                  style={{ imageRendering: 'auto' }}
                 />
-                {/* Live animated icon overlay for div2 (High-speed) */}
-                {i === 1 && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="highspeed-pulse-ring" />
-                    <div className="highspeed-pulse-ring" style={{ animationDelay: '0.4s' }} />
-                    <div className="highspeed-pulse-ring" style={{ animationDelay: '0.8s' }} />
-                  </div>
-                )}
               </div>
 
               <div className={`scroll-text text-center ${i % 2 === 0 ? 'md:text-left' : 'md:text-right'} max-w-xl`}>

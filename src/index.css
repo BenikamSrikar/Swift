@@ -154,25 +154,53 @@
     transform: translateY(0) translateX(0) scale(1);
   }
 
-  /* High-speed section — live pulse rings */
-  .highspeed-pulse-ring {
-    position: absolute;
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    border: 2px solid hsl(var(--primary) / 0.4);
-    animation: pulse-expand 2.4s ease-out infinite;
+  /* Per-section live animations for images */
+
+  /* Div 1 (Secure) — gentle shield pulse */
+  .shift-live-0 img {
+    animation: secure-glow 3s ease-in-out infinite;
+  }
+  @keyframes secure-glow {
+    0%, 100% { filter: drop-shadow(0 0 6px hsl(355 82% 56% / 0.2)); }
+    50% { filter: drop-shadow(0 0 20px hsl(355 82% 56% / 0.5)); }
   }
 
-  @keyframes pulse-expand {
-    0% {
-      transform: scale(0.5);
-      opacity: 0.8;
-    }
-    100% {
-      transform: scale(2.5);
-      opacity: 0;
-    }
+  /* Div 2 (High-speed) — continuous float + subtle rotate */
+  .shift-live-1 img {
+    animation: highspeed-float 2.5s ease-in-out infinite;
+  }
+  @keyframes highspeed-float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-8px) rotate(1deg); }
+    75% { transform: translateY(4px) rotate(-1deg); }
+  }
+
+  /* Div 3 (Instant) — electric pulse scale */
+  .shift-live-2 img {
+    animation: instant-zap 2s ease-in-out infinite;
+  }
+  @keyframes instant-zap {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px hsl(355 82% 56% / 0.15)); }
+    15% { transform: scale(1.06); filter: drop-shadow(0 0 16px hsl(355 82% 56% / 0.6)); }
+    30% { transform: scale(1); filter: drop-shadow(0 0 4px hsl(355 82% 56% / 0.15)); }
+  }
+
+  /* Div 4 (Files & Folders) — gentle bounce */
+  .shift-live-3 img {
+    animation: files-bounce 3s ease-in-out infinite;
+  }
+  @keyframes files-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  /* Div 5 (Transfer) — slide shimmer */
+  .shift-live-4 img {
+    animation: transfer-slide 3.5s ease-in-out infinite;
+  }
+  @keyframes transfer-slide {
+    0%, 100% { transform: translateX(0); filter: drop-shadow(0 0 6px hsl(355 82% 56% / 0.2)); }
+    50% { transform: translateX(8px); filter: drop-shadow(0 0 14px hsl(355 82% 56% / 0.45)); }
   }
 
   /* Room card scale-in animation */
