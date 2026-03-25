@@ -292,15 +292,18 @@ export default function Room() {
     });
     peerConnections.current.set(targetUserId, pc);
 
-    const dc = pc.createDataChannel('file-transfer');
+    const dc = pc.createDataChannel('file-transfer', {
+      ordered: true,
+      maxRetransmits: 10,
+    });
     dataChannels.current.set(targetUserId, dc);
 
     dc.binaryType = 'arraybuffer';
-    dc.bufferedAmountLowThreshold = 65536;
+    const chunkSize = 262144; // 256KB chunks for faster transfer
+    dc.bufferedAmountLowThreshold = chunkSize * 2;
 
     dc.onopen = async () => {
       dc.send(JSON.stringify({ type: 'metadata', name: file.name, size: file.size }));
-      const chunkSize = 65536; // 64KB chunks for faster transfer
       const buffer = await file.arrayBuffer();
       let offset = 0;
 
@@ -400,14 +403,25 @@ export default function Room() {
       input.onchange = async () => {
         const files = input.files;
         if (!files || files.length === 0) return;
-        toast.info('Compressing folder…');
+        toast.info('Packing folder…');
         const zip = new JSZip();
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i];
-          zip.file((f as any).webkitRelativePath || f.name, f);
-        }
-        const blob = await zip.generateAsync({ type: 'blob' });
-        await sendFileViaPeer(fromUserId, new File([blob], 'folder.zip', { type: 'application/zip' }));
+        const fileArray = Array.from(files);
+        // Add all files in parallel for speed
+        await Promise.all(
+          fileArray.map(async (f) => {
+            const path = (f as any).webkitRelativePath || f.name;
+            const buf = await f.arrayBuffer();
+            zip.file(path, buf);
+          })
+        );
+        // STORE mode = no compression = much faster packing
+        const blob = await zip.generateAsync({
+          type: 'blob',
+          compression: 'STORE',
+          streamFiles: true,
+        });
+        const folderName = (fileArray[0] as any).webkitRelativePath?.split('/')[0] || 'folder';
+        await sendFileViaPeer(fromUserId, new File([blob], `${folderName}.zip`, { type: 'application/zip' }));
       };
       input.click();
     }
