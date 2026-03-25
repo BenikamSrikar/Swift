@@ -14,7 +14,6 @@ const SHIFT_ITEMS = [
   {
     letter: 'S',
     word: 'Secure',
-    image: shiftSecure,
     brief: 'Your privacy is non-negotiable.',
     description:
       "Every transfer in SHIFT is peer-to-peer using WebRTC \u2014 your files never pass through any server. With end-to-end encryption baked into the protocol, only the sender and receiver can access the data. No cloud storage, no logs, no traces. It\u2019s as if the transfer never happened \u2014 except you have the file.",
@@ -22,7 +21,6 @@ const SHIFT_ITEMS = [
   {
     letter: 'H',
     word: 'High-speed',
-    image: shiftHighspeed,
     brief: 'Direct connections, zero bottlenecks.',
     description:
       'Traditional file sharing uploads to a server, then downloads to the recipient \u2014 doubling the time. SHIFT eliminates the middleman entirely. WebRTC establishes a direct tunnel between devices, meaning your transfer speed is limited only by the network between you and the other person. Large videos, hefty archives \u2014 they move at full throttle.',
@@ -30,7 +28,6 @@ const SHIFT_ITEMS = [
   {
     letter: 'I',
     word: 'Instant',
-    image: shiftInstant,
     brief: 'Zero friction, zero accounts.',
     description:
       "No sign-ups, no email verification, no passwords to remember. Just type your name and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds. SHIFT is designed for the moments when you need to move a file right now \u2014 not after filling out three forms.",
@@ -38,7 +35,6 @@ const SHIFT_ITEMS = [
   {
     letter: 'F',
     word: 'Files & Folders',
-    image: shiftFiles,
     brief: 'Send anything \u2014 files, folders, or videos.',
     description:
       "Whether it\u2019s a single document, an entire project folder, or a large video file, SHIFT handles it all. Folders are automatically compressed into ZIP archives before transfer, preserving directory structure. Video files get their own dedicated transfer mode. The recipient gets a download notification with one-click save \u2014 clean and simple.",
@@ -46,12 +42,13 @@ const SHIFT_ITEMS = [
   {
     letter: 'T',
     word: 'Transfer',
-    image: shiftTransfer,
     brief: 'Ephemeral by design.',
     description:
       "SHIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history exists only for the sender during the active session and can be exported as a PDF. Once you log out or close the tab \u2014 it\u2019s gone. This is file transfer distilled to its purest form.",
   },
 ];
+
+const SHIFT_ICON_COMPONENTS = [SecureIcon, HighSpeedIcon, InstantIcon, FilesIcon, TransferIcon];
 
 // Progressively darker backgrounds + unique animation variant per section
 const SECTION_STYLES = [
