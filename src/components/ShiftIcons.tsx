@@ -29,7 +29,7 @@ export function SecureIcon({ revealed }: { revealed: boolean }) {
    2. HIGH-SPEED — speedometer needle with
       concentric radar pulse rings
    ═══════════════════════════════════════════ */
-export function HighSpeedIcon() {
+export function HighSpeedIcon({ revealed }: { revealed: boolean }) {
   return (
     <svg viewBox="0 0 200 200" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
       {/* Concentric pulse rings */}
