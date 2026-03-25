@@ -292,15 +292,18 @@ export default function Room() {
     });
     peerConnections.current.set(targetUserId, pc);
 
-    const dc = pc.createDataChannel('file-transfer');
+    const dc = pc.createDataChannel('file-transfer', {
+      ordered: true,
+      maxRetransmits: 10,
+    });
     dataChannels.current.set(targetUserId, dc);
 
     dc.binaryType = 'arraybuffer';
-    dc.bufferedAmountLowThreshold = 65536;
+    const chunkSize = 262144; // 256KB chunks for faster transfer
+    dc.bufferedAmountLowThreshold = chunkSize * 2;
 
     dc.onopen = async () => {
       dc.send(JSON.stringify({ type: 'metadata', name: file.name, size: file.size }));
-      const chunkSize = 65536; // 64KB chunks for faster transfer
       const buffer = await file.arrayBuffer();
       let offset = 0;
 
