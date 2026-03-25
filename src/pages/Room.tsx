@@ -13,6 +13,9 @@ import { Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import JSZip from 'jszip';
 
+const DATA_CHANNEL_CHUNK_SIZE = 262144;
+const DATA_CHANNEL_BUFFER_LIMIT = DATA_CHANNEL_CHUNK_SIZE * 8;
+
 interface Participant {
   user_id: string;
   name: string;
@@ -28,6 +31,20 @@ interface TransferRequest {
   fromUserId: string;
   fromName: string;
   type: 'file' | 'folder' | 'video';
+}
+
+interface IncomingFolderFile {
+  path: string;
+  size: number;
+  chunks: BlobPart[];
+}
+
+interface IncomingFolderTransfer {
+  zip: JSZip;
+  folderName: string;
+  totalFiles: number;
+  receivedFiles: number;
+  currentFile: IncomingFolderFile | null;
 }
 
 export default function Room() {
@@ -244,15 +261,66 @@ export default function Room() {
   };
 
   const receiveFile = (dc: RTCDataChannel) => {
-    const chunks: ArrayBuffer[] = [];
+    const chunks: BlobPart[] = [];
     let metadata: { name: string; size: number } | null = null;
+    let folderTransfer: IncomingFolderTransfer | null = null;
 
     dc.onmessage = (event) => {
       if (typeof event.data === 'string') {
         const msg = JSON.parse(event.data);
         if (msg.type === 'metadata') {
           metadata = msg;
+          folderTransfer = null;
           toast.info(`Receiving: ${msg.name}`, { duration: 3000 });
+        } else if (msg.type === 'folder-start') {
+          folderTransfer = {
+            zip: new JSZip(),
+            folderName: msg.name,
+            totalFiles: msg.totalFiles,
+            receivedFiles: 0,
+            currentFile: null,
+          };
+          metadata = null;
+          toast.info(`Receiving folder: ${msg.name}`, { duration: 3000 });
+        } else if (msg.type === 'file-start' && folderTransfer) {
+          folderTransfer.currentFile = {
+            path: msg.path,
+            size: msg.size,
+            chunks: [],
+          };
+        } else if (msg.type === 'file-end' && folderTransfer?.currentFile) {
+          folderTransfer.zip.file(
+            folderTransfer.currentFile.path,
+            new Blob(folderTransfer.currentFile.chunks)
+          );
+          folderTransfer.receivedFiles += 1;
+          folderTransfer.currentFile = null;
+        } else if (msg.type === 'folder-end' && folderTransfer) {
+          const completedTransfer = folderTransfer;
+          folderTransfer = null;
+          void completedTransfer.zip
+            .generateAsync({
+              type: 'blob',
+              compression: 'STORE',
+              streamFiles: true,
+            })
+            .then((blob) => {
+              const url = URL.createObjectURL(blob);
+              toast.success(`Folder received: ${completedTransfer.folderName}`, {
+                action: {
+                  label: 'Download',
+                  onClick: () => {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${completedTransfer.folderName}.zip`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  },
+                },
+                duration: 15000,
+              });
+              dc.close();
+            });
         } else if (msg.type === 'done') {
           const blob = new Blob(chunks);
           const url = URL.createObjectURL(blob);
@@ -272,16 +340,48 @@ export default function Room() {
           dc.close();
         }
       } else {
-        chunks.push(event.data);
+        if (folderTransfer?.currentFile) {
+          folderTransfer.currentFile.chunks.push(event.data);
+        } else {
+          chunks.push(event.data);
+        }
       }
     };
   };
 
-  const sendFileViaPeer = async (targetUserId: string, file: File) => {
+  const waitForBufferedAmount = (dc: RTCDataChannel) =>
+    new Promise<void>((resolve) => {
+      if (dc.bufferedAmount <= DATA_CHANNEL_BUFFER_LIMIT) {
+        resolve();
+        return;
+      }
+
+      const handleBufferedAmountLow = () => resolve();
+      dc.addEventListener('bufferedamountlow', handleBufferedAmountLow, { once: true });
+    });
+
+  const sendBlobInChunks = async (dc: RTCDataChannel, blob: Blob) => {
+    let offset = 0;
+
+    while (offset < blob.size) {
+      if (dc.bufferedAmount > DATA_CHANNEL_BUFFER_LIMIT) {
+        await waitForBufferedAmount(dc);
+      }
+
+      const chunk = await blob.slice(offset, offset + DATA_CHANNEL_CHUNK_SIZE).arrayBuffer();
+      dc.send(chunk);
+      offset += DATA_CHANNEL_CHUNK_SIZE;
+    }
+  };
+
+  const createTransferPeer = async (
+    targetUserId: string,
+    onOpen: (dc: RTCDataChannel) => Promise<void>
+  ) => {
     const channel = transferChannelRef.current;
     if (!channel) {
       toast.error('Channel not ready, try again');
-      return;
+      return false;
     }
 
     const pc = new RTCPeerConnection({
@@ -294,35 +394,18 @@ export default function Room() {
 
     const dc = pc.createDataChannel('file-transfer', {
       ordered: true,
-      maxRetransmits: 10,
     });
     dataChannels.current.set(targetUserId, dc);
 
     dc.binaryType = 'arraybuffer';
-    const chunkSize = 262144; // 256KB chunks for faster transfer
-    dc.bufferedAmountLowThreshold = chunkSize * 2;
+    dc.bufferedAmountLowThreshold = DATA_CHANNEL_BUFFER_LIMIT / 2;
 
-    dc.onopen = async () => {
-      dc.send(JSON.stringify({ type: 'metadata', name: file.name, size: file.size }));
-      const buffer = await file.arrayBuffer();
-      let offset = 0;
-
-      const sendChunk = () => {
-        while (offset < buffer.byteLength) {
-          if (dc.bufferedAmount > chunkSize * 4) {
-            dc.onbufferedamountlow = () => {
-              dc.onbufferedamountlow = null;
-              sendChunk();
-            };
-            return;
-          }
-          dc.send(buffer.slice(offset, offset + chunkSize));
-          offset += chunkSize;
-        }
-        dc.send(JSON.stringify({ type: 'done' }));
-        toast.success(`Sent: ${file.name}`, { duration: 4000 });
-      };
-      sendChunk();
+    dc.onopen = () => {
+      void onOpen(dc).catch(() => {
+        toast.error('Transfer failed');
+        dc.close();
+        pc.close();
+      });
     };
 
     pc.onicecandidate = (event) => {
@@ -344,6 +427,19 @@ export default function Room() {
       payload: { targetUserId, fromUserId: userId, signal: offer },
     });
 
+    return true;
+  };
+
+  const sendFileViaPeer = async (targetUserId: string, file: File) => {
+    const started = await createTransferPeer(targetUserId, async (dc) => {
+      dc.send(JSON.stringify({ type: 'metadata', name: file.name, size: file.size }));
+      await sendBlobInChunks(dc, file);
+      dc.send(JSON.stringify({ type: 'done' }));
+      toast.success(`Sent: ${file.name}`, { duration: 4000 });
+    });
+
+    if (!started) return;
+
     const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
     await supabase.from('transfer_history').insert({
       sender_id: userId!,
@@ -351,6 +447,46 @@ export default function Room() {
       recipient_name: targetName,
       file_name: file.name,
       file_type: 'file',
+    });
+  };
+
+  const sendFolderViaPeer = async (targetUserId: string, files: FileList | File[], folderName: string) => {
+    const fileArray = Array.from(files);
+    const started = await createTransferPeer(targetUserId, async (dc) => {
+      dc.send(
+        JSON.stringify({
+          type: 'folder-start',
+          name: folderName,
+          totalFiles: fileArray.length,
+        })
+      );
+
+      for (const file of fileArray) {
+        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+        dc.send(
+          JSON.stringify({
+            type: 'file-start',
+            path: relativePath,
+            size: file.size,
+          })
+        );
+        await sendBlobInChunks(dc, file);
+        dc.send(JSON.stringify({ type: 'file-end' }));
+      }
+
+      dc.send(JSON.stringify({ type: 'folder-end' }));
+      toast.success(`Sent folder: ${folderName}`, { duration: 4000 });
+    });
+
+    if (!started) return;
+
+    const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
+    await supabase.from('transfer_history').insert({
+      sender_id: userId!,
+      sender_name: userName!,
+      recipient_name: targetName,
+      file_name: `${folderName}.zip`,
+      file_type: 'folder',
     });
   };
 
@@ -403,25 +539,9 @@ export default function Room() {
       input.onchange = async () => {
         const files = input.files;
         if (!files || files.length === 0) return;
-        toast.info('Packing folder…');
-        const zip = new JSZip();
-        const fileArray = Array.from(files);
-        // Add all files in parallel for speed
-        await Promise.all(
-          fileArray.map(async (f) => {
-            const path = (f as any).webkitRelativePath || f.name;
-            const buf = await f.arrayBuffer();
-            zip.file(path, buf);
-          })
-        );
-        // STORE mode = no compression = much faster packing
-        const blob = await zip.generateAsync({
-          type: 'blob',
-          compression: 'STORE',
-          streamFiles: true,
-        });
-        const folderName = (fileArray[0] as any).webkitRelativePath?.split('/')[0] || 'folder';
-        await sendFileViaPeer(fromUserId, new File([blob], `${folderName}.zip`, { type: 'application/zip' }));
+        const folderName = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0] || 'folder';
+        toast.info(`Streaming folder: ${folderName}`);
+        await sendFolderViaPeer(fromUserId, files, folderName);
       };
       input.click();
     }
