@@ -36,14 +36,16 @@ export default function UserCard({
       {/* Avatar */}
       <UserAvatar name={name} size="lg" />
 
-      {/* Name + host badge */}
+      {/* Host badge — top left */}
+      {isHost && (
+        <span className="absolute top-1.5 left-1.5 text-[9px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+          Host
+        </span>
+      )}
+
+      {/* Name */}
       <div className="min-w-0 flex-1 sm:flex-none text-left sm:text-center">
         <span className="font-semibold text-sm truncate block">{name}</span>
-        {isHost && (
-          <span className="text-[9px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-1.5 py-0.5 rounded inline-block mt-1">
-            Host
-          </span>
-        )}
       </div>
 
       {/* Action buttons — side by side */}
