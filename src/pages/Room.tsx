@@ -490,75 +490,85 @@ export default function Room() {
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={handleHistory} />
 
       <main className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full">
-        {/* Top bar: user badge left, room live center, signal right */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 animate-fade-up">
-          {/* Left: current user badge */}
-          <div className="flex items-center gap-2">
-            <UserAvatar name={userName || '?'} size="sm" />
-            <div>
-              <span className="text-sm font-semibold">{userName}</span>
-              {isHost && (
-                <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
-                  Host
+        {removedByHost ? (
+          <div className="flex flex-col items-center justify-center h-[60vh] gap-4 animate-fade-in">
+            <p className="text-lg font-semibold text-destructive">Host has removed you from this room</p>
+            <p className="text-sm text-muted-foreground">You no longer have access to this room.</p>
+            <Button variant="outline" onClick={handleLogout}>Logout</Button>
+          </div>
+        ) : (
+          <>
+            {/* Top bar: user badge left, room live center, signal right */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 animate-fade-up">
+              {/* Left: current user badge */}
+              <div className="flex items-center gap-2">
+                <UserAvatar name={userName || '?'} size="sm" />
+                <div>
+                  <span className="text-sm font-semibold">{userName}</span>
+                  {isHost && (
+                    <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+                      Host
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Center: room live badge */}
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-signal-strong animate-pulse" />
+                <span className="text-xs font-mono text-muted-foreground">
+                  Room {roomId} is live
                 </span>
+                <button onClick={copyRoomId} className="text-muted-foreground hover:text-foreground transition-colors">
+                  {copied ? <Check className="h-3.5 w-3.5 text-signal-strong" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+
+              {/* Right: signal strength */}
+              <SignalStrength />
+            </div>
+
+            {room?.status === 'locked' && (
+              <div className="text-center mb-4 animate-fade-up">
+                <span className="text-xs font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                  Room Locked — Host has left
+                </span>
+              </div>
+            )}
+
+            {/* Participants — horizontal grid on desktop, vertical stack on mobile */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+              {participants
+                .filter((p) => p.user_id !== userId)
+                .map((p, i) => (
+                  <div
+                    key={p.user_id}
+                    className="animate-scale-in"
+                    style={{ animationDelay: `${i * 100}ms` }}
+                  >
+                    <UserCard
+                      name={p.name}
+                      isHost={p.user_id === room?.host_id}
+                      showHostControls={isHost}
+                      onRequestFile={() => handleRequestFile(p.user_id)}
+                      onRequestFolder={() => handleRequestFolder(p.user_id)}
+                      onRemove={() => handleRemoveUser(p.user_id)}
+                    />
+                  </div>
+                ))}
+
+              {participants.length === 1 && isHost && (
+                <div className="col-span-full text-center py-12 text-muted-foreground text-sm animate-fade-up" style={{ animationDelay: '200ms' }}>
+                  <p>Share your Room ID to invite others</p>
+                  <Button variant="outline" size="sm" className="mt-3 gap-2" onClick={copyRoomId}>
+                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    Copy Room ID
+                  </Button>
+                </div>
               )}
             </div>
-          </div>
-
-          {/* Center: room live badge */}
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-signal-strong animate-pulse" />
-            <span className="text-xs font-mono text-muted-foreground">
-              Room {roomId} is live
-            </span>
-            <button onClick={copyRoomId} className="text-muted-foreground hover:text-foreground transition-colors">
-              {copied ? <Check className="h-3.5 w-3.5 text-signal-strong" /> : <Copy className="h-3.5 w-3.5" />}
-            </button>
-          </div>
-
-          {/* Right: signal strength */}
-          <SignalStrength />
-        </div>
-
-        {room?.status === 'locked' && (
-          <div className="text-center mb-4 animate-fade-up">
-            <span className="text-xs font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
-              Room Locked — Host has left
-            </span>
-          </div>
+          </>
         )}
-
-        {/* Participants — horizontal grid on desktop, vertical stack on mobile */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
-        {participants
-          .filter((p) => p.user_id !== userId)
-          .map((p, i) => (
-            <div
-              key={p.user_id}
-              className="animate-scale-in"
-              style={{ animationDelay: `${i * 100}ms` }}
-            >
-              <UserCard
-                name={p.name}
-                isHost={p.user_id === room?.host_id}
-                showHostControls={isHost}
-                onRequestFile={() => handleRequestFile(p.user_id)}
-                onRequestFolder={() => handleRequestFolder(p.user_id)}
-                onRemove={() => handleRemoveUser(p.user_id)}
-              />
-            </div>
-          ))}
-
-          {participants.length === 1 && isHost && (
-            <div className="col-span-full text-center py-12 text-muted-foreground text-sm animate-fade-up" style={{ animationDelay: '200ms' }}>
-              <p>Share your Room ID to invite others</p>
-              <Button variant="outline" size="sm" className="mt-3 gap-2" onClick={copyRoomId}>
-                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                Copy Room ID
-              </Button>
-            </div>
-          )}
-        </div>
       </main>
 
       <JoinRequestDialog
