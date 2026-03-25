@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+
 
 /* ═══════════════════════════════════════════
    1. SECURE — padlock that animates from
