@@ -1,14 +1,13 @@
 import { useEffect, useRef } from 'react';
 
-interface Particle {
+interface Node {
   x: number;
   y: number;
+  baseX: number;
+  baseY: number;
   vx: number;
   vy: number;
-  size: number;
-  opacity: number;
-  life: number;
-  maxLife: number;
+  radius: number;
 }
 
 export default function ParticleField() {
@@ -17,64 +16,95 @@ export default function ParticleField() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     let animationId: number;
-    const particles: Particle[] = [];
-    const PARTICLE_COUNT = 60;
+    let nodes: Node[] = [];
+    const NODE_COUNT = 45;
+    const CONNECTION_DIST = 140;
 
     const resize = () => {
-      canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-      canvas.height = canvas.offsetHeight * window.devicePixelRatio;
-      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = canvas.offsetWidth * dpr;
+      canvas.height = canvas.offsetHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    const initNodes = () => {
+      const w = canvas.offsetWidth;
+      const h = canvas.offsetHeight;
+      nodes = [];
+      for (let i = 0; i < NODE_COUNT; i++) {
+        const x = Math.random() * w;
+        const y = Math.random() * h;
+        nodes.push({
+          x, y,
+          baseX: x,
+          baseY: y,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: (Math.random() - 0.5) * 0.3,
+          radius: Math.random() * 2.5 + 1.5,
+        });
+      }
     };
 
     resize();
-    window.addEventListener('resize', resize);
-
-    const spawn = (): Particle => ({
-      x: Math.random() * canvas.offsetWidth,
-      y: Math.random() * canvas.offsetHeight,
-      vx: (Math.random() - 0.5) * 0.4,
-      vy: -Math.random() * 0.6 - 0.2,
-      size: Math.random() * 3 + 1,
-      opacity: Math.random() * 0.5 + 0.1,
-      life: 0,
-      maxLife: Math.random() * 200 + 100,
-    });
-
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const p = spawn();
-      p.life = Math.random() * p.maxLife;
-      particles.push(p);
-    }
+    initNodes();
+    window.addEventListener('resize', () => { resize(); initNodes(); });
 
     const animate = () => {
-      ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
+      const w = canvas.offsetWidth;
+      const h = canvas.offsetHeight;
+      ctx.clearRect(0, 0, w, h);
 
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life++;
+      // Update positions with gentle wiggle
+      for (const node of nodes) {
+        node.x += node.vx;
+        node.y += node.vy;
 
-        const progress = p.life / p.maxLife;
-        const alpha = progress < 0.3
-          ? (progress / 0.3) * p.opacity
-          : progress > 0.7
-          ? ((1 - progress) / 0.3) * p.opacity
-          : p.opacity;
+        // Soft boundary bounce
+        if (node.x < 0 || node.x > w) node.vx *= -1;
+        if (node.y < 0 || node.y > h) node.vy *= -1;
 
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(355, 82%, 56%, ${alpha})`;
-        ctx.fill();
+        // Gentle drift back toward base (wiggle effect)
+        node.vx += (node.baseX - node.x) * 0.0003;
+        node.vy += (node.baseY - node.y) * 0.0003;
 
-        if (p.life >= p.maxLife) {
-          particles[i] = spawn();
+        // Small random jitter
+        node.vx += (Math.random() - 0.5) * 0.02;
+        node.vy += (Math.random() - 0.5) * 0.02;
+
+        // Clamp velocity
+        const maxV = 0.5;
+        node.vx = Math.max(-maxV, Math.min(maxV, node.vx));
+        node.vy = Math.max(-maxV, Math.min(maxV, node.vy));
+      }
+
+      // Draw edges (black)
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < CONNECTION_DIST) {
+            const alpha = 1 - dist / CONNECTION_DIST;
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.strokeStyle = `rgba(0, 0, 0, ${alpha * 0.15})`;
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+          }
         }
+      }
+
+      // Draw dots (red)
+      for (const node of nodes) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'hsl(355, 82%, 56%)';
+        ctx.fill();
       }
 
       animationId = requestAnimationFrame(animate);

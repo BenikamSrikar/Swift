@@ -48,6 +48,7 @@ export default function Room() {
   const transferChannelRef = useRef<any>(null);
 
   const isHost = room?.host_id === userId;
+  const [removedByHost, setRemovedByHost] = useState(false);
 
   // Load room initially
   useEffect(() => {
