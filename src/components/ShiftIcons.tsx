@@ -124,7 +124,7 @@ export function FilesIcon({ revealed }: { revealed: boolean }) {
    5. TRANSFER — file moving from left
       computer to right computer
    ═══════════════════════════════════════════ */
-export function TransferIcon() {
+export function TransferIcon({ revealed }: { revealed: boolean }) {
   return (
     <svg viewBox="0 0 240 180" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
       {/* Left laptop */}
