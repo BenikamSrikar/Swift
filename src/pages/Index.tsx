@@ -61,6 +61,7 @@ const SECTION_STYLES = [
 
 function useElasticScrollReveal() {
   const refs = useRef<(HTMLDivElement | null)[]>([]);
+  const [revealedSet, setRevealedSet] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -68,6 +69,10 @@ function useElasticScrollReveal() {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add('revealed');
+            const idx = refs.current.indexOf(entry.target as HTMLDivElement);
+            if (idx >= 0) {
+              setRevealedSet((prev) => new Set(prev).add(idx));
+            }
           }
         });
       },
@@ -81,14 +86,14 @@ function useElasticScrollReveal() {
     return () => observer.disconnect();
   }, []);
 
-  return refs;
+  return { refs, revealedSet };
 }
 
 export default function Index() {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const sectionRefs = useElasticScrollReveal();
+  const { refs: sectionRefs, revealedSet } = useElasticScrollReveal();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
