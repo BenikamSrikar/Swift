@@ -55,7 +55,7 @@ export function HighSpeedIcon({ revealed }: { revealed: boolean }) {
    3. INSTANT — stopwatch / timer with
       ticking hand animation
    ═══════════════════════════════════════════ */
-export function InstantIcon() {
+export function InstantIcon({ revealed }: { revealed: boolean }) {
   return (
     <svg viewBox="0 0 200 200" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
       {/* Timer body */}
