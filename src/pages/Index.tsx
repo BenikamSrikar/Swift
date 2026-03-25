@@ -176,7 +176,7 @@ export default function Index() {
       {SHIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
         const style = SECTION_STYLES[i];
         const IconComponent = SHIFT_ICON_COMPONENTS[i];
-        const isRevealed = sectionRefs.current[i]?.classList.contains('revealed') ?? false;
+        const isSectionRevealed = revealedSet.has(i);
 
         return (
           <section
