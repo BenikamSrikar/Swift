@@ -87,6 +87,13 @@ export default function Room() {
 
     if (!parts) return;
 
+    // Check if current user has been removed/blocked
+    const myEntry = parts.find((p) => p.user_id === userId);
+    if (myEntry && myEntry.status === 'blocked') {
+      setRemovedByHost(true);
+      return;
+    }
+
     const accepted = parts.filter((p) => p.status === 'accepted');
     const pending = parts.filter((p) => p.status === 'pending');
 
@@ -118,13 +125,12 @@ export default function Room() {
     }));
 
     setPendingRequests(newPending);
-    // Show the first pending request if any
     if (newPending.length > 0) {
       setCurrentRequest((prev) => prev ?? newPending[0]);
     } else {
       setCurrentRequest(null);
     }
-  }, [roomId]);
+  }, [roomId, userId]);
 
   // Initial load of participants
   useEffect(() => {
