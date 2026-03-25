@@ -85,7 +85,7 @@ export function InstantIcon({ revealed }: { revealed: boolean }) {
    4. FILES & FOLDERS — folder with files
       popping up one by one
    ═══════════════════════════════════════════ */
-export function FilesIcon() {
+export function FilesIcon({ revealed }: { revealed: boolean }) {
   return (
     <svg viewBox="0 0 200 200" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
       {/* Folder back */}
