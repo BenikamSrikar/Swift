@@ -884,6 +884,13 @@ export default function Room() {
         onAccept={handleTransferAccept}
         onReject={() => setTransferRequest(null)}
       />
+
+      <UploadModal
+        open={!!uploadModal?.open}
+        onClose={() => setUploadModal(null)}
+        onFileSelected={handleUploadFile}
+        onFolderSelected={handleUploadFolder}
+      />
     </div>
   );
 }
