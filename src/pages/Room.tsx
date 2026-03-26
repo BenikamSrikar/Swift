@@ -6,6 +6,7 @@ import UserAvatar from '@/components/UserAvatar';
 import SignalStrength from '@/components/SignalStrength';
 import JoinRequestDialog from '@/components/JoinRequestDialog';
 import TransferRequestDialog from '@/components/TransferRequestDialog';
+import UploadModal from '@/components/UploadModal';
 import { supabase } from '@/integrations/supabase/client';
 import { getStoredUserId, getStoredUserName, clearSession } from '@/lib/session';
 import { toast } from 'sonner';
