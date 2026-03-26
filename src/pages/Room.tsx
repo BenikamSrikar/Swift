@@ -345,7 +345,9 @@ export default function Room() {
             directoryCache: new Map(),
           };
           metadata = null;
-          setTransferProgress({ label: msg.name, percent: 0, direction: 'receiving' });
+          if (!msg.small) {
+            setTransferProgress({ label: msg.name, percent: 0, direction: 'receiving' });
+          }
         } else if (msg.type === 'file-start' && folderTransfer) {
           let writer: WritableFileStreamLike | null = null;
 
