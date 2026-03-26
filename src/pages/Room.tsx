@@ -642,26 +642,9 @@ export default function Room() {
     toast.info('File request sent');
   };
 
-  const handleRequestFolder = async (targetUserId: string) => {
+  const handleRequestFolder = (targetUserId: string) => {
     const channel = transferChannelRef.current;
     if (!channel) { toast.error('Channel not ready'); return; }
-
-    const pickerHost = window as Window & {
-      showDirectoryPicker?: () => Promise<FileSystemDirectoryHandleLike>;
-    };
-
-    if (pickerHost.showDirectoryPicker) {
-      try {
-        const directoryHandle = await pickerHost.showDirectoryPicker();
-        folderReceiveTargets.current.set(targetUserId, directoryHandle);
-      } catch {
-        toast.info('Folder request cancelled');
-        return;
-      }
-    } else {
-      folderReceiveTargets.current.delete(targetUserId);
-      toast.info('Direct folder save is not supported here, so a ZIP will be prepared after transfer');
-    }
 
     channel.send({
       type: 'broadcast',
