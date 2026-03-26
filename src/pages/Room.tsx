@@ -676,34 +676,20 @@ export default function Room() {
 
   const handleTransferAccept = async () => {
     if (!transferRequest) return;
-    const { type, fromUserId } = transferRequest;
+    const { fromUserId } = transferRequest;
     setTransferRequest(null);
+    setUploadModal({ open: true, targetUserId: fromUserId });
+  };
 
-    if (type === 'file' || type === 'video') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      if (type === 'video') {
-        input.accept = 'video/*';
-      }
-      input.onchange = async () => {
-        const file = input.files?.[0];
-        if (file) await sendFileViaPeer(fromUserId, file);
-      };
-      input.click();
-    } else {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.multiple = true;
-      (input as any).webkitdirectory = true;
-      input.onchange = async () => {
-        const files = input.files;
-        if (!files || files.length === 0) return;
-        const folderName = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0] || 'folder';
-        setTransferProgress({ label: folderName, percent: 0, direction: 'sending' });
-        await sendFolderViaPeer(fromUserId, files, folderName);
-      };
-      input.click();
-    }
+  const handleUploadFile = async (file: File) => {
+    if (!uploadModal) return;
+    await sendFileViaPeer(uploadModal.targetUserId, file);
+  };
+
+  const handleUploadFolder = async (files: FileList, folderName: string) => {
+    if (!uploadModal) return;
+    setTransferProgress({ label: folderName, percent: 0, direction: 'sending' });
+    await sendFolderViaPeer(uploadModal.targetUserId, files, folderName);
   };
 
   const handleAcceptJoin = async () => {
