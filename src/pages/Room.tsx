@@ -86,6 +86,7 @@ export default function Room() {
   const [transferRequest, setTransferRequest] = useState<TransferRequest | null>(null);
   const [copied, setCopied] = useState(false);
   const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
+  const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string } | null>(null);
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
