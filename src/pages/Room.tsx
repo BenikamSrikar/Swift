@@ -381,8 +381,10 @@ export default function Room() {
 
           folderTransfer.receivedFiles += 1;
           folderTransfer.currentFile = null;
-          const pct = Math.round((folderTransfer.receivedFiles / folderTransfer.totalFiles) * 100);
-          setTransferProgress({ label: folderTransfer.folderName, percent: pct, direction: 'receiving' });
+          if (folderTransfer.totalFiles > 100) {
+            const pct = Math.round((folderTransfer.receivedFiles / folderTransfer.totalFiles) * 100);
+            setTransferProgress({ label: folderTransfer.folderName, percent: pct, direction: 'receiving' });
+          }
         } else if (msg.type === 'folder-end' && folderTransfer) {
           const completedTransfer = folderTransfer;
           folderTransfer = null;
