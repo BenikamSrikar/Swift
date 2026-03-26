@@ -570,37 +570,56 @@ export default function Room() {
 
   const sendFolderViaPeer = async (targetUserId: string, files: FileList | File[], folderName: string) => {
     const fileArray = Array.from(files);
-    const started = await createTransferPeer(targetUserId, async (dc) => {
-      dc.send(
-        JSON.stringify({
-          type: 'folder-start',
-          name: folderName,
-          totalFiles: fileArray.length,
-        })
-      );
 
-      for (let i = 0; i < fileArray.length; i++) {
-        const file = fileArray[i];
-        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
-        dc.send(
-          JSON.stringify({
-            type: 'file-start',
-            path: relativePath,
-            size: file.size,
-          })
-        );
-        await sendBlobInChunks(dc, file);
-        dc.send(JSON.stringify({ type: 'file-end' }));
-        const pct = Math.round(((i + 1) / fileArray.length) * 100);
-        setTransferProgress({ label: folderName, percent: pct, direction: 'sending' });
+    // Compress folder into a ZIP on sender side first
+    setTransferProgress({ label: `${folderName} • compressing`, percent: 0, direction: 'sending' });
+    const zip = new JSZip();
+    for (let i = 0; i < fileArray.length; i++) {
+      const file = fileArray[i];
+      const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+      zip.file(relativePath, file);
+      const pct = Math.round(((i + 1) / fileArray.length) * 50); // 0-50% for compression
+      setTransferProgress({ label: `${folderName} • compressing`, percent: pct, direction: 'sending' });
+    }
+
+    const zipBlob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 1 }, // fast compression
+    }, (meta) => {
+      const pct = 50 + Math.round(meta.percent / 2); // 50-100% for zip generation
+      setTransferProgress({ label: `${folderName} • compressing`, percent: pct, direction: 'sending' });
+    });
+
+    // Send as single compressed file
+    const zipFileName = `${folderName}.zip`;
+    setTransferProgress({ label: `${folderName} • sending`, percent: 0, direction: 'sending' });
+
+    const started = await createTransferPeer(targetUserId, async (dc) => {
+      dc.send(JSON.stringify({ type: 'metadata', name: zipFileName, size: zipBlob.size }));
+
+      let offset = 0;
+      const totalSize = zipBlob.size;
+      while (offset < totalSize) {
+        if (dc.bufferedAmount > DATA_CHANNEL_BUFFER_LIMIT) {
+          await waitForBufferedAmount(dc);
+        }
+        const chunk = await zipBlob.slice(offset, offset + DATA_CHANNEL_CHUNK_SIZE).arrayBuffer();
+        dc.send(chunk);
+        offset += DATA_CHANNEL_CHUNK_SIZE;
+        const pct = Math.round((offset / totalSize) * 100);
+        setTransferProgress({ label: `${folderName} • sending`, percent: Math.min(pct, 100), direction: 'sending' });
       }
 
-      dc.send(JSON.stringify({ type: 'folder-end' }));
+      dc.send(JSON.stringify({ type: 'done' }));
       setTransferProgress(null);
       toast.success(`Sent folder: ${folderName}`, { duration: 4000 });
     });
 
-    if (!started) return;
+    if (!started) {
+      setTransferProgress(null);
+      return;
+    }
 
     const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
     await supabase.from('transfer_history').insert({
