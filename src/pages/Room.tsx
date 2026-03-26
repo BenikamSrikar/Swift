@@ -623,11 +623,9 @@ export default function Room() {
         file_name: `${folderName}.zip`, file_type: 'folder',
       });
     } else {
-      // Send files individually for small folders (≤100 files) — no compression overhead
-      setTransferProgress({ label: `${folderName} • sending`, percent: 0, direction: 'sending' });
-
+      // Send files individually for small folders (≤100 files) — no compression, no progress bar
       const started = await createTransferPeer(targetUserId, async (dc) => {
-        dc.send(JSON.stringify({ type: 'folder-start', name: folderName, totalFiles: fileArray.length }));
+        dc.send(JSON.stringify({ type: 'folder-start', name: folderName, totalFiles: fileArray.length, small: true }));
 
         for (let i = 0; i < fileArray.length; i++) {
           const file = fileArray[i];
@@ -635,16 +633,13 @@ export default function Room() {
           dc.send(JSON.stringify({ type: 'file-start', path: relativePath, size: file.size }));
           await sendBlobInChunks(dc, file);
           dc.send(JSON.stringify({ type: 'file-end' }));
-          const pct = Math.round(((i + 1) / fileArray.length) * 100);
-          setTransferProgress({ label: `${folderName} • sending`, percent: pct, direction: 'sending' });
         }
 
         dc.send(JSON.stringify({ type: 'folder-end' }));
-        setTransferProgress(null);
         toast.success(`Sent folder: ${folderName}`, { duration: 4000 });
       });
 
-      if (!started) { setTransferProgress(null); return; }
+      if (!started) { return; }
 
       const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
       await supabase.from('transfer_history').insert({
