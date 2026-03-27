@@ -894,6 +894,7 @@ export default function Room() {
 
       <UploadModal
         open={!!uploadModal?.open}
+        mode={uploadModal?.mode || 'file'}
         onClose={() => setUploadModal(null)}
         onFileSelected={handleUploadFile}
         onFolderSelected={handleUploadFolder}
