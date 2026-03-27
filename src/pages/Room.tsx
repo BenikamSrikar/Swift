@@ -686,7 +686,7 @@ export default function Room() {
     if (!transferRequest) return;
     const { fromUserId } = transferRequest;
     setTransferRequest(null);
-    setUploadModal({ open: true, targetUserId: fromUserId });
+    setUploadModal({ open: true, targetUserId: fromUserId, mode: transferRequest.type === 'folder' ? 'folder' : 'file' });
   };
 
   const handleUploadFile = async (file: File) => {
