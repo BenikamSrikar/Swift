@@ -387,11 +387,12 @@ export default function Room() {
           }
         } else if (msg.type === 'folder-end' && folderTransfer) {
           const completedTransfer = folderTransfer;
+          const isSmall = completedTransfer.totalFiles <= 100;
           folderTransfer = null;
           folderReceiveTargets.current.delete(fromUserId);
 
           if (completedTransfer.mode === 'stream') {
-            setTransferProgress(null);
+            if (!isSmall) setTransferProgress(null);
             toast.success(`Folder received: ${completedTransfer.folderName}`, {
               description: 'Saved directly to your selected folder.',
               duration: 6000,
@@ -400,11 +401,13 @@ export default function Room() {
             return;
           }
 
-          setTransferProgress({
-            label: `${completedTransfer.folderName} • finalizing`,
-            percent: 99,
-            direction: 'receiving',
-          });
+          if (!isSmall) {
+            setTransferProgress({
+              label: `${completedTransfer.folderName} • finalizing`,
+              percent: 99,
+              direction: 'receiving',
+            });
+          }
 
           const blob = await completedTransfer.zip.generateAsync({
             type: 'blob',
@@ -412,7 +415,7 @@ export default function Room() {
             streamFiles: true,
           });
 
-          setTransferProgress(null);
+          if (!isSmall) setTransferProgress(null);
           const url = URL.createObjectURL(blob);
           toast.success(`Folder received: ${completedTransfer.folderName}`, {
             action: {
