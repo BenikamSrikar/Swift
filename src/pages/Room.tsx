@@ -86,7 +86,7 @@ export default function Room() {
   const [transferRequest, setTransferRequest] = useState<TransferRequest | null>(null);
   const [copied, setCopied] = useState(false);
   const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
-  const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string } | null>(null);
+  const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string; mode: 'file' | 'folder' } | null>(null);
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
@@ -686,7 +686,7 @@ export default function Room() {
     if (!transferRequest) return;
     const { fromUserId } = transferRequest;
     setTransferRequest(null);
-    setUploadModal({ open: true, targetUserId: fromUserId });
+    setUploadModal({ open: true, targetUserId: fromUserId, mode: transferRequest.type === 'folder' ? 'folder' : 'file' });
   };
 
   const handleUploadFile = async (file: File) => {
@@ -894,6 +894,7 @@ export default function Room() {
 
       <UploadModal
         open={!!uploadModal?.open}
+        mode={uploadModal?.mode || 'file'}
         onClose={() => setUploadModal(null)}
         onFileSelected={handleUploadFile}
         onFolderSelected={handleUploadFolder}

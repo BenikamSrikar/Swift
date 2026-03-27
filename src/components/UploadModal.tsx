@@ -1,26 +1,41 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
 import { Upload, FolderUp, FileUp } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface UploadModalProps {
   open: boolean;
+  mode: 'file' | 'folder';
   onClose: () => void;
   onFileSelected: (file: File) => void;
   onFolderSelected: (files: FileList, folderName: string) => void;
 }
 
-export default function UploadModal({ open, onClose, onFileSelected, onFolderSelected }: UploadModalProps) {
-  const [activeTab, setActiveTab] = useState<'file' | 'folder'>('file');
+export default function UploadModal({ open, mode, onClose, onFileSelected, onFolderSelected }: UploadModalProps) {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const isMobile = useIsMobile();
+
+  // On mobile, skip the modal and directly trigger native picker
+  useEffect(() => {
+    if (open && isMobile) {
+      // Small delay to ensure refs are mounted
+      const timer = setTimeout(() => {
+        if (mode === 'file') {
+          fileInputRef.current?.click();
+        } else {
+          folderInputRef.current?.click();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open, isMobile, mode]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -39,19 +54,17 @@ export default function UploadModal({ open, onClose, onFileSelected, onFolderSel
     e.stopPropagation();
     setDragOver(false);
 
-    if (activeTab === 'file') {
+    if (mode === 'file') {
       const file = e.dataTransfer.files?.[0];
       if (file) {
         onFileSelected(file);
         onClose();
       }
     } else {
-      // Dropped items for folder - use dataTransfer.items for webkitGetAsEntry
       const items = e.dataTransfer.items;
       if (items && items.length > 0) {
         const entry = items[0].webkitGetAsEntry?.();
         if (entry?.isDirectory) {
-          // For directory drops, we need to traverse
           traverseDirectory(entry as FileSystemDirectoryEntry).then((files) => {
             if (files.length > 0) {
               const folderName = entry.name;
@@ -62,7 +75,6 @@ export default function UploadModal({ open, onClose, onFileSelected, onFolderSel
             }
           });
         } else {
-          // Single file dropped on folder tab
           const file = e.dataTransfer.files?.[0];
           if (file) {
             onFileSelected(file);
@@ -71,7 +83,7 @@ export default function UploadModal({ open, onClose, onFileSelected, onFolderSel
         }
       }
     }
-  }, [activeTab, onFileSelected, onFolderSelected, onClose]);
+  }, [mode, onFileSelected, onFolderSelected, onClose]);
 
   const traverseDirectory = async (dirEntry: FileSystemDirectoryEntry): Promise<File[]> => {
     const files: File[] = [];
@@ -85,7 +97,6 @@ export default function UploadModal({ open, onClose, onFileSelected, onFolderSel
     const processEntry = async (entry: FileSystemEntry, path: string) => {
       if (entry.isFile) {
         const file = await getFile(entry as FileSystemFileEntry);
-        // Create a new File with the relative path
         const newFile = new File([file], file.name, { type: file.type, lastModified: file.lastModified });
         Object.defineProperty(newFile, 'webkitRelativePath', {
           value: `${path}/${file.name}`,
@@ -135,37 +146,58 @@ export default function UploadModal({ open, onClose, onFileSelected, onFolderSel
     if (file) {
       onFileSelected(file);
       onClose();
+    } else if (isMobile) {
+      // User cancelled the native picker on mobile
+      onClose();
     }
   };
 
   const handleFolderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {
+      if (isMobile) onClose();
+      return;
+    }
     const folderName = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0] || 'folder';
     onFolderSelected(files, folderName);
     onClose();
   };
 
+  // Hidden inputs always rendered for mobile direct-trigger
+  const hiddenInputs = (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleFileInputChange}
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleFolderInputChange}
+        {...({ webkitdirectory: 'true', directory: '' } as any)}
+        multiple
+      />
+    </>
+  );
+
+  // On mobile, don't render the dialog — just the hidden inputs
+  if (isMobile) {
+    if (!open) return null;
+    return hiddenInputs;
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Select & Send</DialogTitle>
+          <DialogTitle>{mode === 'file' ? 'Send a File' : 'Send a Folder'}</DialogTitle>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'file' | 'folder')}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="file" className="gap-2">
-              <FileUp className="h-4 w-4" />
-              File
-            </TabsTrigger>
-            <TabsTrigger value="folder" className="gap-2">
-              <FolderUp className="h-4 w-4" />
-              Folder
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="file" className="mt-4">
+        <div className="mt-4">
+          {mode === 'file' ? (
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -181,15 +213,7 @@ export default function UploadModal({ open, onClose, onFileSelected, onFolderSel
                 Drag & drop a file here, or <span className="text-primary font-medium">browse</span>
               </p>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFileInputChange}
-            />
-          </TabsContent>
-
-          <TabsContent value="folder" className="mt-4">
+          ) : (
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -206,16 +230,10 @@ export default function UploadModal({ open, onClose, onFileSelected, onFolderSel
               </p>
               <p className="text-xs text-muted-foreground/70">Folder will be compressed before sending</p>
             </div>
-            <input
-              ref={folderInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFolderInputChange}
-              {...({ webkitdirectory: 'true', directory: '' } as any)}
-              multiple
-            />
-          </TabsContent>
-        </Tabs>
+          )}
+        </div>
+
+        {hiddenInputs}
       </DialogContent>
     </Dialog>
   );
