@@ -693,7 +693,6 @@ export default function Room() {
 
   const handleUploadFolder = async (files: FileList, folderName: string) => {
     if (!uploadModal) return;
-    setTransferProgress({ label: folderName, percent: 0, direction: 'sending' });
     await sendFolderViaPeer(uploadModal.targetUserId, files, folderName);
   };
 
