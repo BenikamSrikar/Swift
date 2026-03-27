@@ -6,7 +6,7 @@ interface VoltsNavbarProps {
 
 export default function VoltsNavbar({ showActions, onHistoryClick, onLogout }: VoltsNavbarProps) {
   return (
-    <nav className="w-full border-b bg-card px-6 py-3 flex items-center justify-between">
+    <nav className="w-full border-b bg-card px-6 py-3 flex items-center justify-center relative">
       <div>
         <div className="flex items-center gap-1.5">
           <span className="text-lg font-bold tracking-tight text-primary">SHIFT</span>
