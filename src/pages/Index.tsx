@@ -234,7 +234,7 @@ export default function Index() {
             No data stored &bull; Peer-to-peer &bull; Ephemeral sessions
           </span>
           <p className="text-xs" style={{ color: 'hsl(0 0% 35%)' }}>
-            &copy; {new Date().getFullYear()} SHIFT. All rights reserved.
+            &copy; {new Date().getFullYear()} SWIFT. All rights reserved.
           </p>
         </div>
       </footer>
