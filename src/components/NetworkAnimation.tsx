@@ -133,7 +133,7 @@ function drawCenterHub(
   ctx.font = `bold ${10 * scale}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('SHIFT', cx, cy);
+  ctx.fillText('SWIFT', cx, cy);
 }
 
 function drawEdge(

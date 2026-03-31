@@ -9,7 +9,7 @@ export default function VoltsNavbar({ showActions, onHistoryClick, onLogout }: V
     <nav className="w-full border-b bg-card px-6 py-3 flex items-center justify-center relative">
       <div>
         <div className="flex items-center gap-1.5">
-          <span className="text-lg font-bold tracking-tight text-primary">SHIFT</span>
+          <span className="text-lg font-bold tracking-tight text-primary">SWIFT</span>
           <span className="text-xs font-medium text-foreground">v1.0</span>
         </div>
       </div>

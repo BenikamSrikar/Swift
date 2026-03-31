@@ -165,52 +165,35 @@
     transform: rotate(0deg) translateY(0);
   }
 
-  /* ═══ HIGH-SPEED: concentric rings ═══ */
-  .concentric-ring {
-    transform-origin: center;
+  /* ═══ WIDEBAND: signal arcs + frequency bars ═══ */
+  .wb-arc {
     opacity: 0;
-    animation: ring-expand 2.4s ease-out infinite;
+    animation: wb-pulse 2s ease-in-out infinite;
   }
-  .ring-1 { animation-delay: 0s; }
-  .ring-2 { animation-delay: 0.8s; }
-  .ring-3 { animation-delay: 1.6s; }
+  .wb-arc-1 { animation-delay: 0s; }
+  .wb-arc-2 { animation-delay: 0.4s; }
+  .wb-arc-3 { animation-delay: 0.8s; }
 
-  @keyframes ring-expand {
-    0% { transform: scale(1); opacity: 0.7; }
-    100% { transform: scale(4); opacity: 0; }
-  }
-
-  /* Needle sweep */
-  .speed-needle {
-    transform-origin: 100px 140px;
-    animation: needle-sweep 2s ease-in-out infinite alternate;
-  }
-  @keyframes needle-sweep {
-    0% { transform: rotate(-50deg); }
-    100% { transform: rotate(40deg); }
+  @keyframes wb-pulse {
+    0% { opacity: 0; transform: scale(0.9); }
+    30% { opacity: 0.8; transform: scale(1); }
+    70% { opacity: 0.6; transform: scale(1.02); }
+    100% { opacity: 0; transform: scale(1.05); }
   }
 
-  /* Gauge fill */
-  .gauge-fill {
-    stroke-dasharray: 235;
-    stroke-dashoffset: 235;
-    animation: gauge-draw 2s ease-in-out infinite alternate;
+  .freq-bar {
+    animation: freq-bounce 1.8s ease-in-out infinite;
   }
-  @keyframes gauge-draw {
-    0% { stroke-dashoffset: 235; }
-    100% { stroke-dashoffset: 40; }
-  }
+  .fb-1 { animation-delay: 0s; }
+  .fb-2 { animation-delay: 0.15s; }
+  .fb-3 { animation-delay: 0.3s; }
+  .fb-4 { animation-delay: 0.45s; }
+  .fb-5 { animation-delay: 0.6s; }
+  .fb-6 { animation-delay: 0.75s; }
 
-  /* Speed lines */
-  .speed-line {
-    animation: speed-flash 1.5s ease-in-out infinite;
-  }
-  .sl-1 { animation-delay: 0s; }
-  .sl-2 { animation-delay: 0.3s; }
-  .sl-3 { animation-delay: 0.6s; }
-  @keyframes speed-flash {
-    0%, 100% { opacity: 0.2; transform: translateY(0); }
-    50% { opacity: 0.8; transform: translateY(-6px); }
+  @keyframes freq-bounce {
+    0%, 100% { transform: scaleY(1); opacity: 0.3; }
+    50% { transform: scaleY(1.4); opacity: 0.8; }
   }
 
   /* ═══ INSTANT: ticking timer hand ═══ */

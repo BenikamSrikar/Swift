@@ -8,47 +8,47 @@ import { generateUserId, storeSession } from '@/lib/session';
 import { ArrowRight } from 'lucide-react';
 import ParticleField from '@/components/ParticleField';
 import NetworkAnimation from '@/components/NetworkAnimation';
-import { SecureIcon, HighSpeedIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
+import { SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
 
-const SHIFT_ITEMS = [
+const SWIFT_ITEMS = [
   {
     letter: 'S',
     word: 'Secure',
     brief: 'Your privacy is non-negotiable.',
     description:
-      "Every transfer in SHIFT is peer-to-peer using WebRTC \u2014 your files never pass through any server. With end-to-end encryption baked into the protocol, only the sender and receiver can access the data. No cloud storage, no logs, no traces. It\u2019s as if the transfer never happened \u2014 except you have the file.",
+      "Every transfer in SWIFT is peer-to-peer using WebRTC — your files never pass through any server. With end-to-end encryption baked into the protocol, only the sender and receiver can access the data. No cloud storage, no logs, no traces. It\u2019s as if the transfer never happened — except you have the file.",
   },
   {
-    letter: 'H',
-    word: 'High-speed',
-    brief: 'Direct connections, zero bottlenecks.',
+    letter: 'W',
+    word: 'Wideband',
+    brief: 'Maximum bandwidth, zero bottlenecks.',
     description:
-      'Traditional file sharing uploads to a server, then downloads to the recipient \u2014 doubling the time. SHIFT eliminates the middleman entirely. WebRTC establishes a direct tunnel between devices, meaning your transfer speed is limited only by the network between you and the other person. Large videos, hefty archives \u2014 they move at full throttle.',
+      'Traditional file sharing uploads to a server, then downloads to the recipient — doubling the time. SWIFT eliminates the middleman entirely. WebRTC establishes a direct wideband tunnel between devices, utilizing the full spectrum of your connection. Large videos, hefty archives — they move at full throttle with no artificial limits.',
   },
   {
     letter: 'I',
     word: 'Instant',
     brief: 'Zero friction, zero accounts.',
     description:
-      "No sign-ups, no email verification, no passwords to remember. Just type your name and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds. SHIFT is designed for the moments when you need to move a file right now \u2014 not after filling out three forms.",
+      "No sign-ups, no email verification, no passwords to remember. Just type your name and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds. SWIFT is designed for the moments when you need to move a file right now — not after filling out three forms.",
   },
   {
     letter: 'F',
     word: 'Files & Folders',
-    brief: 'Send anything \u2014 files, folders, or videos.',
+    brief: 'Send anything — files, folders, or videos.',
     description:
-      "Whether it\u2019s a single document, an entire project folder, or a large video file, SHIFT handles it all. Folders are automatically compressed into ZIP archives before transfer, preserving directory structure. Video files get their own dedicated transfer mode. The recipient gets a download notification with one-click save \u2014 clean and simple.",
+      "Whether it\u2019s a single document, an entire project folder, or a large video file, SWIFT handles it all. Folders are automatically compressed into ZIP archives before transfer, preserving directory structure. Video files get their own dedicated transfer mode. The recipient gets a download notification with one-click save — clean and simple.",
   },
   {
     letter: 'T',
     word: 'Transfer',
     brief: 'Ephemeral by design.',
     description:
-      "SHIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history exists only for the sender during the active session and can be exported as a PDF. Once you log out or close the tab \u2014 it\u2019s gone. This is file transfer distilled to its purest form.",
+      "SWIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history exists only for the sender during the active session and can be exported as a PDF. Once you log out or close the tab — it\u2019s gone. This is file transfer distilled to its purest form.",
   },
 ];
 
-const SHIFT_ICON_COMPONENTS = [SecureIcon, HighSpeedIcon, InstantIcon, FilesIcon, TransferIcon];
+const SWIFT_ICON_COMPONENTS = [SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon];
 
 // Progressively darker backgrounds + unique animation variant per section
 const SECTION_STYLES = [
@@ -129,7 +129,7 @@ export default function Index() {
           {/* Left: text + form */}
           <div className="flex-1 animate-fade-up" style={{ animationDelay: '100ms' }}>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4">
-              <span className="text-primary">SHIFT</span>
+              <span className="text-primary">SWIFT</span>
             </h1>
             <p className="text-base lg:text-lg text-muted-foreground leading-relaxed max-w-md mb-8">
               Peer-to-peer file transfer built for speed and privacy. No accounts, no cloud — just a direct connection between you and the recipient.
@@ -172,10 +172,10 @@ export default function Index() {
         </div>
       </section>
 
-      {/* SHIFT Sections — elastic scroll reveal, progressively darker */}
-      {SHIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
+      {/* SWIFT Sections — elastic scroll reveal, progressively darker */}
+      {SWIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
         const style = SECTION_STYLES[i];
-        const IconComponent = SHIFT_ICON_COMPONENTS[i];
+        const IconComponent = SWIFT_ICON_COMPONENTS[i];
         const isSectionRevealed = revealedSet.has(i);
 
         return (
@@ -224,17 +224,17 @@ export default function Index() {
       <footer className="py-12 px-6" style={{ backgroundColor: 'hsl(0 0% 4%)' }}>
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="text-center sm:text-left">
-            <span className="text-xl font-bold text-primary">SHIFT</span>
+            <span className="text-xl font-bold text-primary">SWIFT</span>
             <span className="text-xs font-mono ml-2" style={{ color: 'hsl(0 0% 50%)' }}>v1.0</span>
             <p className="text-xs mt-1" style={{ color: 'hsl(0 0% 45%)' }}>
-              Secure High-speed Instant File Transfer
+              Secure Wideband Instant File Transfer
             </p>
           </div>
           <span className="text-xs" style={{ color: 'hsl(0 0% 40%)' }}>
             No data stored &bull; Peer-to-peer &bull; Ephemeral sessions
           </span>
           <p className="text-xs" style={{ color: 'hsl(0 0% 35%)' }}>
-            &copy; {new Date().getFullYear()} SHIFT. All rights reserved.
+            &copy; {new Date().getFullYear()} SWIFT. All rights reserved.
           </p>
         </div>
       </footer>
