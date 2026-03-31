@@ -26,27 +26,35 @@ export function SecureIcon({ revealed }: { revealed: boolean }) {
 }
 
 /* ═══════════════════════════════════════════
-   2. HIGH-SPEED — speedometer needle with
-      concentric radar pulse rings
+   2. WIDEBAND — signal wave spectrum with
+      expanding frequency bands
    ═══════════════════════════════════════════ */
-export function HighSpeedIcon({ revealed }: { revealed: boolean }) {
+export function WidebandIcon({ revealed }: { revealed: boolean }) {
   return (
     <svg viewBox="0 0 200 200" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-      {/* Concentric pulse rings */}
-      <circle cx="100" cy="110" r="20" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="2" className="concentric-ring ring-1" />
-      <circle cx="100" cy="110" r="20" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="2" className="concentric-ring ring-2" />
-      <circle cx="100" cy="110" r="20" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="2" className="concentric-ring ring-3" />
-      {/* Gauge arc */}
-      <path d="M35,140 A75,75 0 0,1 165,140" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="5" strokeLinecap="round" opacity="0.3" />
-      <path d="M35,140 A75,75 0 0,1 165,140" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="5" strokeLinecap="round" className="gauge-fill" />
-      {/* Needle */}
-      <line x1="100" y1="140" x2="100" y2="75" stroke="hsl(355,82%,56%)" strokeWidth="4" strokeLinecap="round" className="speed-needle" />
-      {/* Center dot */}
-      <circle cx="100" cy="140" r="7" fill="hsl(355,82%,56%)" />
-      {/* Speed lines */}
-      <line x1="50" y1="55" x2="50" y2="40" stroke="hsl(355,82%,56%)" strokeWidth="2.5" strokeLinecap="round" opacity="0.4" className="speed-line sl-1" />
-      <line x1="100" y1="40" x2="100" y2="25" stroke="hsl(355,82%,56%)" strokeWidth="2.5" strokeLinecap="round" opacity="0.4" className="speed-line sl-2" />
-      <line x1="150" y1="55" x2="150" y2="40" stroke="hsl(355,82%,56%)" strokeWidth="2.5" strokeLinecap="round" opacity="0.4" className="speed-line sl-3" />
+      {/* Central antenna / broadcast point */}
+      <circle cx="100" cy="100" r="8" fill="hsl(355,82%,56%)" />
+      <line x1="100" y1="100" x2="100" y2="60" stroke="hsl(355,82%,56%)" strokeWidth="4" strokeLinecap="round" />
+      <line x1="90" y1="68" x2="100" y2="55" stroke="hsl(355,82%,56%)" strokeWidth="3" strokeLinecap="round" />
+      <line x1="110" y1="68" x2="100" y2="55" stroke="hsl(355,82%,56%)" strokeWidth="3" strokeLinecap="round" />
+
+      {/* Wideband signal arcs — left */}
+      <path d="M75,85 Q60,100 75,115" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="3.5" strokeLinecap="round" className="wb-arc wb-arc-1" />
+      <path d="M60,72 Q38,100 60,128" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="3" strokeLinecap="round" className="wb-arc wb-arc-2" />
+      <path d="M45,60 Q16,100 45,140" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="2.5" strokeLinecap="round" className="wb-arc wb-arc-3" />
+
+      {/* Wideband signal arcs — right */}
+      <path d="M125,85 Q140,100 125,115" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="3.5" strokeLinecap="round" className="wb-arc wb-arc-1" />
+      <path d="M140,72 Q162,100 140,128" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="3" strokeLinecap="round" className="wb-arc wb-arc-2" />
+      <path d="M155,60 Q184,100 155,140" fill="none" stroke="hsl(355,82%,56%)" strokeWidth="2.5" strokeLinecap="round" className="wb-arc wb-arc-3" />
+
+      {/* Frequency band indicators at bottom */}
+      <rect x="40" y="155" width="16" height="20" rx="2" fill="hsl(355,82%,56%)" opacity="0.3" className="freq-bar fb-1" />
+      <rect x="62" y="150" width="16" height="25" rx="2" fill="hsl(355,82%,56%)" opacity="0.4" className="freq-bar fb-2" />
+      <rect x="84" y="145" width="16" height="30" rx="2" fill="hsl(355,82%,56%)" opacity="0.5" className="freq-bar fb-3" />
+      <rect x="106" y="148" width="16" height="27" rx="2" fill="hsl(355,82%,56%)" opacity="0.45" className="freq-bar fb-4" />
+      <rect x="128" y="152" width="16" height="23" rx="2" fill="hsl(355,82%,56%)" opacity="0.35" className="freq-bar fb-5" />
+      <rect x="150" y="157" width="16" height="18" rx="2" fill="hsl(355,82%,56%)" opacity="0.25" className="freq-bar fb-6" />
     </svg>
   );
 }
