@@ -172,10 +172,10 @@ export default function Index() {
         </div>
       </section>
 
-      {/* SHIFT Sections — elastic scroll reveal, progressively darker */}
-      {SHIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
+      {/* SWIFT Sections — elastic scroll reveal, progressively darker */}
+      {SWIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
         const style = SECTION_STYLES[i];
-        const IconComponent = SHIFT_ICON_COMPONENTS[i];
+        const IconComponent = SWIFT_ICON_COMPONENTS[i];
         const isSectionRevealed = revealedSet.has(i);
 
         return (
