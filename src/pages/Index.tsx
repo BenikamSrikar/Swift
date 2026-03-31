@@ -129,7 +129,7 @@ export default function Index() {
           {/* Left: text + form */}
           <div className="flex-1 animate-fade-up" style={{ animationDelay: '100ms' }}>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4">
-              <span className="text-primary">SHIFT</span>
+              <span className="text-primary">SWIFT</span>
             </h1>
             <p className="text-base lg:text-lg text-muted-foreground leading-relaxed max-w-md mb-8">
               Peer-to-peer file transfer built for speed and privacy. No accounts, no cloud — just a direct connection between you and the recipient.
