@@ -892,6 +892,8 @@ export default function Room() {
       <JoinRequestDialog
         open={!!currentRequest && isHost}
         requesterName={currentRequest?.name || ''}
+        requesterEmail={currentRequest?.email}
+        requesterAvatar={currentRequest?.avatar_url}
         onAccept={handleAcceptJoin}
         onReject={handleRejectJoin}
       />
@@ -910,6 +912,13 @@ export default function Room() {
         onClose={() => setUploadModal(null)}
         onFileSelected={handleUploadFile}
         onFolderSelected={handleUploadFolder}
+      />
+
+      <HistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        senderEmail={profile?.email || ''}
+        senderName={profile?.name || ''}
       />
     </div>
   );
