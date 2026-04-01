@@ -676,7 +676,7 @@ export default function Room() {
       const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
       await supabase.from('transfer_history').insert({
         sender_id: userId!, sender_name: userName!, recipient_name: targetName,
-        file_name: folderName, file_type: 'folder',
+        file_name: folderName, file_type: 'folder', sender_email: profile?.email || '',
       });
     }
   };
