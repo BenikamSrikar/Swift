@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          auth_user_id: string
+          avatar_url: string | null
+          created_at: string
+          email: string
+          id: string
+          name: string
+        }
+        Insert: {
+          auth_user_id: string
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+        }
+        Update: {
+          auth_user_id?: string
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       room_participants: {
         Row: {
           created_at: string
@@ -92,6 +119,7 @@ export type Database = {
           file_type: string
           id: string
           recipient_name: string
+          sender_email: string | null
           sender_id: string
           sender_name: string
           transferred_at: string
@@ -101,6 +129,7 @@ export type Database = {
           file_type?: string
           id?: string
           recipient_name: string
+          sender_email?: string | null
           sender_id: string
           sender_name: string
           transferred_at?: string
@@ -110,6 +139,7 @@ export type Database = {
           file_type?: string
           id?: string
           recipient_name?: string
+          sender_email?: string | null
           sender_id?: string
           sender_name?: string
           transferred_at?: string
