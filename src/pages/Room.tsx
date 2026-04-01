@@ -37,11 +37,15 @@ interface Participant {
   user_id: string;
   name: string;
   status: string;
+  email?: string;
+  avatar_url?: string | null;
 }
 
 interface PendingRequest {
   userId: string;
   name: string;
+  email?: string;
+  avatar_url?: string | null;
 }
 
 interface TransferRequest {
