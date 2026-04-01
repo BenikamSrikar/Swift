@@ -800,7 +800,7 @@ export default function Room() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 animate-fade-up">
               {/* Left: current user badge */}
               <div className="flex items-center gap-2">
-                <UserAvatar name={userName || '?'} size="sm" />
+                <UserAvatar name={userName || '?'} avatarUrl={profile?.avatar_url} size="sm" />
                 <div>
                   <span className="text-sm font-semibold">{userName}</span>
                   {isHost && (
