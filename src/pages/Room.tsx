@@ -765,28 +765,15 @@ export default function Room() {
     if (userId) {
       await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
       await supabase.from('sessions').delete().eq('user_id', userId);
-      await supabase.from('transfer_history').delete().eq('sender_id', userId);
     }
     peerConnections.current.forEach((pc) => pc.close());
     peerConnections.current.clear();
-    clearSession();
+    await signOut();
     navigate('/');
   };
 
-  const handleHistory = async () => {
-    if (!userId) return;
-    const { data } = await supabase
-      .from('transfer_history')
-      .select('*')
-      .eq('sender_id', userId)
-      .order('transferred_at', { ascending: false });
-
-    if (!data || data.length === 0) {
-      toast.info('No transfer history yet');
-      return;
-    }
-    const { generateHistoryPdf } = await import('@/lib/pdfExport');
-    generateHistoryPdf(userName || 'Unknown', data);
+  const handleHistory = () => {
+    setHistoryOpen(true);
   };
 
   const copyRoomId = () => {
