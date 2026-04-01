@@ -4,6 +4,7 @@ import { File, FolderOpen, X } from 'lucide-react';
 
 interface UserCardProps {
   name: string;
+  avatarUrl?: string | null;
   isHost?: boolean;
   showHostControls?: boolean;
   onRequestFile?: () => void;
@@ -13,6 +14,7 @@ interface UserCardProps {
 
 export default function UserCard({
   name,
+  avatarUrl,
   isHost,
   showHostControls,
   onRequestFile,
@@ -21,7 +23,6 @@ export default function UserCard({
 }: UserCardProps) {
   return (
     <div className="relative group volts-card p-5 flex flex-row items-center gap-4 sm:flex-col sm:items-center sm:justify-center sm:aspect-square sm:w-44 transition-all duration-300 hover:-translate-y-1">
-      {/* Remove button — top right */}
       {showHostControls && (
         <Button
           size="icon"
@@ -33,22 +34,18 @@ export default function UserCard({
         </Button>
       )}
 
-      {/* Avatar */}
-      <UserAvatar name={name} size="lg" />
+      <UserAvatar name={name} avatarUrl={avatarUrl} size="lg" />
 
-      {/* Host badge — top left */}
       {isHost && (
         <span className="absolute top-1.5 left-1.5 text-[9px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
           Host
         </span>
       )}
 
-      {/* Name */}
       <div className="min-w-0 flex-1 sm:flex-none text-left sm:text-center">
         <span className="font-semibold text-sm truncate block">{name}</span>
       </div>
 
-      {/* Action buttons — side by side */}
       <div className="flex items-center gap-2 shrink-0">
         <Button size="sm" variant="outline" className="gap-1 text-xs h-8 px-2.5" onClick={onRequestFile}>
           <File className="h-3.5 w-3.5" />

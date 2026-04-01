@@ -7,8 +7,9 @@ import SignalStrength from '@/components/SignalStrength';
 import JoinRequestDialog from '@/components/JoinRequestDialog';
 import TransferRequestDialog from '@/components/TransferRequestDialog';
 import UploadModal from '@/components/UploadModal';
+import HistoryModal from '@/components/HistoryModal';
 import { supabase } from '@/integrations/supabase/client';
-import { getStoredUserId, getStoredUserName, clearSession } from '@/lib/session';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -36,11 +37,15 @@ interface Participant {
   user_id: string;
   name: string;
   status: string;
+  email?: string;
+  avatar_url?: string | null;
 }
 
 interface PendingRequest {
   userId: string;
   name: string;
+  email?: string;
+  avatar_url?: string | null;
 }
 
 interface TransferRequest {
@@ -76,8 +81,9 @@ interface TransferProgress {
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const userId = getStoredUserId();
-  const userName = getStoredUserName();
+  const { user, profile, signOut } = useAuth();
+  const userId = user?.id;
+  const userName = profile?.name;
 
   const [room, setRoom] = useState<any>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -87,6 +93,7 @@ export default function Room() {
   const [copied, setCopied] = useState(false);
   const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
   const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string; mode: 'file' | 'folder' } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
@@ -122,7 +129,7 @@ export default function Room() {
     loadRoom();
   }, [roomId, userId, userName, navigate]);
 
-  // Load participants - no dependency on currentRequest to avoid stale closures
+  // Load participants - fetch profiles for name/avatar/email
   const loadParticipants = useCallback(async () => {
     if (!roomId) return;
 
@@ -133,7 +140,6 @@ export default function Room() {
 
     if (!parts) return;
 
-    // Check if current user has been removed/blocked
     const myEntry = parts.find((p) => p.user_id === userId);
     if (myEntry && myEntry.status === 'blocked') {
       setRemovedByHost(true);
@@ -150,25 +156,43 @@ export default function Room() {
       return;
     }
 
+    // Fetch profiles for avatar/email info
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('auth_user_id, name, email, avatar_url')
+      .in('auth_user_id', userIds);
+
+    // Fallback to sessions for name if no profile
     const { data: sessions } = await supabase
       .from('sessions')
       .select('user_id, name')
       .in('user_id', userIds);
 
-    const nameMap = new Map(sessions?.map((s) => [s.user_id, s.name]) ?? []);
+    const profileMap = new Map(profiles?.map((p) => [p.auth_user_id, p]) ?? []);
+    const sessionMap = new Map(sessions?.map((s) => [s.user_id, s.name]) ?? []);
 
     setParticipants(
-      accepted.map((p) => ({
-        user_id: p.user_id,
-        name: nameMap.get(p.user_id) || 'Unknown',
-        status: p.status,
-      }))
+      accepted.map((p) => {
+        const prof = profileMap.get(p.user_id);
+        return {
+          user_id: p.user_id,
+          name: prof?.name || sessionMap.get(p.user_id) || 'Unknown',
+          status: p.status,
+          email: prof?.email,
+          avatar_url: prof?.avatar_url,
+        };
+      })
     );
 
-    const newPending = pending.map((p) => ({
-      userId: p.user_id,
-      name: nameMap.get(p.user_id) || 'Unknown',
-    }));
+    const newPending = pending.map((p) => {
+      const prof = profileMap.get(p.user_id);
+      return {
+        userId: p.user_id,
+        name: prof?.name || sessionMap.get(p.user_id) || 'Unknown',
+        email: prof?.email,
+        avatar_url: prof?.avatar_url,
+      };
+    });
 
     setPendingRequests(newPending);
     if (newPending.length > 0) {
@@ -572,6 +596,7 @@ export default function Room() {
       recipient_name: targetName,
       file_name: file.name,
       file_type: 'file',
+      sender_email: profile?.email || '',
     });
   };
 
@@ -627,7 +652,7 @@ export default function Room() {
       const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
       await supabase.from('transfer_history').insert({
         sender_id: userId!, sender_name: userName!, recipient_name: targetName,
-        file_name: `${folderName}.zip`, file_type: 'folder',
+        file_name: `${folderName}.zip`, file_type: 'folder', sender_email: profile?.email || '',
       });
     } else {
       // Send files individually for small folders (≤100 files) — no compression, no progress bar
@@ -651,7 +676,7 @@ export default function Room() {
       const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
       await supabase.from('transfer_history').insert({
         sender_id: userId!, sender_name: userName!, recipient_name: targetName,
-        file_name: folderName, file_type: 'folder',
+        file_name: folderName, file_type: 'folder', sender_email: profile?.email || '',
       });
     }
   };
@@ -741,28 +766,15 @@ export default function Room() {
     if (userId) {
       await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
       await supabase.from('sessions').delete().eq('user_id', userId);
-      await supabase.from('transfer_history').delete().eq('sender_id', userId);
     }
     peerConnections.current.forEach((pc) => pc.close());
     peerConnections.current.clear();
-    clearSession();
+    await signOut();
     navigate('/');
   };
 
-  const handleHistory = async () => {
-    if (!userId) return;
-    const { data } = await supabase
-      .from('transfer_history')
-      .select('*')
-      .eq('sender_id', userId)
-      .order('transferred_at', { ascending: false });
-
-    if (!data || data.length === 0) {
-      toast.info('No transfer history yet');
-      return;
-    }
-    const { generateHistoryPdf } = await import('@/lib/pdfExport');
-    generateHistoryPdf(userName || 'Unknown', data);
+  const handleHistory = () => {
+    setHistoryOpen(true);
   };
 
   const copyRoomId = () => {
@@ -788,7 +800,7 @@ export default function Room() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 animate-fade-up">
               {/* Left: current user badge */}
               <div className="flex items-center gap-2">
-                <UserAvatar name={userName || '?'} size="sm" />
+                <UserAvatar name={userName || '?'} avatarUrl={profile?.avatar_url} size="sm" />
                 <div>
                   <span className="text-sm font-semibold">{userName}</span>
                   {isHost && (
@@ -854,6 +866,7 @@ export default function Room() {
                   >
                     <UserCard
                       name={p.name}
+                      avatarUrl={p.avatar_url}
                       isHost={p.user_id === room?.host_id}
                       showHostControls={isHost}
                       onRequestFile={() => handleRequestFile(p.user_id)}
@@ -880,6 +893,8 @@ export default function Room() {
       <JoinRequestDialog
         open={!!currentRequest && isHost}
         requesterName={currentRequest?.name || ''}
+        requesterEmail={currentRequest?.email}
+        requesterAvatar={currentRequest?.avatar_url}
         onAccept={handleAcceptJoin}
         onReject={handleRejectJoin}
       />
@@ -898,6 +913,13 @@ export default function Room() {
         onClose={() => setUploadModal(null)}
         onFileSelected={handleUploadFile}
         onFolderSelected={handleUploadFolder}
+      />
+
+      <HistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        senderEmail={profile?.email || ''}
+        senderName={profile?.name || ''}
       />
     </div>
   );
