@@ -2,10 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoltsNavbar from '@/components/VoltsNavbar';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { supabase } from '@/integrations/supabase/client';
-import { generateUserId, storeSession } from '@/lib/session';
-import { ArrowRight } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { lovable } from '@/integrations/lovable/index';
 import ParticleField from '@/components/ParticleField';
 import NetworkAnimation from '@/components/NetworkAnimation';
 import { SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
@@ -21,16 +19,16 @@ const SWIFT_ITEMS = [
   {
     letter: 'W',
     word: 'Wideband',
-    brief: 'Maximum bandwidth, zero bottlenecks.',
+    brief: 'Unleash every last bit of bandwidth.',
     description:
-      'Traditional file sharing uploads to a server, then downloads to the recipient — doubling the time. SWIFT eliminates the middleman entirely. WebRTC establishes a direct wideband tunnel between devices, utilizing the full spectrum of your connection. Large videos, hefty archives — they move at full throttle with no artificial limits.',
+      "SWIFT doesn\u2019t just use your connection — it dominates it. By establishing a raw WebRTC data channel directly between devices, every byte travels the shortest possible path with zero relay overhead. There\u2019s no upload-then-download bottleneck, no server-side queuing, no artificial throttling. Whether you\u2019re on fiber, 5G, or a campus Wi-Fi, SWIFT saturates your available bandwidth from the first packet to the last. Multi-gigabyte video files, bloated design assets, entire codebases — they\u2019re delivered at wire speed. This is wideband in the truest sense: the full spectral capacity of your link, working for you.",
   },
   {
     letter: 'I',
     word: 'Instant',
     brief: 'Zero friction, zero accounts.',
     description:
-      "No sign-ups, no email verification, no passwords to remember. Just type your name and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds. SWIFT is designed for the moments when you need to move a file right now — not after filling out three forms.",
+      "No sign-ups, no email verification, no passwords to remember. Just sign in with Google and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds. SWIFT is designed for the moments when you need to move a file right now — not after filling out three forms.",
   },
   {
     letter: 'F',
@@ -44,13 +42,12 @@ const SWIFT_ITEMS = [
     word: 'Transfer',
     brief: 'Ephemeral by design.',
     description:
-      "SWIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history exists only for the sender during the active session and can be exported as a PDF. Once you log out or close the tab — it\u2019s gone. This is file transfer distilled to its purest form.",
+      "SWIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history is tied to your Google account and persists across sessions for your reference. Once you close the tab — the connection is gone. This is file transfer distilled to its purest form.",
   },
 ];
 
 const SWIFT_ICON_COMPONENTS = [SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon];
 
-// Progressively darker backgrounds + unique animation variant per section
 const SECTION_STYLES = [
   { custom: 'hsl(0 0% 97%)', textColor: 'hsl(0 0% 8%)', mutedColor: 'hsl(0 0% 40%)', anim: 'anim-scale' },
   { custom: 'hsl(0 0% 82%)', textColor: 'hsl(0 0% 8%)', mutedColor: 'hsl(0 0% 30%)', anim: 'anim-slide-left' },
@@ -90,43 +87,36 @@ function useElasticScrollReveal() {
 }
 
 export default function Index() {
-  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { user, profile, loading: authLoading } = useAuth();
   const { refs: sectionRefs, revealedSet } = useElasticScrollReveal();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    setLoading(true);
-    const userId = generateUserId();
-
-    const { error } = await supabase.from('sessions').insert({
-      user_id: userId,
-      name: name.trim(),
-      status: 'active',
-    });
-
-    if (error) {
-      console.error('Failed to create session:', error);
-      setLoading(false);
-      return;
+  // If already signed in, redirect to connection
+  useEffect(() => {
+    if (!authLoading && user && profile) {
+      navigate('/connection');
     }
+  }, [authLoading, user, profile, navigate]);
 
-    storeSession(userId, name.trim());
-    navigate(`/connection?userId=${userId}`);
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    const { error } = await lovable.auth.signInWithOAuth('google', {
+      redirect_uri: window.location.origin,
+    });
+    if (error) {
+      console.error('Google sign-in failed:', error);
+      setLoading(false);
+    }
   };
 
   return (
     <div className="bg-background">
       <VoltsNavbar />
 
-      {/* Hero Section with particles */}
       <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden">
         <ParticleField />
         <div className="w-full max-w-7xl mx-auto relative z-10 flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
-          {/* Left: text + form */}
           <div className="flex-1 animate-fade-up" style={{ animationDelay: '100ms' }}>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4">
               <span className="text-primary">SWIFT</span>
@@ -135,31 +125,26 @@ export default function Index() {
               Peer-to-peer file transfer built for speed and privacy. No accounts, no cloud — just a direct connection between you and the recipient.
             </p>
 
-            <form onSubmit={handleSubmit} className="space-y-4 max-w-sm">
-              <Input
-                placeholder="Your full name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="h-12 text-base"
-                autoFocus
-                maxLength={40}
-              />
-              <Button
-                type="submit"
-                disabled={!name.trim() || loading}
-                className="w-full h-12 text-base font-semibold gap-2"
-              >
-                {loading ? 'Creating session\u2026' : 'Get Started'}
-                {!loading && <ArrowRight className="h-4 w-4" />}
-              </Button>
-            </form>
+            <Button
+              onClick={handleGoogleSignIn}
+              disabled={loading || authLoading}
+              variant="outline"
+              className="h-12 px-6 gap-3 text-base font-medium bg-transparent border border-border hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all duration-200"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+              </svg>
+              {loading ? 'Signing in…' : 'Sign in with Google'}
+            </Button>
 
             <p className="text-xs text-muted-foreground mt-6">
-              Sessions are ephemeral — your data is never stored permanently.
+              Sign in to create or join rooms. Your transfer history persists across sessions.
             </p>
           </div>
 
-          {/* Right: network animation — hidden on mobile */}
           <div className="hidden lg:flex flex-1 w-full min-h-[400px] lg:min-h-[500px]">
             <NetworkAnimation />
           </div>
@@ -172,7 +157,6 @@ export default function Index() {
         </div>
       </section>
 
-      {/* SWIFT Sections — elastic scroll reveal, progressively darker */}
       {SWIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
         const style = SECTION_STYLES[i];
         const IconComponent = SWIFT_ICON_COMPONENTS[i];
@@ -220,7 +204,6 @@ export default function Index() {
         );
       })}
 
-      {/* Footer */}
       <footer className="py-12 px-6" style={{ backgroundColor: 'hsl(0 0% 4%)' }}>
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="text-center sm:text-left">

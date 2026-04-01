@@ -1,40 +1,59 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import VoltsNavbar from '@/components/VoltsNavbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { getStoredUserId, getStoredUserName, clearSession } from '@/lib/session';
+import { useAuth } from '@/hooks/useAuth';
 import { Plus, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateRoomId } from '@/lib/roomId';
+import HistoryModal from '@/components/HistoryModal';
 
 export default function Connection() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { user, profile, loading: authLoading, signOut } = useAuth();
   const [roomInput, setRoomInput] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [waitingApproval, setWaitingApproval] = useState(false);
-
-  const userId = searchParams.get('userId') || getStoredUserId();
-  const userName = getStoredUserName();
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
-    if (!userId || !userName) {
+    if (!authLoading && (!user || !profile)) {
       navigate('/');
     }
-  }, [userId, userName, navigate]);
+  }, [authLoading, user, profile, navigate]);
+
+  // Ensure session exists for room presence
+  useEffect(() => {
+    if (!user || !profile) return;
+    const ensureSession = async () => {
+      const { data: existing } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      if (!existing) {
+        await supabase.from('sessions').insert({
+          user_id: user.id,
+          name: profile.name,
+          status: 'active',
+        });
+      }
+    };
+    ensureSession();
+  }, [user, profile]);
+
+  if (authLoading || !user || !profile) return null;
 
   const handleCreateRoom = async () => {
-    if (!userId) return;
     setCreating(true);
-
     const roomId = generateRoomId();
 
     const { error } = await supabase.from('rooms').insert({
       room_id: roomId,
-      host_id: userId,
+      host_id: user.id,
       status: 'active',
     });
 
@@ -47,7 +66,7 @@ export default function Connection() {
 
     await supabase.from('room_participants').insert({
       room_id: roomId,
-      user_id: userId,
+      user_id: user.id,
       status: 'accepted',
     });
 
@@ -55,7 +74,7 @@ export default function Connection() {
   };
 
   const handleJoinRoom = async () => {
-    if (!userId || !roomInput.trim()) return;
+    if (!roomInput.trim()) return;
     setJoining(true);
 
     const { data: room } = await supabase
@@ -80,7 +99,7 @@ export default function Connection() {
       .from('room_participants')
       .select('status')
       .eq('room_id', roomInput.trim())
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .single();
 
     if (existing?.status === 'blocked') {
@@ -97,7 +116,7 @@ export default function Connection() {
     if (!existing) {
       await supabase.from('room_participants').insert({
         room_id: roomInput.trim(),
-        user_id: userId,
+        user_id: user.id,
         status: 'pending',
       });
     }
@@ -105,14 +124,14 @@ export default function Connection() {
     setWaitingApproval(true);
 
     const channel = supabase
-      .channel(`join-${userId}`)
+      .channel(`join-${user.id}`)
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'room_participants',
-          filter: `user_id=eq.${userId}`,
+          filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
           const newStatus = payload.new.status;
@@ -131,36 +150,15 @@ export default function Connection() {
   };
 
   const handleLogout = async () => {
-    if (userId) {
-      await supabase.from('sessions').delete().eq('user_id', userId);
-      await supabase.from('transfer_history').delete().eq('sender_id', userId);
-    }
-    clearSession();
+    await supabase.from('sessions').delete().eq('user_id', user.id);
+    await signOut();
     navigate('/');
-  };
-
-  const handleHistory = async () => {
-    if (!userId) return;
-
-    const { data } = await supabase
-      .from('transfer_history')
-      .select('*')
-      .eq('sender_id', userId)
-      .order('transferred_at', { ascending: false });
-
-    if (!data || data.length === 0) {
-      toast.info('No transfer history yet');
-      return;
-    }
-
-    const { generateHistoryPdf } = await import('@/lib/pdfExport');
-    generateHistoryPdf(userName || 'Unknown', data);
   };
 
   if (waitingApproval) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={handleHistory} />
+        <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
         <main className="flex-1 flex items-center justify-center px-4">
           <div className="text-center animate-fade-up">
             <div className="relative inline-block mb-6">
@@ -182,24 +180,28 @@ export default function Connection() {
             </Button>
           </div>
         </main>
+        <HistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} senderEmail={profile.email} senderName={profile.name} />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={handleHistory} />
+      <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
       <main className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-2xl space-y-6 animate-fade-up">
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground mb-1">Logged in as</p>
-            <p className="font-semibold text-lg">{userName}</p>
+          <div className="text-center flex flex-col items-center gap-2">
+            {profile.avatar_url && (
+              <img src={profile.avatar_url} alt={profile.name} className="w-12 h-12 rounded-full" />
+            )}
+            <div>
+              <p className="font-semibold text-lg">{profile.name}</p>
+              <p className="text-sm text-muted-foreground">{profile.email}</p>
+            </div>
           </div>
 
-          {/* Horizontal on desktop/tablet, stacked on mobile */}
           <div className="flex flex-col sm:flex-row gap-4 items-stretch">
-            {/* Create Room */}
             <div className="flex-1 border rounded-xl p-6 bg-card flex flex-col items-center justify-center gap-3">
               <Plus className="h-6 w-6 text-primary" />
               <p className="text-sm font-medium text-muted-foreground">Start a new room</p>
@@ -212,7 +214,6 @@ export default function Connection() {
               </Button>
             </div>
 
-            {/* Divider */}
             <div className="hidden sm:flex items-center">
               <span className="text-xs text-muted-foreground font-medium">OR</span>
             </div>
@@ -220,7 +221,6 @@ export default function Connection() {
               <span className="text-xs text-muted-foreground font-medium">— OR —</span>
             </div>
 
-            {/* Join Room */}
             <div className="flex-1 border rounded-xl p-6 bg-card flex flex-col items-center justify-center gap-3">
               <LogIn className="h-6 w-6 text-primary" />
               <p className="text-sm font-medium text-muted-foreground">Join with Room ID</p>
@@ -249,6 +249,8 @@ export default function Connection() {
           </p>
         </div>
       </main>
+
+      <HistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} senderEmail={profile.email} senderName={profile.name} />
     </div>
   );
 }
