@@ -129,7 +129,7 @@ export default function Room() {
     loadRoom();
   }, [roomId, userId, userName, navigate]);
 
-  // Load participants - no dependency on currentRequest to avoid stale closures
+  // Load participants - fetch profiles for name/avatar/email
   const loadParticipants = useCallback(async () => {
     if (!roomId) return;
 
@@ -140,7 +140,6 @@ export default function Room() {
 
     if (!parts) return;
 
-    // Check if current user has been removed/blocked
     const myEntry = parts.find((p) => p.user_id === userId);
     if (myEntry && myEntry.status === 'blocked') {
       setRemovedByHost(true);
@@ -157,25 +156,43 @@ export default function Room() {
       return;
     }
 
+    // Fetch profiles for avatar/email info
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('auth_user_id, name, email, avatar_url')
+      .in('auth_user_id', userIds);
+
+    // Fallback to sessions for name if no profile
     const { data: sessions } = await supabase
       .from('sessions')
       .select('user_id, name')
       .in('user_id', userIds);
 
-    const nameMap = new Map(sessions?.map((s) => [s.user_id, s.name]) ?? []);
+    const profileMap = new Map(profiles?.map((p) => [p.auth_user_id, p]) ?? []);
+    const sessionMap = new Map(sessions?.map((s) => [s.user_id, s.name]) ?? []);
 
     setParticipants(
-      accepted.map((p) => ({
-        user_id: p.user_id,
-        name: nameMap.get(p.user_id) || 'Unknown',
-        status: p.status,
-      }))
+      accepted.map((p) => {
+        const prof = profileMap.get(p.user_id);
+        return {
+          user_id: p.user_id,
+          name: prof?.name || sessionMap.get(p.user_id) || 'Unknown',
+          status: p.status,
+          email: prof?.email,
+          avatar_url: prof?.avatar_url,
+        };
+      })
     );
 
-    const newPending = pending.map((p) => ({
-      userId: p.user_id,
-      name: nameMap.get(p.user_id) || 'Unknown',
-    }));
+    const newPending = pending.map((p) => {
+      const prof = profileMap.get(p.user_id);
+      return {
+        userId: p.user_id,
+        name: prof?.name || sessionMap.get(p.user_id) || 'Unknown',
+        email: prof?.email,
+        avatar_url: prof?.avatar_url,
+      };
+    });
 
     setPendingRequests(newPending);
     if (newPending.length > 0) {
