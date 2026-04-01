@@ -81,8 +81,9 @@ interface TransferProgress {
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const userId = getStoredUserId();
-  const userName = getStoredUserName();
+  const { user, profile, signOut } = useAuth();
+  const userId = user?.id;
+  const userName = profile?.name;
 
   const [room, setRoom] = useState<any>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -92,6 +93,7 @@ export default function Room() {
   const [copied, setCopied] = useState(false);
   const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
   const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string; mode: 'file' | 'folder' } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
