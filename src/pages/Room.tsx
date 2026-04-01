@@ -596,6 +596,7 @@ export default function Room() {
       recipient_name: targetName,
       file_name: file.name,
       file_type: 'file',
+      sender_email: profile?.email || '',
     });
   };
 
