@@ -866,6 +866,7 @@ export default function Room() {
                   >
                     <UserCard
                       name={p.name}
+                      avatarUrl={p.avatar_url}
                       isHost={p.user_id === room?.host_id}
                       showHostControls={isHost}
                       onRequestFile={() => handleRequestFile(p.user_id)}
