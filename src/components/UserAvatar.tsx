@@ -1,3 +1,9 @@
+interface UserAvatarProps {
+  name: string;
+  avatarUrl?: string | null;
+  size?: 'sm' | 'md' | 'lg';
+}
+
 const COLORS = [
   'hsl(355 82% 56%)',
   'hsl(210 70% 50%)',
@@ -17,18 +23,23 @@ function getColor(name: string): string {
   return COLORS[Math.abs(hash) % COLORS.length];
 }
 
-interface UserAvatarProps {
-  name: string;
-  size?: 'sm' | 'md' | 'lg';
-}
-
 const sizes = {
   sm: 'w-8 h-8 text-sm',
   md: 'w-10 h-10 text-base',
   lg: 'w-12 h-12 text-lg',
 };
 
-export default function UserAvatar({ name, size = 'md' }: UserAvatarProps) {
+export default function UserAvatar({ name, avatarUrl, size = 'md' }: UserAvatarProps) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        className={`${sizes[size]} rounded-full shrink-0 object-cover`}
+      />
+    );
+  }
+
   const letter = name.charAt(0).toUpperCase();
   const bg = getColor(name);
 

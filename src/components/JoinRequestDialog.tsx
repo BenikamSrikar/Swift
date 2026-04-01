@@ -8,11 +8,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import UserAvatar from './UserAvatar';
 
 interface JoinRequestDialogProps {
   open: boolean;
   requesterName: string;
+  requesterEmail?: string;
+  requesterAvatar?: string | null;
   onAccept: () => void;
   onReject: () => void;
 }
@@ -20,6 +21,8 @@ interface JoinRequestDialogProps {
 export default function JoinRequestDialog({
   open,
   requesterName,
+  requesterEmail,
+  requesterAvatar,
   onAccept,
   onReject,
 }: JoinRequestDialogProps) {
@@ -30,9 +33,20 @@ export default function JoinRequestDialog({
           <AlertDialogTitle>Join Request</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="flex items-center gap-3 mt-2">
-              <UserAvatar name={requesterName} />
-              <span className="font-medium text-foreground">{requesterName}</span>
-              <span className="text-muted-foreground">wants to join the room</span>
+              {requesterAvatar ? (
+                <img src={requesterAvatar} alt={requesterName} className="w-10 h-10 rounded-full shrink-0" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold shrink-0">
+                  {requesterName.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">{requesterName}</p>
+                {requesterEmail && (
+                  <p className="text-xs text-muted-foreground truncate">{requesterEmail}</p>
+                )}
+                <p className="text-sm text-muted-foreground mt-0.5">wants to join the room</p>
+              </div>
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
