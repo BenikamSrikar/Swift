@@ -9,6 +9,7 @@ import { Plus, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateRoomId } from '@/lib/roomId';
 import HistoryModal from '@/components/HistoryModal';
+import ConnectionFeatures from '@/components/ConnectionFeatures';
 
 export default function Connection() {
   const navigate = useNavigate();
@@ -247,6 +248,8 @@ export default function Connection() {
           <p className="text-center text-xs text-muted-foreground">
             Create a room or enter a 6-character Room ID to join.
           </p>
+
+          <ConnectionFeatures userName={profile.name} />
         </div>
       </main>
 

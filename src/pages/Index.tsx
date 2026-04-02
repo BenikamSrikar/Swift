@@ -4,8 +4,8 @@ import VoltsNavbar from '@/components/VoltsNavbar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { lovable } from '@/integrations/lovable/index';
-import ParticleField from '@/components/ParticleField';
-import NetworkAnimation from '@/components/NetworkAnimation';
+import SwiftBirdsMap from '@/components/SwiftBirdsMap';
+import BrowserIndependentSection from '@/components/BrowserIndependentSection';
 import { SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
 
 const SWIFT_ITEMS = [
@@ -21,39 +21,39 @@ const SWIFT_ITEMS = [
     word: 'Wideband',
     brief: 'Unleash every last bit of bandwidth.',
     description:
-      "SWIFT doesn\u2019t just use your connection — it dominates it. By establishing a raw WebRTC data channel directly between devices, every byte travels the shortest possible path with zero relay overhead. There\u2019s no upload-then-download bottleneck, no server-side queuing, no artificial throttling. Whether you\u2019re on fiber, 5G, or a campus Wi-Fi, SWIFT saturates your available bandwidth from the first packet to the last. Multi-gigabyte video files, bloated design assets, entire codebases — they\u2019re delivered at wire speed. This is wideband in the truest sense: the full spectral capacity of your link, working for you.",
+      "SWIFT doesn\u2019t just use your connection — it dominates it. By establishing a raw WebRTC data channel directly between devices, every byte travels the shortest possible path with zero relay overhead. There\u2019s no upload-then-download bottleneck, no server-side queuing, no artificial throttling.",
   },
   {
     letter: 'I',
     word: 'Instant',
     brief: 'Zero friction, zero accounts.',
     description:
-      "No sign-ups, no email verification, no passwords to remember. Just sign in with Google and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds. SWIFT is designed for the moments when you need to move a file right now — not after filling out three forms.",
+      "No sign-ups, no email verification, no passwords to remember. Just sign in with Google and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds.",
   },
   {
     letter: 'F',
     word: 'Files & Folders',
     brief: 'Send anything — files, folders, or videos.',
     description:
-      "Whether it\u2019s a single document, an entire project folder, or a large video file, SWIFT handles it all. Folders are automatically compressed into ZIP archives before transfer, preserving directory structure. Video files get their own dedicated transfer mode. The recipient gets a download notification with one-click save — clean and simple.",
+      "Whether it\u2019s a single document, an entire project folder, or a large video file, SWIFT handles it all. Folders are automatically compressed into ZIP archives before transfer, preserving directory structure.",
   },
   {
     letter: 'T',
     word: 'Transfer',
     brief: 'Ephemeral by design.',
     description:
-      "SWIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history is tied to your Google account and persists across sessions for your reference. Once you close the tab — the connection is gone. This is file transfer distilled to its purest form.",
+      "SWIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history is tied to your Google account and persists across sessions for your reference.",
   },
 ];
 
 const SWIFT_ICON_COMPONENTS = [SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon];
 
 const SECTION_STYLES = [
-  { custom: 'hsl(0 0% 97%)', textColor: 'hsl(0 0% 8%)', mutedColor: 'hsl(0 0% 40%)', anim: 'anim-scale' },
-  { custom: 'hsl(0 0% 82%)', textColor: 'hsl(0 0% 8%)', mutedColor: 'hsl(0 0% 30%)', anim: 'anim-slide-left' },
-  { custom: 'hsl(0 0% 55%)', textColor: 'hsl(0 0% 5%)', mutedColor: 'hsl(0 0% 20%)', anim: 'anim-slide-right' },
-  { custom: 'hsl(0 0% 25%)', textColor: 'hsl(0 0% 95%)', mutedColor: 'hsl(0 0% 70%)', anim: 'anim-flip' },
-  { custom: 'hsl(0 0% 8%)', textColor: 'hsl(0 0% 95%)', mutedColor: 'hsl(0 0% 60%)', anim: 'anim-rise' },
+  { anim: 'anim-scale' },
+  { anim: 'anim-slide-left' },
+  { anim: 'anim-slide-right' },
+  { anim: 'anim-flip' },
+  { anim: 'anim-rise' },
 ];
 
 function useElasticScrollReveal() {
@@ -92,7 +92,6 @@ export default function Index() {
   const { user, profile, loading: authLoading } = useAuth();
   const { refs: sectionRefs, revealedSet } = useElasticScrollReveal();
 
-  // If already signed in, redirect to connection
   useEffect(() => {
     if (!authLoading && user && profile) {
       navigate('/connection');
@@ -114,8 +113,8 @@ export default function Index() {
     <div className="bg-background">
       <VoltsNavbar />
 
+      {/* Hero */}
       <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden">
-        <ParticleField />
         <div className="w-full max-w-7xl mx-auto relative z-10 flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
           <div className="flex-1 animate-fade-up" style={{ animationDelay: '100ms' }}>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4">
@@ -146,7 +145,7 @@ export default function Index() {
           </div>
 
           <div className="hidden lg:flex flex-1 w-full min-h-[400px] lg:min-h-[500px]">
-            <NetworkAnimation />
+            <SwiftBirdsMap />
           </div>
         </div>
 
@@ -157,6 +156,10 @@ export default function Index() {
         </div>
       </section>
 
+      {/* Browser Independent Section */}
+      <BrowserIndependentSection />
+
+      {/* SWIFT Sections - all white background */}
       {SWIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
         const style = SECTION_STYLES[i];
         const IconComponent = SWIFT_ICON_COMPONENTS[i];
@@ -166,8 +169,7 @@ export default function Index() {
           <section
             key={letter}
             ref={(el: HTMLDivElement | null) => { sectionRefs.current[i] = el; }}
-            className={`scroll-section ${style.anim} min-h-screen flex items-center justify-center px-6 sm:px-12`}
-            style={{ backgroundColor: style.custom }}
+            className={`scroll-section ${style.anim} min-h-screen flex items-center justify-center px-6 sm:px-12 bg-background`}
           >
             <div
               className={`w-full max-w-5xl flex flex-col ${
@@ -179,23 +181,14 @@ export default function Index() {
               </div>
 
               <div className={`scroll-text text-center ${i % 2 === 0 ? 'md:text-left' : 'md:text-right'} max-w-xl`}>
-                <h2
-                  className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3"
-                  style={{ color: style.textColor }}
-                >
+                <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3 text-foreground">
                   <span className="text-primary">{letter}</span>
                   <span> — {word}</span>
                 </h2>
-                <p
-                  className="text-lg sm:text-xl font-semibold mb-4"
-                  style={{ color: style.textColor }}
-                >
+                <p className="text-lg sm:text-xl font-semibold mb-4 text-foreground">
                   {brief}
                 </p>
-                <p
-                  className="text-sm sm:text-base leading-relaxed"
-                  style={{ color: style.mutedColor }}
-                >
+                <p className="text-sm sm:text-base leading-relaxed text-muted-foreground">
                   {description}
                 </p>
               </div>
@@ -208,7 +201,7 @@ export default function Index() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="text-center sm:text-left">
             <span className="text-xl font-bold text-primary">SWIFT</span>
-            <span className="text-xs font-mono ml-2" style={{ color: 'hsl(0 0% 50%)' }}>v1.0</span>
+            <span className="text-xs font-mono ml-2" style={{ color: 'hsl(0 0% 50%)' }}>v1.1</span>
             <p className="text-xs mt-1" style={{ color: 'hsl(0 0% 45%)' }}>
               Secure Wideband Instant File Transfer
             </p>
