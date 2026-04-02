@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { lovable } from '@/integrations/lovable/index';
 import SwiftBirdsMap from '@/components/SwiftBirdsMap';
+import ParticleField from '@/components/ParticleField';
 import BrowserIndependentSection from '@/components/BrowserIndependentSection';
 import { SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
 
