@@ -9,6 +9,7 @@ import { Plus, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateRoomId } from '@/lib/roomId';
 import HistoryModal from '@/components/HistoryModal';
+import ConnectionFeatures from '@/components/ConnectionFeatures';
 
 export default function Connection() {
   const navigate = useNavigate();

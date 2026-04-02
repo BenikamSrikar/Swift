@@ -10,7 +10,7 @@ export default function VoltsNavbar({ showActions, onHistoryClick, onLogout }: V
       <div>
         <div className="flex items-center gap-1.5">
           <span className="text-lg font-bold tracking-tight text-primary">SWIFT</span>
-          <span className="text-xs font-medium text-foreground">v1.0</span>
+          <span className="text-xs font-medium text-foreground">v1.1</span>
         </div>
       </div>
       <div className="absolute right-6 flex items-center gap-3">
