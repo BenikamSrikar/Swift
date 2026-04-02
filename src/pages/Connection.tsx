@@ -248,6 +248,8 @@ export default function Connection() {
           <p className="text-center text-xs text-muted-foreground">
             Create a room or enter a 6-character Room ID to join.
           </p>
+
+          <ConnectionFeatures userName={profile.name} />
         </div>
       </main>
 
