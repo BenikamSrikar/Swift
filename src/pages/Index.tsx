@@ -116,6 +116,7 @@ export default function Index() {
 
       {/* Hero */}
       <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden">
+        <ParticleField />
         <div className="w-full max-w-7xl mx-auto relative z-10 flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
           <div className="flex-1 animate-fade-up" style={{ animationDelay: '100ms' }}>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4">
