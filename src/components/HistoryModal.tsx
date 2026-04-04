@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { Download } from 'lucide-react';
+import { Download, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 
 interface HistoryRecord {
@@ -17,6 +17,8 @@ interface HistoryRecord {
   file_type: string;
   transferred_at: string;
   sender_name: string;
+  direction?: string;
+  download_url?: string;
 }
 
 interface HistoryModalProps {
@@ -64,7 +66,8 @@ export default function HistoryModal({ open, onClose, senderEmail, senderName }:
       .map(
         (r) => `
       <tr>
-        <td style="padding:6px 12px;border-bottom:1px solid #eee;">${r.recipient_name}</td>
+        <td style="padding:6px 12px;border-bottom:1px solid #eee;">${(r.direction || 'sent') === 'sent' ? '↑ Sent' : '↓ Received'}</td>
+        <td style="padding:6px 12px;border-bottom:1px solid #eee;">${(r.direction || 'sent') === 'sent' ? r.recipient_name : r.sender_name}</td>
         <td style="padding:6px 12px;border-bottom:1px solid #eee;">${r.file_name}</td>
         <td style="padding:6px 12px;border-bottom:1px solid #eee;">${r.file_type}</td>
         <td style="padding:6px 12px;border-bottom:1px solid #eee;">${new Date(r.transferred_at).toLocaleString()}</td>
@@ -82,8 +85,8 @@ export default function HistoryModal({ open, onClose, senderEmail, senderName }:
         td { font-size: 13px; }
       </style></head><body>
       <h1>SWIFT — Transfer History</h1>
-      <p class="subtitle">Sender: ${senderName} (${senderEmail}) · Exported: ${new Date().toLocaleString()}</p>
-      <table><thead><tr><th>Recipient</th><th>File / Folder</th><th>Type</th><th>Date</th></tr></thead>
+      <p class="subtitle">User: ${senderName} (${senderEmail}) · Exported: ${new Date().toLocaleString()}</p>
+      <table><thead><tr><th>Direction</th><th>From/To</th><th>File / Folder</th><th>Type</th><th>Date</th></tr></thead>
       <tbody>${rows}</tbody></table></body></html>`;
 
     const blob = new Blob([html], { type: 'text/html' });
@@ -120,23 +123,54 @@ export default function HistoryModal({ open, onClose, senderEmail, senderName }:
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-muted/50">
-                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Recipient</th>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-8"></th>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">From / To</th>
                           <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">File</th>
                           <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Type</th>
                           <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Time</th>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-8"></th>
                         </tr>
                       </thead>
                       <tbody>
-                        {dayRecords.map((r) => (
-                          <tr key={r.id} className="border-t border-border/50">
-                            <td className="px-3 py-2">{r.recipient_name}</td>
-                            <td className="px-3 py-2 truncate max-w-[200px]">{r.file_name}</td>
-                            <td className="px-3 py-2 capitalize">{r.file_type}</td>
-                            <td className="px-3 py-2 text-muted-foreground">
-                              {format(parseISO(r.transferred_at), 'h:mm a')}
-                            </td>
-                          </tr>
-                        ))}
+                        {dayRecords.map((r) => {
+                          const dir = (r.direction || 'sent') as string;
+                          const isSent = dir === 'sent';
+                          return (
+                            <tr key={r.id} className="border-t border-border/50">
+                              <td className="px-3 py-2">
+                                {isSent ? (
+                                  <ArrowUpRight className="h-3.5 w-3.5 text-primary" />
+                                ) : (
+                                  <ArrowDownLeft className="h-3.5 w-3.5 text-green-500" />
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">
+                                  {isSent ? 'To' : 'From'}
+                                </span>
+                                {isSent ? r.recipient_name : r.sender_name}
+                              </td>
+                              <td className="px-3 py-2 truncate max-w-[180px]">{r.file_name}</td>
+                              <td className="px-3 py-2 capitalize">{r.file_type}</td>
+                              <td className="px-3 py-2 text-muted-foreground">
+                                {format(parseISO(r.transferred_at), 'h:mm a')}
+                              </td>
+                              <td className="px-3 py-2">
+                                {r.download_url && (
+                                  <a
+                                    href={r.download_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary hover:text-primary/80"
+                                    title="Download from Drive"
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                  </a>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

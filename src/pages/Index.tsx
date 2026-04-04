@@ -146,7 +146,7 @@ export default function Index() {
             </p>
           </div>
 
-          <div className="hidden lg:flex flex-1 w-full min-h-[400px] lg:min-h-[500px]">
+          <div className="hidden lg:flex flex-1 w-full min-h-[500px] lg:min-h-[600px]">
             <SwiftBirdsMap />
           </div>
         </div>
@@ -203,7 +203,7 @@ export default function Index() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="text-center sm:text-left">
             <span className="text-xl font-bold text-primary">SWIFT</span>
-            <span className="text-xs font-mono ml-2" style={{ color: 'hsl(0 0% 50%)' }}>v1.1</span>
+            <span className="text-xs font-mono ml-2" style={{ color: 'hsl(0 0% 50%)' }}>v1.2</span>
             <p className="text-xs mt-1" style={{ color: 'hsl(0 0% 45%)' }}>
               Secure Wideband Instant File Transfer
             </p>

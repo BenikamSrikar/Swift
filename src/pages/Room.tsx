@@ -15,6 +15,7 @@ import { Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import JSZip from 'jszip';
+import { uploadToGoogleDrive, scheduleGoogleDriveCleanup, SIZE_THRESHOLD } from '@/lib/googleDrive';
 
 const DATA_CHANNEL_CHUNK_SIZE = 262144;
 const DATA_CHANNEL_BUFFER_LIMIT = DATA_CHANNEL_CHUNK_SIZE * 8;
@@ -81,7 +82,7 @@ interface TransferProgress {
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, providerToken } = useAuth();
   const userId = user?.id;
   const userName = profile?.name;
 
@@ -94,6 +95,7 @@ export default function Room() {
   const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
   const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string; mode: 'file' | 'folder' } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [driveStatus, setDriveStatus] = useState<string | null>(null);
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
@@ -222,7 +224,6 @@ export default function Room() {
           filter: `room_id=eq.${roomId}`,
         },
         () => {
-          // Reload participants on ANY change (insert, update, delete)
           loadParticipants();
         }
       )
@@ -345,12 +346,27 @@ export default function Room() {
     let folderTransfer: IncomingFolderTransfer | null = null;
     let messageQueue = Promise.resolve();
 
+    const logReceiverHistory = async (fileName: string, fileType: string, downloadUrl?: string) => {
+      const senderInfo = participants.find((p) => p.user_id === fromUserId);
+      await supabase.from('transfer_history').insert({
+        sender_id: userId!,
+        sender_name: senderInfo?.name || 'Unknown',
+        recipient_name: userName!,
+        file_name: fileName,
+        file_type: fileType,
+        sender_email: profile?.email || '',
+        direction: 'received',
+        download_url: downloadUrl || null,
+      } as any);
+    };
+
     const processIncomingData = async (data: string | Blob | ArrayBuffer) => {
       if (typeof data === 'string') {
         const msg = JSON.parse(data);
         if (msg.type === 'metadata') {
           metadata = msg;
           folderTransfer = null;
+          setDriveStatus(`Receiving: ${msg.name}`);
           toast.info(`Receiving: ${msg.name}`, { duration: 3000 });
         } else if (msg.type === 'folder-start') {
           const selectedTarget = folderReceiveTargets.current.get(fromUserId) || null;
@@ -417,6 +433,8 @@ export default function Room() {
 
           if (completedTransfer.mode === 'stream') {
             if (!isSmall) setTransferProgress(null);
+            setDriveStatus(null);
+            await logReceiverHistory(completedTransfer.folderName, 'folder');
             toast.success(`Folder received: ${completedTransfer.folderName}`, {
               description: 'Saved directly to your selected folder.',
               duration: 6000,
@@ -440,7 +458,9 @@ export default function Room() {
           });
 
           if (!isSmall) setTransferProgress(null);
+          setDriveStatus(null);
           const url = URL.createObjectURL(blob);
+          await logReceiverHistory(completedTransfer.folderName, 'folder');
           toast.success(`Folder received: ${completedTransfer.folderName}`, {
             action: {
               label: 'Download',
@@ -455,9 +475,25 @@ export default function Room() {
             duration: 15000,
           });
           dc.close();
+        } else if (msg.type === 'drive-link') {
+          // Received a Google Drive download link for large files
+          setDriveStatus(`File available: ${msg.name}`);
+          await logReceiverHistory(msg.name, msg.fileType || 'file', msg.downloadLink);
+          toast.success(`File available: ${msg.name}`, {
+            description: 'Click to download from Google Drive',
+            action: {
+              label: 'Download',
+              onClick: () => window.open(msg.downloadLink, '_blank'),
+            },
+            duration: 30000,
+          });
+          setDriveStatus(null);
+          dc.close();
         } else if (msg.type === 'done') {
           const blob = new Blob(chunks);
           const url = URL.createObjectURL(blob);
+          setDriveStatus(null);
+          await logReceiverHistory(metadata?.name || 'download', 'file');
           toast.success(`File received: ${metadata?.name}`, {
             action: {
               label: 'Download',
@@ -491,6 +527,7 @@ export default function Room() {
         .then(() => processIncomingData(event.data))
         .catch(() => {
           setTransferProgress(null);
+          setDriveStatus(null);
           folderReceiveTargets.current.delete(fromUserId);
           toast.error('Transfer failed');
           dc.close();
@@ -580,16 +617,80 @@ export default function Room() {
   };
 
   const sendFileViaPeer = async (targetUserId: string, file: File) => {
+    const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+
+    // Size-based routing
+    if (file.size >= SIZE_THRESHOLD) {
+      if (!providerToken) {
+        toast.error('Google Drive not connected. Please sign out and sign in again to grant Drive permissions.');
+        return;
+      }
+
+      setDriveStatus('Checking file size...');
+      await new Promise(r => setTimeout(r, 400));
+      setDriveStatus(`File is ${sizeMB}MB — uploading to Google Drive...`);
+
+      try {
+        const { fileId, downloadLink } = await uploadToGoogleDrive(
+          file, file.name, providerToken,
+          (status) => setDriveStatus(status)
+        );
+
+        setDriveStatus('Sending download link to receiver...');
+
+        const started = await createTransferPeer(targetUserId, async (dc) => {
+          dc.send(JSON.stringify({
+            type: 'drive-link',
+            name: file.name,
+            downloadLink,
+            fileType: 'file',
+            size: file.size,
+          }));
+          dc.close();
+        });
+
+        if (!started) { setDriveStatus(null); return; }
+
+        scheduleGoogleDriveCleanup(fileId, providerToken);
+
+        await supabase.from('transfer_history').insert({
+          sender_id: userId!,
+          sender_name: userName!,
+          recipient_name: targetName,
+          file_name: file.name,
+          file_type: 'file',
+          sender_email: profile?.email || '',
+          direction: 'sent',
+          download_url: downloadLink,
+        } as any);
+
+        setDriveStatus(null);
+        toast.success(`Sent via Google Drive: ${file.name}`, {
+          description: 'Link expires in 5 minutes',
+          duration: 6000,
+        });
+      } catch (err) {
+        console.error('Drive upload failed:', err);
+        setDriveStatus(null);
+        toast.error('Google Drive upload failed. Check your permissions.');
+      }
+      return;
+    }
+
+    // <25MB: Send via WebRTC
+    setDriveStatus(`File is ${sizeMB}MB — sending directly via WebRTC...`);
+
     const started = await createTransferPeer(targetUserId, async (dc) => {
       dc.send(JSON.stringify({ type: 'metadata', name: file.name, size: file.size }));
       await sendBlobInChunks(dc, file);
       dc.send(JSON.stringify({ type: 'done' }));
+      setDriveStatus(null);
       toast.success(`Sent: ${file.name}`, { duration: 4000 });
     });
 
-    if (!started) return;
+    if (!started) { setDriveStatus(null); return; }
 
-    const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
     await supabase.from('transfer_history').insert({
       sender_id: userId!,
       sender_name: userName!,
@@ -597,15 +698,93 @@ export default function Room() {
       file_name: file.name,
       file_type: 'file',
       sender_email: profile?.email || '',
-    });
+      direction: 'sent',
+    } as any);
   };
 
   const sendFolderViaPeer = async (targetUserId: string, files: FileList | File[], folderName: string) => {
     const fileArray = Array.from(files);
+    const totalSize = fileArray.reduce((sum, f) => sum + f.size, 0);
+    const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(1);
+    const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
+
+    // Size-based routing for folders
+    if (totalSize >= SIZE_THRESHOLD) {
+      if (!providerToken) {
+        toast.error('Google Drive not connected. Please sign out and sign in again to grant Drive permissions.');
+        return;
+      }
+
+      setDriveStatus('Checking folder size...');
+      await new Promise(r => setTimeout(r, 400));
+      setDriveStatus(`Folder is ${totalSizeMB}MB — compressing...`);
+
+      const zip = new JSZip();
+      for (const file of fileArray) {
+        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+        zip.file(relativePath, file);
+      }
+
+      setDriveStatus('Generating ZIP archive...');
+      const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 1 },
+      });
+
+      try {
+        const { fileId, downloadLink } = await uploadToGoogleDrive(
+          zipBlob, `${folderName}.zip`, providerToken,
+          (status) => setDriveStatus(status)
+        );
+
+        setDriveStatus('Sending download link to receiver...');
+
+        const started = await createTransferPeer(targetUserId, async (dc) => {
+          dc.send(JSON.stringify({
+            type: 'drive-link',
+            name: `${folderName}.zip`,
+            downloadLink,
+            fileType: 'folder',
+            size: totalSize,
+          }));
+          dc.close();
+        });
+
+        if (!started) { setDriveStatus(null); return; }
+
+        scheduleGoogleDriveCleanup(fileId, providerToken);
+
+        await supabase.from('transfer_history').insert({
+          sender_id: userId!,
+          sender_name: userName!,
+          recipient_name: targetName,
+          file_name: `${folderName}.zip`,
+          file_type: 'folder',
+          sender_email: profile?.email || '',
+          direction: 'sent',
+          download_url: downloadLink,
+        } as any);
+
+        setDriveStatus(null);
+        toast.success(`Sent via Google Drive: ${folderName}`, {
+          description: 'Link expires in 5 minutes',
+          duration: 6000,
+        });
+      } catch (err) {
+        console.error('Drive upload failed:', err);
+        setDriveStatus(null);
+        toast.error('Google Drive upload failed. Check your permissions.');
+      }
+      return;
+    }
+
+    // <25MB: Send via WebRTC
+    setDriveStatus(`Folder is ${totalSizeMB}MB — sending directly...`);
     const useCompression = fileArray.length > 100;
 
     if (useCompression) {
-      // Compress folder into a ZIP for large folders (>100 files)
+      setDriveStatus(null);
       setTransferProgress({ label: `${folderName} • compressing`, percent: 0, direction: 'sending' });
       const zip = new JSZip();
       for (let i = 0; i < fileArray.length; i++) {
@@ -631,15 +810,15 @@ export default function Room() {
       const started = await createTransferPeer(targetUserId, async (dc) => {
         dc.send(JSON.stringify({ type: 'metadata', name: zipFileName, size: zipBlob.size }));
         let offset = 0;
-        const totalSize = zipBlob.size;
-        while (offset < totalSize) {
+        const zipTotalSize = zipBlob.size;
+        while (offset < zipTotalSize) {
           if (dc.bufferedAmount > DATA_CHANNEL_BUFFER_LIMIT) {
             await waitForBufferedAmount(dc);
           }
           const chunk = await zipBlob.slice(offset, offset + DATA_CHANNEL_CHUNK_SIZE).arrayBuffer();
           dc.send(chunk);
           offset += DATA_CHANNEL_CHUNK_SIZE;
-          const pct = Math.round((offset / totalSize) * 100);
+          const pct = Math.round((offset / zipTotalSize) * 100);
           setTransferProgress({ label: `${folderName} • sending`, percent: Math.min(pct, 100), direction: 'sending' });
         }
         dc.send(JSON.stringify({ type: 'done' }));
@@ -649,13 +828,13 @@ export default function Room() {
 
       if (!started) { setTransferProgress(null); return; }
 
-      const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
       await supabase.from('transfer_history').insert({
         sender_id: userId!, sender_name: userName!, recipient_name: targetName,
         file_name: `${folderName}.zip`, file_type: 'folder', sender_email: profile?.email || '',
-      });
+        direction: 'sent',
+      } as any);
     } else {
-      // Send files individually for small folders (≤100 files) — no compression, no progress bar
+      setDriveStatus(null);
       const started = await createTransferPeer(targetUserId, async (dc) => {
         dc.send(JSON.stringify({ type: 'folder-start', name: folderName, totalFiles: fileArray.length, small: true }));
 
@@ -673,11 +852,11 @@ export default function Room() {
 
       if (!started) { return; }
 
-      const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
       await supabase.from('transfer_history').insert({
         sender_id: userId!, sender_name: userName!, recipient_name: targetName,
         file_name: folderName, file_type: 'folder', sender_email: profile?.email || '',
-      });
+        direction: 'sent',
+      } as any);
     }
   };
 
@@ -703,9 +882,6 @@ export default function Room() {
     });
     toast.info('Folder request sent');
   };
-
-
-
 
   const handleTransferAccept = async () => {
     if (!transferRequest) return;
@@ -825,6 +1001,16 @@ export default function Room() {
               {/* Right: signal strength */}
               <SignalStrength />
             </div>
+
+            {/* Drive status text */}
+            {driveStatus && (
+              <div className="mb-4 animate-fade-up">
+                <div className="flex items-center gap-3 bg-muted/60 rounded-lg px-4 py-3 border border-border">
+                  <div className="h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />
+                  <span className="text-xs font-medium">{driveStatus}</span>
+                </div>
+              </div>
+            )}
 
             {/* Transfer progress bar */}
             {transferProgress && (
