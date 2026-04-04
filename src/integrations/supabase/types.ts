@@ -115,6 +115,8 @@ export type Database = {
       }
       transfer_history: {
         Row: {
+          direction: string
+          download_url: string | null
           file_name: string
           file_type: string
           id: string
@@ -125,6 +127,8 @@ export type Database = {
           transferred_at: string
         }
         Insert: {
+          direction?: string
+          download_url?: string | null
           file_name: string
           file_type?: string
           id?: string
@@ -135,6 +139,8 @@ export type Database = {
           transferred_at?: string
         }
         Update: {
+          direction?: string
+          download_url?: string | null
           file_name?: string
           file_type?: string
           id?: string
