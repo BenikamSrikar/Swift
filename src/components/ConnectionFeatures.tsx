@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Shield, Zap, Globe, FolderSync, Clock, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Shield, Zap, Globe, FolderSync, Clock, AlertTriangle, ArrowRight, Cloud } from 'lucide-react';
 
 const NEW_FEATURES = [
   {
     icon: Globe,
     title: 'Browser Independent',
     description: 'Works on Chrome, Firefox, Safari, and Edge — no extensions needed.',
+  },
+  {
+    icon: Cloud,
+    title: 'Smart Size Routing',
+    description: 'Files <25MB transfer via WebRTC. Larger files auto-upload to Google Drive with 5-min expiry links.',
   },
   {
     icon: FolderSync,
@@ -17,24 +22,20 @@ const NEW_FEATURES = [
     title: 'Enhanced Security',
     description: 'Upgraded encryption with stronger key exchange protocols.',
   },
-  {
-    icon: Zap,
-    title: 'Faster Connections',
-    description: 'Optimized signaling for quicker peer discovery and connection setup.',
-  },
 ];
 
 const HOW_IT_WORKS = [
   { step: '1', title: 'Create or Join', description: 'Create a room and share the 6-character code, or enter a code to join.' },
   { step: '2', title: 'Connect Peer-to-Peer', description: 'A direct WebRTC connection is established — no server in between.' },
-  { step: '3', title: 'Transfer Files', description: 'Drag and drop files to send them at full speed, encrypted end-to-end.' },
+  { step: '3', title: 'Transfer Files', description: 'Drop files to send. Small files go direct, large files route through Google Drive automatically.' },
 ];
 
 const V1_COMPARISON = [
-  { v1: 'Slower initial connection times', v11: 'Optimized signaling — connects in seconds', icon: Clock },
-  { v1: 'Only individual files could be sent', v11: 'Full folder support with auto-ZIP', icon: FolderSync },
-  { v1: 'Intermittent issues on Safari & Edge', v11: 'Seamless cross-browser compatibility', icon: Globe },
-  { v1: 'Basic encryption only', v11: 'Enhanced end-to-end encryption', icon: Shield },
+  { v1: 'All files sent via WebRTC only', v12: 'Smart routing — WebRTC for <25MB, Google Drive for larger', icon: Cloud },
+  { v1: 'No transfer history for receivers', v12: 'Both sender and receiver see full transfer history', icon: Clock },
+  { v1: 'Only individual files could be sent', v12: 'Full folder support with auto-ZIP', icon: FolderSync },
+  { v1: 'Intermittent issues on Safari & Edge', v12: 'Seamless cross-browser compatibility', icon: Globe },
+  { v1: 'Basic encryption only', v12: 'Enhanced end-to-end encryption', icon: Shield },
 ];
 
 function useScrollReveal() {
@@ -83,7 +84,7 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
             Welcome back, <span className="text-primary">{userName.split(' ')[0]}</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Here's what's new in SWIFT v1.1</p>
+          <p className="text-sm text-muted-foreground mt-1">Here's what's new in SWIFT v1.2</p>
         </div>
       </div>
 
@@ -92,7 +93,7 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
         ref={(el) => { refs.current[1] = el; }}
         className={getRevealClass(1, 'up')}
       >
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">What's New in v1.1</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">What's New in v1.2</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {NEW_FEATURES.map((f, i) => (
             <div
@@ -131,12 +132,12 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
         </div>
       </div>
 
-      {/* v1.0 vs v1.1 Comparison */}
+      {/* v1.0 vs v1.2 Comparison */}
       <div
         ref={(el) => { refs.current[3] = el; }}
         className={getRevealClass(3, 'right')}
       >
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">v1.0 vs v1.1</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">v1.0 vs v1.2</h3>
         <div className="space-y-3">
           {V1_COMPARISON.map((item, i) => (
             <div
@@ -148,7 +149,7 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
               <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0">
                 <span className="text-xs text-muted-foreground line-through flex-1">{item.v1}</span>
                 <ArrowRight className="w-3 h-3 text-primary shrink-0 hidden sm:block" />
-                <span className="text-xs font-medium text-foreground flex-1">{item.v11}</span>
+                <span className="text-xs font-medium text-foreground flex-1">{item.v12}</span>
               </div>
             </div>
           ))}
