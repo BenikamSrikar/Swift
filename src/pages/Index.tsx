@@ -146,7 +146,7 @@ export default function Index() {
             </p>
           </div>
 
-          <div className="hidden lg:flex flex-1 w-full min-h-[400px] lg:min-h-[500px]">
+          <div className="hidden lg:flex flex-1 w-full min-h-[500px] lg:min-h-[600px]">
             <SwiftBirdsMap />
           </div>
         </div>
