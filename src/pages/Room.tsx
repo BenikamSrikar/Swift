@@ -105,6 +105,26 @@ export default function Room() {
   const isHost = room?.host_id === userId;
   const [removedByHost, setRemovedByHost] = useState(false);
 
+  const requestDriveAccess = useCallback(async () => {
+    setDriveStatus('Requesting Google Drive permission...');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/room/${roomId}`,
+        scopes: 'https://www.googleapis.com/auth/drive.file',
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+
+    if (error) {
+      setDriveStatus(null);
+      toast.error('Could not open Google Drive permission request.');
+    }
+  }, [roomId]);
+
   // Load room initially
   useEffect(() => {
     if (!userId || !userName || !roomId) {
