@@ -105,6 +105,26 @@ export default function Room() {
   const isHost = room?.host_id === userId;
   const [removedByHost, setRemovedByHost] = useState(false);
 
+  const requestDriveAccess = useCallback(async () => {
+    setDriveStatus('Requesting Google Drive permission...');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/room/${roomId}`,
+        scopes: 'https://www.googleapis.com/auth/drive.file',
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+
+    if (error) {
+      setDriveStatus(null);
+      toast.error('Could not open Google Drive permission request.');
+    }
+  }, [roomId]);
+
   // Load room initially
   useEffect(() => {
     if (!userId || !userName || !roomId) {
@@ -623,7 +643,8 @@ export default function Room() {
     // Size-based routing
     if (file.size >= SIZE_THRESHOLD) {
       if (!providerToken) {
-        toast.error('Google Drive not connected. Please sign out and sign in again to grant Drive permissions.');
+        toast.info('Google Drive permission is required for files larger than 25MB.');
+        await requestDriveAccess();
         return;
       }
 
@@ -673,7 +694,13 @@ export default function Room() {
       } catch (err) {
         console.error('Drive upload failed:', err);
         setDriveStatus(null);
-        toast.error('Google Drive upload failed. Check your permissions.');
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (errorMessage.includes('401') || errorMessage.includes('403')) {
+          toast.error('Google Drive permission expired. Please grant access again.');
+          await requestDriveAccess();
+          return;
+        }
+        toast.error('Google Drive upload failed. Please try again.');
       }
       return;
     }
@@ -711,7 +738,8 @@ export default function Room() {
     // Size-based routing for folders
     if (totalSize >= SIZE_THRESHOLD) {
       if (!providerToken) {
-        toast.error('Google Drive not connected. Please sign out and sign in again to grant Drive permissions.');
+        toast.info('Google Drive permission is required for folders larger than 25MB.');
+        await requestDriveAccess();
         return;
       }
 
@@ -774,7 +802,13 @@ export default function Room() {
       } catch (err) {
         console.error('Drive upload failed:', err);
         setDriveStatus(null);
-        toast.error('Google Drive upload failed. Check your permissions.');
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (errorMessage.includes('401') || errorMessage.includes('403')) {
+          toast.error('Google Drive permission expired. Please grant access again.');
+          await requestDriveAccess();
+          return;
+        }
+        toast.error('Google Drive upload failed. Please try again.');
       }
       return;
     }
