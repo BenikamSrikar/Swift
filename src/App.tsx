@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
+import ThemePicker from "@/components/ThemePicker";
 import Index from "./pages/Index.tsx";
 import Connection from "./pages/Connection.tsx";
 import Room from "./pages/Room.tsx";
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+        <ThemePicker />
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>

@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import VoltsNavbar from '@/components/VoltsNavbar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { lovable } from '@/integrations/lovable/index';
 import SwiftBirdsMap from '@/components/SwiftBirdsMap';
 import ParticleField from '@/components/ParticleField';
-import BrowserIndependentSection from '@/components/BrowserIndependentSection';
 import { SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
 
 const SWIFT_ITEMS = [
@@ -15,35 +14,35 @@ const SWIFT_ITEMS = [
     word: 'Secure',
     brief: 'Your privacy is non-negotiable.',
     description:
-      "Every transfer in SWIFT is peer-to-peer using WebRTC — your files never pass through any server. With end-to-end encryption baked into the protocol, only the sender and receiver can access the data. No cloud storage, no logs, no traces. It\u2019s as if the transfer never happened — except you have the file.",
+      "Every transfer in SWIFT is peer-to-peer using WebRTC — your files never pass through any server. With end-to-end encryption baked into the protocol, only the sender and receiver can access the data. No cloud storage, no logs, no traces.",
   },
   {
     letter: 'W',
     word: 'Wideband',
     brief: 'Unleash every last bit of bandwidth.',
     description:
-      "SWIFT doesn\u2019t just use your connection — it dominates it. By establishing a raw WebRTC data channel directly between devices, every byte travels the shortest possible path with zero relay overhead. There\u2019s no upload-then-download bottleneck, no server-side queuing, no artificial throttling.",
+      "SWIFT doesn\u2019t just use your connection — it dominates it. By establishing a raw WebRTC data channel directly between devices, every byte travels the shortest possible path with zero relay overhead.",
   },
   {
     letter: 'I',
     word: 'Instant',
     brief: 'Zero friction, zero accounts.',
     description:
-      "No sign-ups, no email verification, no passwords to remember. Just sign in with Google and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring. The entire setup takes under 10 seconds.",
+      "No sign-ups, no email verification, no passwords to remember. Just sign in with Google and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring.",
   },
   {
     letter: 'F',
     word: 'Files & Folders',
     brief: 'Send anything — files, folders, or videos.',
     description:
-      "Whether it\u2019s a single document, an entire project folder, or a large video file, SWIFT handles it all. Folders are automatically compressed into ZIP archives before transfer, preserving directory structure.",
+      "Whether it\u2019s a single document, an entire project folder, or a large video file, SWIFT handles it all. Large files are sent in chunks with real-time progress tracking on both sides.",
   },
   {
     letter: 'T',
     word: 'Transfer',
     brief: 'Ephemeral by design.',
     description:
-      "SWIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history is tied to your Google account and persists across sessions for your reference.",
+      "SWIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history persists across sessions for your reference.",
   },
 ];
 
@@ -101,21 +100,21 @@ export default function Index() {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-        scopes: 'https://www.googleapis.com/auth/drive.file',
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
     });
-    if (error) {
-      console.error('Google sign-in failed:', error);
+
+    if (result.error) {
+      console.error('Google sign-in failed:', result.error);
       setLoading(false);
+      return;
     }
+
+    if (result.redirected) {
+      return;
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -125,7 +124,7 @@ export default function Index() {
       {/* Hero */}
       <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden">
         <ParticleField />
-        <div className="w-full max-w-7xl mx-auto relative z-10 flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
+        <div className="w-full max-w-7xl mx-auto relative z-10 flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
           <div className="flex-1 animate-fade-up" style={{ animationDelay: '100ms' }}>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4">
               <span className="text-primary">SWIFT</span>
@@ -154,8 +153,11 @@ export default function Index() {
             </p>
           </div>
 
-          <div className="hidden lg:flex flex-1 w-full min-h-[500px] lg:min-h-[600px]">
-            <SwiftBirdsMap />
+          {/* World map aligned to the right of SWIFT title */}
+          <div className="hidden lg:block flex-1 relative" style={{ minHeight: 500 }}>
+            <div className="absolute inset-0 flex items-start" style={{ top: '-2rem' }}>
+              <SwiftBirdsMap />
+            </div>
           </div>
         </div>
 
@@ -166,10 +168,7 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Browser Independent Section */}
-      <BrowserIndependentSection />
-
-      {/* SWIFT Sections - all white background */}
+      {/* SWIFT Sections */}
       {SWIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
         const style = SECTION_STYLES[i];
         const IconComponent = SWIFT_ICON_COMPONENTS[i];
