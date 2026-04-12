@@ -13,8 +13,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
+import { format } from 'date-fns';
 import JSZip from 'jszip';
+import TransferQueue, { QueuedTransfer } from '@/components/TransferQueue';
 
 const DATA_CHANNEL_CHUNK_SIZE = 262144; // 256KB
 const DATA_CHANNEL_BUFFER_LIMIT = DATA_CHANNEL_CHUNK_SIZE * 8;
@@ -41,12 +42,6 @@ interface TransferRequest {
   type: 'file' | 'folder' | 'video';
 }
 
-interface TransferProgress {
-  label: string;
-  percent: number;
-  direction: 'sending' | 'receiving';
-}
-
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
@@ -60,7 +55,7 @@ export default function Room() {
   const [currentRequest, setCurrentRequest] = useState<PendingRequest | null>(null);
   const [transferRequest, setTransferRequest] = useState<TransferRequest | null>(null);
   const [copied, setCopied] = useState(false);
-  const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
+  const [queuedTransfers, setQueuedTransfers] = useState<QueuedTransfer[]>([]);
   const [statusText, setStatusText] = useState<string | null>(null);
   const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string; mode: 'file' | 'folder' } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -68,9 +63,18 @@ export default function Room() {
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
   const transferChannelRef = useRef<any>(null);
+  const transferPayloads = useRef<Map<string, { blob: Blob; targetUserId: string }>>(new Map());
 
   const isHost = room?.host_id === userId;
   const [removedByHost, setRemovedByHost] = useState(false);
+
+  const generateTransferId = () => {
+    try {
+      return (window.crypto as any).randomUUID();
+    } catch {
+      return Math.random().toString(36).substring(2, 11);
+    }
+  };
 
   // Load room
   useEffect(() => {
@@ -110,7 +114,7 @@ export default function Room() {
     if (!parts) return;
 
     const myEntry = parts.find((p) => p.user_id === userId);
-    if (myEntry && myEntry.status === 'blocked') {
+    if (myEntry && (myEntry.status === 'blocked' || myEntry.status === 'rejected')) {
       setRemovedByHost(true);
       return;
     }
@@ -163,7 +167,10 @@ export default function Room() {
 
     setPendingRequests(newPending);
     if (newPending.length > 0) {
-      setCurrentRequest((prev) => prev ?? newPending[0]);
+      setCurrentRequest((prev) => {
+        const stillInList = newPending.find(np => np.userId === prev?.userId);
+        return stillInList ? prev : newPending[0];
+      });
     } else {
       setCurrentRequest(null);
     }
@@ -264,19 +271,30 @@ export default function Room() {
   // ── Receive logic ──
   const receiveFile = (dc: RTCDataChannel, fromUserId: string) => {
     const chunks: BlobPart[] = [];
-    let metadata: { name: string; size: number } | null = null;
+    let metadata: { id: string; name: string; size: number } | null = null;
     let receivedBytes = 0;
     let messageQueue = Promise.resolve();
 
     const logHistory = async (fileName: string, fileType: string) => {
-      const senderInfo = participants.find((p) => p.user_id === fromUserId);
+      let senderName = participants.find((p) => p.user_id === fromUserId)?.name;
+      let senderEmail = participants.find((p) => p.user_id === fromUserId)?.email;
+
+      if (!senderName) {
+        // Fallback: check sessions or profiles directly if not in active list
+        const { data: prof } = await supabase.from('profiles').select('name, email').eq('auth_user_id', fromUserId).single();
+        if (prof) {
+          senderName = prof.name;
+          senderEmail = prof.email;
+        }
+      }
+
       await supabase.from('transfer_history').insert({
-        sender_id: userId!,
-        sender_name: senderInfo?.name || 'Unknown',
+        sender_id: fromUserId,
+        sender_name: senderName || 'Unknown Peer',
         recipient_name: userName!,
         file_name: fileName,
         file_type: fileType,
-        sender_email: profile?.email || '',
+        sender_email: senderEmail || '',
         direction: 'received',
       } as any);
     };
@@ -289,31 +307,52 @@ export default function Room() {
           metadata = msg;
           receivedBytes = 0;
           chunks.length = 0;
-          setStatusText(`Receiving: ${msg.name}`);
-          toast.info(`Receiving: ${msg.name}`, { duration: 3000 });
+          
+          const transferId = msg.id || generateTransferId();
+          setQueuedTransfers(prev => [...prev, {
+            id: transferId,
+            name: msg.name,
+            size: msg.size,
+            progress: 0,
+            status: 'processing',
+            direction: 'receiving',
+            type: msg.name.endsWith('.zip') ? 'folder' : 'file'
+          }]);
 
-          if (msg.size >= SIZE_THRESHOLD) {
-            setTransferProgress({ label: msg.name, percent: 0, direction: 'receiving' });
-          }
+          setStatusText(`Receiving: ${msg.name}`);
         } else if (msg.type === 'done') {
           const blob = new Blob(chunks);
           const url = URL.createObjectURL(blob);
+          const currentMeta = metadata;
+          
           setStatusText(null);
-          setTransferProgress(null);
-          await logHistory(metadata?.name || 'download', metadata?.name?.endsWith('.zip') ? 'folder' : 'file');
-          toast.success(`File received: ${metadata?.name}`, {
-            action: {
-              label: 'Download',
-              onClick: () => {
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = metadata?.name || 'download';
-                a.click();
-                URL.revokeObjectURL(url);
+          setQueuedTransfers(prev => prev.map(t => 
+            t.name === currentMeta?.name && t.status === 'processing' 
+              ? { ...t, status: 'completed', progress: 100 } 
+              : t
+          ));
+
+          // Auto-remove completed transfer from UI after 3 seconds
+          setTimeout(() => {
+            setQueuedTransfers(prev => prev.filter(t => t.id !== msg.id && t.progress !== 100));
+          }, 3000);
+
+          if (currentMeta) {
+            await logHistory(currentMeta.name, currentMeta.name.endsWith('.zip') ? 'folder' : 'file');
+            toast.success(`File received: ${currentMeta.name}`, {
+              action: {
+                label: 'Download',
+                onClick: () => {
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = currentMeta.name;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                },
               },
-            },
-            duration: 15000,
-          });
+              duration: 15000,
+            });
+          }
           dc.close();
         }
       } else {
@@ -321,9 +360,13 @@ export default function Room() {
         const byteLength = data instanceof ArrayBuffer ? data.byteLength : (data as Blob).size;
         receivedBytes += byteLength;
 
-        if (metadata && metadata.size >= SIZE_THRESHOLD) {
+        if (metadata) {
           const pct = Math.min(Math.round((receivedBytes / metadata.size) * 100), 100);
-          setTransferProgress({ label: metadata.name, percent: pct, direction: 'receiving' });
+          setQueuedTransfers(prev => prev.map(t => 
+            t.name === metadata?.name && t.status === 'processing' 
+              ? { ...t, progress: pct } 
+              : t
+          ));
         }
       }
     };
@@ -331,10 +374,10 @@ export default function Room() {
     dc.onmessage = (event) => {
       messageQueue = messageQueue
         .then(() => processIncomingData(event.data))
-        .catch(() => {
-          setTransferProgress(null);
+        .catch((err) => {
+          console.error('Receive error:', err);
           setStatusText(null);
-          toast.error('Transfer failed');
+          toast.error('Internal receiver error');
           dc.close();
         });
     };
@@ -377,7 +420,7 @@ export default function Room() {
   ) => {
     const channel = transferChannelRef.current;
     if (!channel) {
-      toast.error('Channel not ready, try again');
+      toast.error('Communication channel not ready');
       return false;
     }
 
@@ -395,8 +438,9 @@ export default function Room() {
     dc.bufferedAmountLowThreshold = DATA_CHANNEL_BUFFER_LIMIT / 2;
 
     dc.onopen = () => {
-      void onOpen(dc).catch(() => {
-        toast.error('Transfer failed');
+      void onOpen(dc).catch((err) => {
+        console.error('DataChannel error:', err);
+        toast.error('Connection interrupted');
         dc.close();
         pc.close();
       });
@@ -424,188 +468,110 @@ export default function Room() {
     return true;
   };
 
-  // ── Send file ──
-  const sendFileViaPeer = async (targetUserId: string, file: File) => {
-    const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
-    const isLarge = file.size >= SIZE_THRESHOLD;
-    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+  // ── Queue Processing ──
+  useEffect(() => {
+    const isAnyProcessing = queuedTransfers.some(t => t.status === 'processing');
+    if (isAnyProcessing) return;
 
-    setStatusText(`Sending ${file.name} (${sizeMB}MB)…`);
-    if (isLarge) {
-      setTransferProgress({ label: file.name, percent: 0, direction: 'sending' });
-    }
+    const next = queuedTransfers.find(t => t.status === 'pending' && t.direction === 'sending');
+    if (!next) return;
 
-    const started = await createTransferPeer(targetUserId, async (dc) => {
-      dc.send(JSON.stringify({ type: 'metadata', name: file.name, size: file.size }));
+    const payload = transferPayloads.current.get(next.id);
+    if (!payload) return;
 
-      await sendBlobInChunks(dc, file, (sent, total) => {
-        if (isLarge) {
+    const startTransfer = async () => {
+      setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'processing' } : t));
+      
+      const started = await createTransferPeer(payload.targetUserId, async (dc) => {
+        dc.send(JSON.stringify({ 
+          type: 'metadata', 
+          id: next.id,
+          name: next.name, 
+          size: next.size 
+        }));
+
+        await sendBlobInChunks(dc, payload.blob, (sent, total) => {
           const pct = Math.min(Math.round((sent / total) * 100), 100);
-          setTransferProgress({ label: file.name, percent: pct, direction: 'sending' });
-        }
+          setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, progress: pct } : t));
+        });
+
+        dc.send(JSON.stringify({ type: 'done' }));
+        setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'completed', progress: 100 } : t));
+        setStatusText(null);
+        toast.success(`Successfully sent ${next.name}`);
+        
+        // Auto-remove after completion
+        setTimeout(() => {
+          setQueuedTransfers(prev => prev.filter(t => t.id !== next.id));
+          transferPayloads.current.delete(next.id);
+        }, 3000);
       });
 
-      dc.send(JSON.stringify({ type: 'done' }));
-      setTransferProgress(null);
-      setStatusText(null);
-      toast.success(`Sent: ${file.name}`, { duration: 4000 });
-    });
-
-    if (!started) {
-      setTransferProgress(null);
-      setStatusText(null);
-      return;
-    }
-
-    await supabase.from('transfer_history').insert({
-      sender_id: userId!,
-      sender_name: userName!,
-      recipient_name: targetName,
-      file_name: file.name,
-      file_type: 'file',
-      sender_email: profile?.email || '',
-      direction: 'sent',
-    } as any);
-  };
-
-  // ── Send folder ──
-  const sendFolderViaPeer = async (targetUserId: string, files: FileList | File[], folderName: string) => {
-    const fileArray = Array.from(files);
-    const totalSize = fileArray.reduce((sum, f) => sum + f.size, 0);
-    const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(1);
-    const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
-
-    // Always zip with STORE (no compression), preserving folder structure
-    setStatusText(`Zipping ${folderName} (${totalSizeMB}MB)…`);
-    setTransferProgress({ label: `${folderName} • zipping`, percent: 0, direction: 'sending' });
-
-    const zip = new JSZip();
-    for (let i = 0; i < fileArray.length; i++) {
-      const file = fileArray[i];
-      const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
-      zip.file(relativePath, file, { compression: 'STORE' });
-      const pct = Math.round(((i + 1) / fileArray.length) * 30);
-      setTransferProgress({ label: `${folderName} • zipping`, percent: pct, direction: 'sending' });
-    }
-
-    const zipBlob = await zip.generateAsync(
-      { type: 'blob', compression: 'STORE', streamFiles: true },
-      (meta) => {
-        const pct = 30 + Math.round(meta.percent * 0.2);
-        setTransferProgress({ label: `${folderName} • zipping`, percent: Math.min(pct, 50), direction: 'sending' });
+      if (!started) {
+        setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'failed' } : t));
+      } else {
+        const targetName = participants.find(p => p.user_id === payload.targetUserId)?.name || 'Unknown';
+        await supabase.from('transfer_history').insert({
+          sender_id: userId!,
+          sender_name: userName!,
+          recipient_name: targetName,
+          file_name: next.name,
+          file_type: next.type,
+          sender_email: profile?.email || '',
+          direction: 'sent',
+        } as any);
       }
-    );
+    };
 
-    const zipFileName = `${folderName}.zip`;
-    const isLarge = zipBlob.size >= SIZE_THRESHOLD;
+    startTransfer();
+  }, [queuedTransfers, userId, userName, profile, participants]);
 
-    setStatusText(`Sending ${zipFileName}…`);
-    setTransferProgress({ label: `${folderName} • sending`, percent: 0, direction: 'sending' });
+  // ── Send files ──
+  const sendFilesViaPeer = async (targetUserId: string, files: File[]) => {
+    const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
+    
+    let fileToSend: Blob;
+    let fileName: string;
+    let fileType: 'file' | 'folder' = 'file';
 
-    const started = await createTransferPeer(targetUserId, async (dc) => {
-      dc.send(JSON.stringify({ type: 'metadata', name: zipFileName, size: zipBlob.size }));
-
-      await sendBlobInChunks(dc, zipBlob, (sent, total) => {
-        const pct = Math.min(Math.round((sent / total) * 100), 100);
-        setTransferProgress({ label: `${folderName} • sending`, percent: pct, direction: 'sending' });
+    if (files.length === 1) {
+      fileToSend = files[0];
+      fileName = files[0].name;
+    } else {
+      setStatusText(`Preparing ${files.length} files...`);
+      const zip = new JSZip();
+      files.forEach(f => {
+        const path = (f as any).webkitRelativePath || f.name;
+        zip.file(path, f);
       });
-
-      dc.send(JSON.stringify({ type: 'done' }));
-      setTransferProgress(null);
-      setStatusText(null);
-      toast.success(`Sent folder: ${folderName}`, { duration: 4000 });
-    });
-
-    if (!started) {
-      setTransferProgress(null);
-      setStatusText(null);
-      return;
+      fileToSend = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      fileName = `swift_batch_${format(new Date(), 'HHmm')}.zip`;
+      fileType = 'folder';
     }
 
-    await supabase.from('transfer_history').insert({
-      sender_id: userId!,
-      sender_name: userName!,
-      recipient_name: targetName,
-      file_name: zipFileName,
-      file_type: 'folder',
-      sender_email: profile?.email || '',
-      direction: 'sent',
-    } as any);
+    const transferId = generateTransferId();
+    transferPayloads.current.set(transferId, { blob: fileToSend, targetUserId });
+
+    setQueuedTransfers(prev => [...prev, {
+      id: transferId,
+      name: fileName,
+      size: fileToSend.size,
+      progress: 0,
+      status: 'pending',
+      direction: 'sending',
+      type: fileType
+    }]);
   };
 
-  // ── Room actions ──
-  const handleRequestFile = (targetUserId: string) => {
-    const channel = transferChannelRef.current;
-    if (!channel) { toast.error('Channel not ready'); return; }
-    channel.send({
-      type: 'broadcast',
-      event: 'transfer-request',
-      payload: { targetUserId, fromUserId: userId, fromName: userName, type: 'file' },
-    });
-    toast.info('File request sent');
-  };
-
-  const handleRequestFolder = (targetUserId: string) => {
-    const channel = transferChannelRef.current;
-    if (!channel) { toast.error('Channel not ready'); return; }
-    channel.send({
-      type: 'broadcast',
-      event: 'transfer-request',
-      payload: { targetUserId, fromUserId: userId, fromName: userName, type: 'folder' },
-    });
-    toast.info('Folder request sent');
-  };
-
-  const handleTransferAccept = async () => {
-    if (!transferRequest) return;
-    const { fromUserId } = transferRequest;
-    setTransferRequest(null);
-    setUploadModal({ open: true, targetUserId: fromUserId, mode: transferRequest.type === 'folder' ? 'folder' : 'file' });
-  };
-
-  const handleUploadFile = async (file: File) => {
+  const handleUploadFiles = async (files: File[]) => {
     if (!uploadModal) return;
-    await sendFileViaPeer(uploadModal.targetUserId, file);
+    await sendFilesViaPeer(uploadModal.targetUserId, files);
   };
 
-  const handleUploadFolder = async (files: FileList, folderName: string) => {
+  const handleUploadFolder = async (files: FileList) => {
     if (!uploadModal) return;
-    await sendFolderViaPeer(uploadModal.targetUserId, files, folderName);
-  };
-
-  const handleAcceptJoin = async () => {
-    if (!currentRequest) return;
-    await supabase
-      .from('room_participants')
-      .update({ status: 'accepted' })
-      .eq('room_id', roomId!)
-      .eq('user_id', currentRequest.userId);
-
-    const remaining = pendingRequests.filter((r) => r.userId !== currentRequest.userId);
-    setPendingRequests(remaining);
-    setCurrentRequest(remaining[0] || null);
-  };
-
-  const handleRejectJoin = async () => {
-    if (!currentRequest) return;
-    await supabase
-      .from('room_participants')
-      .update({ status: 'blocked' })
-      .eq('room_id', roomId!)
-      .eq('user_id', currentRequest.userId);
-
-    const remaining = pendingRequests.filter((r) => r.userId !== currentRequest.userId);
-    setPendingRequests(remaining);
-    setCurrentRequest(remaining[0] || null);
-  };
-
-  const handleRemoveUser = async (targetUserId: string) => {
-    await supabase
-      .from('room_participants')
-      .update({ status: 'blocked' })
-      .eq('room_id', roomId!)
-      .eq('user_id', targetUserId);
-    toast.error('User removed');
+    const fileArray = Array.from(files);
+    await sendFilesViaPeer(uploadModal.targetUserId, fileArray);
   };
 
   const handleLogout = async () => {
@@ -622,114 +588,99 @@ export default function Room() {
     navigate('/');
   };
 
-  const handleHistory = () => setHistoryOpen(true);
-
   const copyRoomId = () => {
-    navigator.clipboard.writeText(roomId || '');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (roomId) {
+      navigator.clipboard.writeText(roomId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={handleHistory} />
+      <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
       <main className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full">
         {removedByHost ? (
-          <div className="flex flex-col items-center justify-center h-[60vh] gap-4 animate-fade-in">
-            <p className="text-lg font-semibold text-destructive">Host has removed you from this room</p>
-            <p className="text-sm text-muted-foreground">You no longer have access to this room.</p>
-            <Button variant="outline" onClick={handleLogout}>Logout</Button>
+          <div className="flex flex-col items-center justify-center h-[60vh] gap-4 animate-fade-in text-center">
+            <p className="text-xl font-bold text-destructive">Room Access Revoked</p>
+            <p className="text-muted-foreground">The host has ended your session or blocked your access.</p>
+            <Button variant="outline" onClick={handleLogout}>Return to Landing</Button>
           </div>
         ) : (
           <>
-            {/* Top bar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 animate-fade-up">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <UserAvatar name={userName || '?'} avatarUrl={profile?.avatar_url} size="sm" />
-                <div>
-                  <span className="text-sm font-semibold">{userName}</span>
-                  {isHost && (
-                    <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
-                      Host
-                    </span>
-                  )}
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold tracking-tight">{userName}</span>
+                  {isHost && <span className="text-[9px] font-black uppercase text-primary tracking-widest leading-none">Administrator</span>}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-full border border-border/40">
                 <div className="h-2 w-2 rounded-full bg-signal-strong animate-pulse" />
-                <span className="text-xs font-mono text-muted-foreground">Room {roomId} is live</span>
-                <button onClick={copyRoomId} className="text-muted-foreground hover:text-foreground transition-colors">
-                  {copied ? <Check className="h-3.5 w-3.5 text-signal-strong" /> : <Copy className="h-3.5 w-3.5" />}
+                <span className="text-[11px] font-mono text-muted-foreground">Secure ID: {roomId}</span>
+                <button onClick={copyRoomId} className="ml-1 text-muted-foreground hover:text-foreground transition-all active:scale-90">
+                  {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
                 </button>
               </div>
 
               <SignalStrength />
             </div>
 
-            {/* Status text */}
             {statusText && (
-              <div className="mb-4 animate-fade-up">
-                <div className="flex items-center gap-3 bg-muted/60 rounded-lg px-4 py-3 border border-border">
-                  <div className="h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />
-                  <span className="text-xs font-medium">{statusText}</span>
+              <div className="mb-4 animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 py-3 border border-primary/20">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary animate-ping shrink-0" />
+                  <span className="text-xs font-bold uppercase tracking-tight text-primary">{statusText}</span>
                 </div>
               </div>
             )}
 
-            {/* Transfer progress bar */}
-            {transferProgress && (
-              <div className="mb-4 animate-fade-up">
-                <div className="flex items-center gap-3 bg-muted/60 rounded-lg px-4 py-3 border border-border">
-                  <div className="h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium truncate">
-                        {transferProgress.direction === 'sending' ? 'Sending' : 'Receiving'}: {transferProgress.label}
-                      </span>
-                      <span className="text-xs font-mono text-muted-foreground ml-2">
-                        {transferProgress.percent}%
-                      </span>
-                    </div>
-                    <Progress value={transferProgress.percent} className="h-2" />
-                  </div>
-                </div>
-              </div>
-            )}
+            <TransferQueue transfers={queuedTransfers} />
 
-            {room?.status === 'locked' && (
-              <div className="text-center mb-4 animate-fade-up">
-                <span className="text-xs font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
-                  Room Locked — Host has left
-                </span>
-              </div>
-            )}
-
-            {/* Participants */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
               {participants
                 .filter((p) => p.user_id !== userId)
                 .map((p, i) => (
-                  <div key={p.user_id} className="animate-scale-in" style={{ animationDelay: `${i * 100}ms` }}>
+                  <div key={p.user_id} className="animate-in fade-in zoom-in-95 duration-300" style={{ animationDelay: `${i * 100}ms` }}>
                     <UserCard
                       name={p.name}
                       avatarUrl={p.avatar_url}
                       isHost={p.user_id === room?.host_id}
                       showHostControls={isHost}
-                      onRequestFile={() => handleRequestFile(p.user_id)}
-                      onRequestFolder={() => handleRequestFolder(p.user_id)}
+                      onRequestFile={() => {
+                        transferChannelRef.current?.send({
+                          type: 'broadcast',
+                          event: 'transfer-request',
+                          payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, type: 'file' },
+                        });
+                        toast.info('File requested');
+                      }}
+                      onRequestFolder={() => {
+                        transferChannelRef.current?.send({
+                          type: 'broadcast',
+                          event: 'transfer-request',
+                          payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, type: 'folder' },
+                        });
+                        toast.info('Folder requested');
+                      }}
                       onRemove={() => handleRemoveUser(p.user_id)}
                     />
                   </div>
                 ))}
 
               {participants.length === 1 && isHost && (
-                <div className="col-span-full text-center py-12 text-muted-foreground text-sm animate-fade-up" style={{ animationDelay: '200ms' }}>
-                  <p>Share your Room ID to invite others</p>
-                  <Button variant="outline" size="sm" className="mt-3 gap-2" onClick={copyRoomId}>
+                <div className="col-span-full flex flex-col items-center justify-center py-20 text-muted-foreground animate-in fade-in">
+                  <div className="w-16 h-16 bg-muted/20 rounded-full flex items-center justify-center mb-4">
+                    <Copy className="h-6 w-6 opacity-20" />
+                  </div>
+                  <p className="text-sm font-medium">Ready and waiting for peers</p>
+                  <p className="text-xs opacity-60 mt-1">Share your Gmail ID to start transferring</p>
+                  <Button variant="outline" size="sm" className="mt-6 gap-2 border-primary/20 text-primary" onClick={copyRoomId}>
                     {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                    Copy Room ID
+                    Copy Connection Link
                   </Button>
                 </div>
               )}
@@ -743,15 +694,28 @@ export default function Room() {
         requesterName={currentRequest?.name || ''}
         requesterEmail={currentRequest?.email}
         requesterAvatar={currentRequest?.avatar_url}
-        onAccept={handleAcceptJoin}
-        onReject={handleRejectJoin}
+        onAccept={async () => {
+          if (!currentRequest) return;
+          await supabase.from('room_participants').update({ status: 'accepted' }).eq('room_id', roomId!).eq('user_id', currentRequest.userId);
+          loadParticipants();
+        }}
+        onReject={async () => {
+          if (!currentRequest) return;
+          await supabase.from('room_participants').update({ status: 'blocked' }).eq('room_id', roomId!).eq('user_id', currentRequest.userId);
+          loadParticipants();
+        }}
       />
 
       <TransferRequestDialog
         open={!!transferRequest}
         requesterName={transferRequest?.fromName || ''}
         type={transferRequest?.type || 'file'}
-        onAccept={handleTransferAccept}
+        onAccept={() => {
+          if (!transferRequest) return;
+          const { fromUserId, type } = transferRequest;
+          setTransferRequest(null);
+          setUploadModal({ open: true, targetUserId: fromUserId, mode: type === 'folder' ? 'folder' : 'file' });
+        }}
         onReject={() => setTransferRequest(null)}
       />
 
@@ -759,7 +723,7 @@ export default function Room() {
         open={!!uploadModal?.open}
         mode={uploadModal?.mode || 'file'}
         onClose={() => setUploadModal(null)}
-        onFileSelected={handleUploadFile}
+        onFileSelected={handleUploadFiles}
         onFolderSelected={handleUploadFolder}
       />
 
@@ -771,4 +735,9 @@ export default function Room() {
       />
     </div>
   );
+
+  async function handleRemoveUser(targetUserId: string) {
+    await supabase.from('room_participants').update({ status: 'blocked' }).eq('room_id', roomId!).eq('user_id', targetUserId);
+    toast.error('User disconnected');
+  }
 }

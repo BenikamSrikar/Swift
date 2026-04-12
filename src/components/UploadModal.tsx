@@ -12,7 +12,7 @@ interface UploadModalProps {
   open: boolean;
   mode: 'file' | 'folder';
   onClose: () => void;
-  onFileSelected: (file: File) => void;
+  onFileSelected: (files: File[]) => void;
   onFolderSelected: (files: FileList, folderName: string) => void;
 }
 
@@ -55,9 +55,9 @@ export default function UploadModal({ open, mode, onClose, onFileSelected, onFol
     setDragOver(false);
 
     if (mode === 'file') {
-      const file = e.dataTransfer.files?.[0];
-      if (file) {
-        onFileSelected(file);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        onFileSelected(files);
         onClose();
       }
     } else {
@@ -75,9 +75,9 @@ export default function UploadModal({ open, mode, onClose, onFileSelected, onFol
             }
           });
         } else {
-          const file = e.dataTransfer.files?.[0];
-          if (file) {
-            onFileSelected(file);
+          const files = Array.from(e.dataTransfer.files);
+          if (files.length > 0) {
+            onFileSelected(files);
             onClose();
           }
         }
@@ -142,9 +142,9 @@ export default function UploadModal({ open, mode, onClose, onFileSelected, onFol
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onFileSelected(file);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      onFileSelected(Array.from(files));
       onClose();
     } else if (isMobile) {
       // User cancelled the native picker on mobile
@@ -171,6 +171,7 @@ export default function UploadModal({ open, mode, onClose, onFileSelected, onFol
         type="file"
         className="hidden"
         onChange={handleFileInputChange}
+        multiple
       />
       <input
         ref={folderInputRef}
@@ -210,7 +211,7 @@ export default function UploadModal({ open, mode, onClose, onFileSelected, onFol
             >
               <Upload className="h-10 w-10 text-muted-foreground" />
               <p className="text-sm text-muted-foreground text-center">
-                Drag & drop a file here, or <span className="text-primary font-medium">browse</span>
+                Drag & drop files here, or <span className="text-primary font-medium">browse</span>
               </p>
             </div>
           ) : (
