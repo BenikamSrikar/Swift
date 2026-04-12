@@ -97,22 +97,25 @@ export default function Connection() {
       const { data: rooms } = await supabase.from('rooms').select('*').eq('status', 'active');
       if (!rooms) { setActiveRooms([]); return; }
       
-      const hostIds = rooms.map(r => r.host_id).filter(id => id !== user.id);
-      if (hostIds.length === 0) { setActiveRooms([]); return; }
+      const { data: participants } = await supabase.from('room_participants').select('room_id, user_id').eq('status', 'accepted');
+      const activeParticipants = participants || [];
       
-      const { data: sessions } = await supabase.from('sessions').select('user_id').in('user_id', hostIds);
-      const activeHostIds = sessions?.map(s => s.user_id) || [];
-      if (activeHostIds.length === 0) { setActiveRooms([]); return; }
+      // Filter for rooms where the host is actively present in that specific room
+      const liveRooms = rooms.filter(r => 
+        r.host_id !== user.id && 
+        activeParticipants.some(p => p.room_id === r.room_id && p.user_id === r.host_id)
+      );
 
-      const { data: profiles } = await supabase.from('profiles').select('*').in('auth_user_id', activeHostIds);
+      if (liveRooms.length === 0) { setActiveRooms([]); return; }
+
+      const hostIds = liveRooms.map(r => r.host_id);
+      const { data: profiles } = await supabase.from('profiles').select('*').in('auth_user_id', hostIds);
       if (!profiles) { setActiveRooms([]); return; }
       
-      const combined = rooms
-        .filter(r => activeHostIds.includes(r.host_id))
-        .map(r => ({
-          ...r,
-          hostProfile: profiles.find(p => p.auth_user_id === r.host_id)
-        })).filter(r => r.hostProfile);
+      const combined = liveRooms.map(r => ({
+        ...r,
+        hostProfile: profiles.find(p => p.auth_user_id === r.host_id)
+      })).filter(r => r.hostProfile);
         
       setActiveRooms(combined);
     };
@@ -122,13 +125,13 @@ export default function Connection() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, fetchRooms)
       .subscribe();
       
-    const subSessions = supabase.channel('public:sessions')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, fetchRooms)
+    const subParticipants = supabase.channel('public:room_participants')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, fetchRooms)
       .subscribe();
 
     return () => { 
       supabase.removeChannel(subRooms); 
-      supabase.removeChannel(subSessions);
+      supabase.removeChannel(subParticipants);
     };
   }, [user, profile]);
 
