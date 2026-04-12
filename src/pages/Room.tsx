@@ -102,7 +102,7 @@ export default function Room() {
     loadRoom();
   }, [roomId, userId, userName, navigate]);
 
-  // Load participants
+  // Load participants — filter out ghosts (accepted but no active session)
   const loadParticipants = useCallback(async () => {
     if (!roomId) return;
 
@@ -121,6 +121,31 @@ export default function Room() {
 
     const accepted = parts.filter((p) => p.status === 'accepted');
     const pending = parts.filter((p) => p.status === 'pending');
+
+    // ── Ghost Detection: remove accepted participants with no active session ──
+    if (accepted.length > 0) {
+      const { data: activeSessions } = await supabase
+        .from('sessions')
+        .select('user_id')
+        .in('user_id', accepted.map((p) => p.user_id));
+
+      const activeSessionIds = new Set((activeSessions ?? []).map((s) => s.user_id));
+
+      const ghostIds = accepted
+        .filter((p) => p.user_id !== userId && !activeSessionIds.has(p.user_id))
+        .map((p) => p.user_id);
+
+      if (ghostIds.length > 0) {
+        await supabase
+          .from('room_participants')
+          .delete()
+          .eq('room_id', roomId)
+          .in('user_id', ghostIds);
+        // Re-fetch after cleanup
+        loadParticipants();
+        return;
+      }
+    }
 
     const userIds = [...accepted, ...pending].map((p) => p.user_id);
     if (userIds.length === 0) {
@@ -179,6 +204,50 @@ export default function Room() {
   useEffect(() => {
     if (roomId) loadParticipants();
   }, [roomId, loadParticipants]);
+
+  // ── Cleanup on tab close / navigation away ──
+  useEffect(() => {
+    if (!userId || !roomId) return;
+
+    const cleanup = () => {
+      // Use sendBeacon for reliable fire-and-forget on unload
+      // Supabase REST: DELETE /rest/v1/room_participants?room_id=eq.X&user_id=eq.Y
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/room_participants?room_id=eq.${encodeURIComponent(roomId)}&user_id=eq.${encodeURIComponent(userId)}`;
+      const blob = new Blob([], { type: 'application/json' });
+      // Include auth headers via fetch (best-effort, non-blocking)
+      navigator.sendBeacon(url, blob);
+
+      // Also kick off a normal delete as a backup (may not complete on unload)
+      supabase
+        .from('room_participants')
+        .delete()
+        .eq('user_id', userId)
+        .eq('room_id', roomId)
+        .then(() => {})
+        .catch(() => {});
+
+      supabase
+        .from('sessions')
+        .delete()
+        .eq('user_id', userId)
+        .then(() => {})
+        .catch(() => {});
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        cleanup();
+      }
+    };
+
+    window.addEventListener('beforeunload', cleanup);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('beforeunload', cleanup);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [userId, roomId]);
 
   // Realtime participant changes
   useEffect(() => {
@@ -677,7 +746,7 @@ export default function Room() {
                     <Copy className="h-6 w-6 opacity-20" />
                   </div>
                   <p className="text-sm font-medium">Ready and waiting for peers</p>
-                  <p className="text-xs opacity-60 mt-1">Share your Gmail ID to start transferring</p>
+                  <p className="text-xs opacity-60 mt-1">Share your 4-Digit Room Code to start transferring</p>
                   <Button variant="outline" size="sm" className="mt-6 gap-2 border-primary/20 text-primary" onClick={copyRoomId}>
                     {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                     Copy Connection Link

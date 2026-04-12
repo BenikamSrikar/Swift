@@ -97,14 +97,22 @@ export default function Connection() {
 
   const handleCreateRoom = async () => {
     setCreating(true);
-    const roomId = profile.email;
-    const { data: existingRoom } = await supabase.from('rooms').select('id').eq('room_id', roomId).single();
-    if (existingRoom) {
-      await supabase.from('rooms').update({ status: 'active' }).eq('room_id', roomId);
-    } else {
-      const { error } = await supabase.from('rooms').insert({ room_id: roomId, host_id: user.id, status: 'active' });
-      if (error) { toast.error('Failed to create room'); setCreating(false); return; }
+    let roomId = "";
+    let isUnique = false;
+    
+    while (!isUnique) {
+      roomId = Math.floor(1000 + Math.random() * 9000).toString();
+      const { data: existingRoom } = await supabase.from('rooms').select('id').eq('room_id', roomId).single();
+      if (!existingRoom) {
+        isUnique = true;
+      }
     }
+
+    const { error } = await supabase.from('rooms').insert({ room_id: roomId, host_id: user.id, status: 'active' });
+    if (error) { toast.error('Failed to create room'); setCreating(false); return; }
+
+    // Remove any stale participant row before inserting a fresh one
+    await supabase.from('room_participants').delete().eq('room_id', roomId).eq('user_id', user.id);
     await supabase.from('room_participants').insert({ room_id: roomId, user_id: user.id, status: 'accepted' });
     navigate(`/room/${roomId}`);
   };
@@ -118,8 +126,11 @@ export default function Connection() {
     if (room.status === 'locked') { toast.error('Room is locked'); setJoining(false); return; }
     const { data: existing } = await supabase.from('room_participants').select('status').eq('room_id', rid).eq('user_id', user.id).single();
     if (existing?.status === 'blocked') { toast.error('You are blocked'); setJoining(false); return; }
-    if (existing?.status === 'accepted') { navigate(`/room/${rid}`); return; }
-    if (!existing) { await supabase.from('room_participants').insert({ room_id: rid, user_id: user.id, status: 'pending' }); }
+    // Remove any previous stale row before re-joining
+    if (existing) {
+      await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
+    }
+    await supabase.from('room_participants').insert({ room_id: rid, user_id: user.id, status: 'pending' });
     setWaitingApproval(true);
     const channel = supabase.channel(`join-${user.id}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_participants', filter: `user_id=eq.${user.id}` }, (payload) => {
       if (payload.new.status === 'accepted') { channel.unsubscribe(); navigate(`/room/${rid}`); }
@@ -227,7 +238,8 @@ export default function Connection() {
                     <h3 className="font-bold text-base mb-0.5">Join a Room</h3>
                     <div className="flex flex-col gap-2 mt-2">
                       <Input
-                        placeholder="Enter Host's Gmail Address"
+                        placeholder="Enter 4-Digit Room Code"
+                        maxLength={4}
                         value={roomInput}
                         onChange={(e) => setRoomInput(e.target.value)}
                         className="h-12 rounded-xl bg-muted/50 border-none text-center text-xs font-medium placeholder:font-normal focus-visible:ring-1 focus-visible:ring-primary/30"

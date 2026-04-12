@@ -84,7 +84,7 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
             Welcome back, <span className="text-primary">{userName.split(' ')[0]}</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Here's what's new in SWIFT v1.2</p>
+          <p className="text-sm text-muted-foreground mt-1">Here's what's new in SWIFT v1.3</p>
         </div>
       </div>
 
@@ -93,7 +93,7 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
         ref={(el) => { refs.current[1] = el; }}
         className={getRevealClass(1, 'up')}
       >
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">What's New in v1.2</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">What's New in v1.3</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {NEW_FEATURES.map((f, i) => (
             <div
@@ -132,12 +132,12 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
         </div>
       </div>
 
-      {/* v1.0 vs v1.2 Comparison */}
+      {/* v1.0 vs v1.3 Comparison */}
       <div
         ref={(el) => { refs.current[3] = el; }}
         className={getRevealClass(3, 'right')}
       >
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">v1.0 vs v1.2</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">v1.0 vs v1.3</h3>
         <div className="space-y-3">
           {V1_COMPARISON.map((item, i) => (
             <div
