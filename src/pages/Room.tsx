@@ -122,30 +122,7 @@ export default function Room() {
     const accepted = parts.filter((p) => p.status === 'accepted');
     const pending = parts.filter((p) => p.status === 'pending');
 
-    // ── Ghost Detection: remove accepted participants with no active session ──
-    if (accepted.length > 0) {
-      const { data: activeSessions } = await supabase
-        .from('sessions')
-        .select('user_id')
-        .in('user_id', accepted.map((p) => p.user_id));
-
-      const activeSessionIds = new Set((activeSessions ?? []).map((s) => s.user_id));
-
-      const ghostIds = accepted
-        .filter((p) => p.user_id !== userId && !activeSessionIds.has(p.user_id))
-        .map((p) => p.user_id);
-
-      if (ghostIds.length > 0) {
-        await supabase
-          .from('room_participants')
-          .delete()
-          .eq('room_id', roomId)
-          .in('user_id', ghostIds);
-        // Re-fetch after cleanup
-        loadParticipants();
-        return;
-      }
-    }
+    // Removed Ghost Detection: deleting participants based on session lag caused accidental kicks.
 
     const userIds = [...accepted, ...pending].map((p) => p.user_id);
     if (userIds.length === 0) {
@@ -235,17 +212,15 @@ export default function Room() {
     };
 
     const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        cleanup();
-      }
+      // Intentionally empty to prevent kicking users on tab switch
     };
 
     window.addEventListener('beforeunload', cleanup);
-    document.addEventListener('visibilitychange', handleVisibility);
+    // document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       window.removeEventListener('beforeunload', cleanup);
-      document.removeEventListener('visibilitychange', handleVisibility);
+      // document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [userId, roomId]);
 
