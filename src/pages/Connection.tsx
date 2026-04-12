@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Plus, LogIn, Clock } from 'lucide-react';
+import { Plus, LogIn, Clock, Search } from 'lucide-react';
 import HistoryModal from '@/components/HistoryModal';
 import ConnectionFeatures from '@/components/ConnectionFeatures';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -66,11 +66,12 @@ function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
 export default function Connection() {
   const navigate = useNavigate();
   const { user, profile, loading: authLoading, signOut } = useAuth();
-  const [roomInput, setRoomInput] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [waitingApproval, setWaitingApproval] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [activeRooms, setActiveRooms] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (!authLoading && (!user || !profile)) {
@@ -91,6 +92,30 @@ export default function Connection() {
       }
     };
     ensureSession();
+
+    const fetchRooms = async () => {
+      const { data: rooms } = await supabase.from('rooms').select('*').eq('status', 'active');
+      if (!rooms) return;
+      const hostIds = rooms.map(r => r.host_id).filter(id => id !== user.id);
+      if (hostIds.length === 0) { setActiveRooms([]); return; }
+      const { data: profiles } = await supabase.from('profiles').select('*').in('auth_user_id', hostIds);
+      if (!profiles) return;
+      
+      const combined = rooms
+        .filter(r => r.host_id !== user.id)
+        .map(r => ({
+          ...r,
+          hostProfile: profiles.find(p => p.auth_user_id === r.host_id)
+        })).filter(r => r.hostProfile);
+        
+      setActiveRooms(combined);
+    };
+
+    fetchRooms();
+    const sub = supabase.channel('public:rooms')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, fetchRooms)
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
   }, [user, profile]);
 
   if (authLoading || !user || !profile) return null;
@@ -117,11 +142,9 @@ export default function Connection() {
     navigate(`/room/${roomId}`);
   };
 
-  const handleJoinRoom = async (overrideRid?: string) => {
-    const rawVal = typeof overrideRid === 'string' ? overrideRid : roomInput;
-    if (!rawVal.trim()) return;
+  const handleJoinRoom = async (rid: string, hostName: string) => {
+    if (!rid.trim()) return;
     setJoining(true);
-    const rid = rawVal.trim().toUpperCase();
     const { data: room } = await supabase.from('rooms').select('*').eq('room_id', rid).single();
     if (!room) { toast.error('Room not found'); setJoining(false); return; }
     if (room.status === 'locked') { toast.error('Room is locked'); setJoining(false); return; }
@@ -135,7 +158,7 @@ export default function Connection() {
     setWaitingApproval(true);
     const channel = supabase.channel(`join-${user.id}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_participants', filter: `user_id=eq.${user.id}` }, (payload) => {
       if (payload.new.status === 'accepted') { channel.unsubscribe(); navigate(`/room/${rid}`); }
-      else if (payload.new.status === 'blocked') { channel.unsubscribe(); toast.error('Rejected'); setWaitingApproval(false); setJoining(false); }
+      else if (payload.new.status === 'blocked') { channel.unsubscribe(); toast.error(`${hostName} had declined your request for joining.`); setWaitingApproval(false); setJoining(false); }
     }).subscribe();
   };
 
@@ -230,30 +253,60 @@ export default function Connection() {
                   </Button>
                 </div>
 
-                {/* Join Card */}
-                <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-4 group hover:border-primary/30 transition-all duration-500">
-                  <div className="w-12 h-12 bg-secondary/20 rounded-xl flex items-center justify-center group-hover:bg-secondary/30 transition-colors">
-                    <LogIn className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="text-center w-full">
-                    <h3 className="font-bold text-base mb-0.5">Join a Room</h3>
-                    <div className="flex flex-col gap-2 mt-2">
+                {/* Active Rooms Card */}
+                <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col group hover:border-primary/30 transition-all duration-500 overflow-hidden h-full">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-secondary/20 rounded-lg flex items-center justify-center">
+                        <LogIn className="h-4 w-4 text-primary" />
+                      </div>
+                      <h3 className="font-bold text-base">Active Rooms</h3>
+                    </div>
+                    <div className="relative">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <Input
-                        placeholder="Enter 6-Digit Room Code"
-                        maxLength={6}
-                        value={roomInput}
-                        onChange={(e) => {
-                          const val = e.target.value.toUpperCase();
-                          if (val.length <= 6) {
-                            setRoomInput(val);
-                            if (val.length === 6) {
-                              handleJoinRoom(val);
-                            }
-                          }
-                        }}
-                        className="h-12 rounded-xl bg-muted/50 border-none text-center text-[16px] font-bold placeholder:font-normal focus-visible:ring-1 focus-visible:ring-primary/30 tracking-widest placeholder:tracking-normal"
+                        placeholder="Search host..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="h-8 pl-9 rounded-full bg-muted/50 border-none text-xs focus-visible:ring-1 focus-visible:ring-primary/30 w-[140px] sm:w-[160px]"
                       />
                     </div>
+                  </div>
+                  
+                  <div className="w-full h-[200px] flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                    {activeRooms.filter(room => room.hostProfile.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                      activeRooms.filter(room => room.hostProfile.name.toLowerCase().includes(searchQuery.toLowerCase())).map(room => (
+                        <div key={room.id} className="flex items-center justify-between p-3 rounded-xl bg-background/60 border border-border/30 hover:border-primary/30 transition-all hover:shadow-md hover:bg-background/80">
+                          <div className="flex items-center gap-3 overflow-hidden mr-2">
+                            {room.hostProfile.avatar_url ? (
+                              <img src={room.hostProfile.avatar_url} className="w-10 h-10 rounded-full object-cover border border-border" alt={room.hostProfile.name} />
+                            ) : (
+                              <div className="w-10 h-10 flex shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">
+                                {room.hostProfile.name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-semibold text-sm truncate">{room.hostProfile.name}</span>
+                              <span className="text-[10px] text-muted-foreground truncate">{room.hostProfile.email}</span>
+                            </div>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="secondary"
+                            onClick={() => handleJoinRoom(room.room_id, room.hostProfile.name)} 
+                            disabled={joining}
+                            className="rounded-full shrink-0 font-bold hover:bg-primary hover:text-primary-foreground transition-colors"
+                          >
+                            Join
+                          </Button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full opacity-50">
+                        <Clock className="w-8 h-8 mb-2 text-muted-foreground" />
+                        <p className="text-sm text-center text-muted-foreground">No active rooms found.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>

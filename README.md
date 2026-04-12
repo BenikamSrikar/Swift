@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://img.shields.io/badge/version-v1.3-blue.svg?style=for-the-badge" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.2-blue.svg?style=for-the-badge" alt="Version" />
   <img src="https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge" alt="License" />
   <img src="https://img.shields.io/badge/React-18.3.1-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
@@ -18,11 +18,11 @@
 ## 🌟 Inspiration
 In a digital landscape dominated by proprietary file-sharing clouds enforcing hidden limits, throttled network speeds, and invasive data compliance tracking (e.g., Google Drive, Dropbox), SWIFT-Connect was conceived as an elegant, uncompromising alternative. 
 
-Inspired by the fundamental principles of open P2P networks and "zero-knowledge" remote architectures, this project ensures **your actual files are never uploaded to a cloud database**. Supabase is effectively used merely as a temporary signaling and authentication bridge—once peers authenticate and connect via a secure 6-digit room code, the transfer line is established natively *between them*.
+Inspired by the fundamental principles of open P2P networks and "zero-knowledge" remote architectures, this project ensures **your actual files are never uploaded to a cloud database**. Supabase is effectively used merely as a temporary signaling and authentication bridge—once peers authenticate and connect via secure room negotiation, the transfer line is established natively *between them*.
 
 ## 🚀 Key Features & Capabilities
 * **Zero-Storage P2P Transfer:** Unparalleled privacy and speed limit elimination. Your data is routed directly user-to-user utilizing local network WebRTC `RTCDataChannel` integrations.
-* **6-Digit Secure Rooms:** Rapidly host and join securely gated network rooms using automatically generated 6-digit alphanumeric connection codes.
+* **Active Network Rooms:** Rapidly host and join securely gated network rooms by interacting with real-time active host lists directly on the connection dashboard. No manual codes needed.
 * **Smart Folder Packaging:** Send multiple files or entire nested directories effortlessly. The internal application engine utilizes `JSZip` to process and tightly zip hierarchies on-the-fly before transmission.
 * **Connection Dashboard:** Host administrators possess granular control over incoming live connections, with live connection queues, immediate kicking abilities, and dynamic room locking.
 * **Premium UI Experience:** Features cutting-edge visual layouts. Powered by intricate glassmorphism elements, reactive particle backgrounds, flawless `framer-motion` layout animations, and premium minimalist `shadcn/ui` structural components.
