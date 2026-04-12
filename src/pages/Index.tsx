@@ -151,7 +151,7 @@ export default function Index() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 items-start">
-              {user && profile ? (
+              {user ? (
                 <>
                   <Button
                     onClick={() => navigate('/connection')}

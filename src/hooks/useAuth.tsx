@@ -29,20 +29,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
+  const fetchProfile = async (userId: string, userMeta?: { email?: string; full_name?: string; avatar_url?: string }) => {
+    // Try to fetch existing profile first
+    const { data: existing } = await supabase
       .from('profiles')
       .select('*')
       .eq('auth_user_id', userId)
       .single();
-    setProfile(data as Profile | null);
+
+    if (existing) {
+      setProfile(existing as Profile);
+      return;
+    }
+
+    // Profile row doesn't exist yet (new user or data was wiped) — create it
+    if (userMeta) {
+      const { data: upserted } = await supabase
+        .from('profiles')
+        .upsert({
+          auth_user_id: userId,
+          email: userMeta.email ?? '',
+          name: userMeta.full_name ?? userMeta.email ?? 'User',
+          avatar_url: userMeta.avatar_url ?? null,
+        }, { onConflict: 'auth_user_id' })
+        .select()
+        .single();
+      setProfile(upserted as Profile | null);
+    }
   };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        setTimeout(() => fetchProfile(session.user.id), 0);
+        const meta = session.user.user_metadata as { email?: string; full_name?: string; avatar_url?: string };
+        setTimeout(() => fetchProfile(session.user.id, meta), 0);
       } else {
         setProfile(null);
       }
@@ -52,7 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        const meta = session.user.user_metadata as { email?: string; full_name?: string; avatar_url?: string };
+        fetchProfile(session.user.id, meta);
       }
       setLoading(false);
     });
