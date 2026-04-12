@@ -115,9 +115,23 @@ export default function Room() {
     if (!parts) return;
 
     const myEntry = parts.find((p) => p.user_id === userId);
-    if (myEntry && (myEntry.status === 'blocked' || myEntry.status === 'rejected')) {
+    if (!myEntry) {
+      if (!isHost) toast.error('You have left or were disconnected from the room.');
+      navigate('/connection');
+      return;
+    }
+    if (myEntry.status === 'blocked' || myEntry.status === 'rejected') {
       setRemovedByHost(true);
       return;
+    }
+
+    if (!isHost && room?.host_id) {
+      const hostStillHere = parts.find((p) => p.user_id === room.host_id);
+      if (!hostStillHere) {
+        toast.error('Host has left the meeting. Returning to landing page...', { duration: 5000 });
+        navigate('/connection');
+        return;
+      }
     }
 
     const accepted = parts.filter((p) => p.status === 'accepted');
@@ -177,7 +191,7 @@ export default function Room() {
     } else {
       setCurrentRequest(null);
     }
-  }, [roomId, userId]);
+  }, [roomId, userId, room?.host_id, isHost, navigate]);
 
   useEffect(() => {
     if (roomId) loadParticipants();
@@ -201,15 +215,13 @@ export default function Room() {
         .delete()
         .eq('user_id', userId)
         .eq('room_id', roomId)
-        .then(() => {})
-        .catch(() => {});
+        .then(() => {}, () => {});
 
       supabase
         .from('sessions')
         .delete()
         .eq('user_id', userId)
-        .then(() => {})
-        .catch(() => {});
+        .then(() => {}, () => {});
     };
 
     const handleVisibility = () => {
@@ -633,6 +645,18 @@ export default function Room() {
     navigate('/');
   };
 
+  const handleLeaveMeeting = async () => {
+    if (isHost && roomId) {
+      await supabase.from('rooms').update({ status: 'locked' }).eq('room_id', roomId);
+    }
+    if (userId) {
+      await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
+    }
+    peerConnections.current.forEach((pc) => pc.close());
+    peerConnections.current.clear();
+    navigate('/connection');
+  };
+
   const copyRoomId = () => {
     if (roomId) {
       navigator.clipboard.writeText(roomId);
@@ -671,7 +695,10 @@ export default function Room() {
                 </button>
               </div>
 
-              <SignalStrength />
+              <div className="flex items-center gap-3">
+                <SignalStrength />
+                <Button variant="destructive" size="sm" onClick={handleLeaveMeeting} className="h-8 text-xs font-bold px-3">Leave Meeting</Button>
+              </div>
             </div>
 
             {statusText && (
@@ -722,7 +749,7 @@ export default function Room() {
                     <Copy className="h-6 w-6 opacity-20" />
                   </div>
                   <p className="text-sm font-medium">Ready and waiting for peers</p>
-                  <p className="text-xs opacity-60 mt-1">Share your 4-Digit Room Code to start transferring</p>
+                  <p className="text-xs opacity-60 mt-1">Share your 6-Digit Room Code to start transferring</p>
                   <Button variant="outline" size="sm" className="mt-6 gap-2 border-primary/20 text-primary" onClick={copyRoomId}>
                     {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                     Copy Connection Link

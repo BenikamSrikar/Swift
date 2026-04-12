@@ -101,7 +101,7 @@ export default function Connection() {
     let isUnique = false;
     
     while (!isUnique) {
-      roomId = Math.floor(1000 + Math.random() * 9000).toString();
+      roomId = Array.from({ length: 6 }, () => '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 36)]).join('');
       const { data: existingRoom } = await supabase.from('rooms').select('id').eq('room_id', roomId).single();
       if (!existingRoom) {
         isUnique = true;
@@ -117,10 +117,11 @@ export default function Connection() {
     navigate(`/room/${roomId}`);
   };
 
-  const handleJoinRoom = async () => {
-    if (!roomInput.trim()) return;
+  const handleJoinRoom = async (overrideRid?: string) => {
+    const rawVal = typeof overrideRid === 'string' ? overrideRid : roomInput;
+    if (!rawVal.trim()) return;
     setJoining(true);
-    const rid = roomInput.trim().toLowerCase();
+    const rid = rawVal.trim().toUpperCase();
     const { data: room } = await supabase.from('rooms').select('*').eq('room_id', rid).single();
     if (!room) { toast.error('Room not found'); setJoining(false); return; }
     if (room.status === 'locked') { toast.error('Room is locked'); setJoining(false); return; }
@@ -238,24 +239,20 @@ export default function Connection() {
                     <h3 className="font-bold text-base mb-0.5">Join a Room</h3>
                     <div className="flex flex-col gap-2 mt-2">
                       <Input
-                        placeholder="Enter 4-Digit Room Code"
-                        maxLength={4}
+                        placeholder="Enter 6-Digit Room Code"
+                        maxLength={6}
                         value={roomInput}
-                        onChange={(e) => setRoomInput(e.target.value)}
-                        className="h-12 rounded-xl bg-muted/50 border-none text-center text-xs font-medium placeholder:font-normal focus-visible:ring-1 focus-visible:ring-primary/30"
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase();
+                          if (val.length <= 6) {
+                            setRoomInput(val);
+                            if (val.length === 6) {
+                              handleJoinRoom(val);
+                            }
+                          }
+                        }}
+                        className="h-12 rounded-xl bg-muted/50 border-none text-center text-[16px] font-bold placeholder:font-normal focus-visible:ring-1 focus-visible:ring-primary/30 tracking-widest placeholder:tracking-normal"
                       />
-                      <Button 
-                        onClick={handleJoinRoom} 
-                        disabled={!roomInput.trim() || joining}
-                        variant={roomInput.trim() ? "default" : "secondary"}
-                        className={`w-full h-12 rounded-xl text-sm font-bold transition-all active:translate-y-0.5 ${
-                          roomInput.trim() 
-                            ? "bg-[#ff0000] text-black hover:bg-[#ff0000]/90" 
-                            : "bg-muted hover:bg-muted/80"
-                        }`}
-                      >
-                        {joining ? 'Requesting...' : 'Request Access'}
-                      </Button>
                     </div>
                   </div>
                 </div>
