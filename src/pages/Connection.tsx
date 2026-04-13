@@ -55,7 +55,7 @@ function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
       {/* Outer glow ring */}
       <motion.div 
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/10"
-        style={{ width: 110, height: 110 }}
+        style={{ width: '120%', height: '120%' }}
         animate={{ scale: [1, 1.05, 1], opacity: [0.05, 0.15, 0.05] }}
         transition={{ duration: 4, repeat: Infinity }}
       />
@@ -189,146 +189,137 @@ export default function Connection() {
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary selection:text-primary-foreground overflow-hidden">
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
-      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 relative">
-        <div className="w-full max-w-4xl flex flex-col items-center z-10">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-8 md:py-12 relative">
+        <div className="flex flex-col md:flex-row gap-8 lg:gap-16 w-full z-10 relative">
           
-          {/* Profile Section */}
-          <div className="relative mb-6 flex flex-col items-center animate-fade-up">
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-3">
+          {/* Profile Section (Left Column) */}
+          <div className="w-full md:w-[280px] lg:w-[320px] flex flex-col items-center md:items-start shrink-0 animate-fade-in-up">
+            <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-full md:aspect-square md:h-auto mb-6">
               <AvatarParticles />
-              <div className="absolute inset-0 rounded-full border-4 border-background shadow-2xl overflow-hidden z-20 bg-muted">
+              <div className="absolute inset-0 rounded-full border border-border bg-card shadow-lg overflow-hidden z-20">
                 {profile.avatar_url ? (
-                  <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover p-1 rounded-full" />
+                  <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover rounded-full" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-5xl font-bold bg-primary text-primary-foreground">
+                  <div className="w-full h-full flex items-center justify-center text-6xl font-bold bg-primary/10 text-primary">
                     {profile.name.charAt(0).toUpperCase()}
                   </div>
                 )}
               </div>
               <motion.div 
-                className="absolute -bottom-1 -right-1 bg-green-500 w-4 h-4 rounded-full border-2 border-background z-30"
+                className="absolute bottom-4 right-4 md:bottom-8 md:right-8 bg-green-500 w-5 h-5 rounded-full border-4 border-background z-30"
                 animate={{ scale: [1, 1.2, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               />
             </div>
             
             <motion.div 
-              initial={{ opacity: 0, y: 10 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              className="text-center"
+              initial={{ opacity: 0, x: -10 }} 
+              animate={{ opacity: 1, x: 0 }} 
+              className="text-center md:text-left w-full"
             >
-              <h1 className="text-2xl font-bold tracking-tight mb-0.5">{profile.name}</h1>
-              <p className="text-xs text-muted-foreground font-medium opacity-70 mb-1.5">{profile.email}</p>
-              <div className="flex items-center gap-2 justify-center">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Session Active</span>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1">{profile.name}</h1>
+              <p className="text-base sm:text-lg text-muted-foreground mb-4">{profile.email}</p>
+              
+              <div className="flex items-center gap-2 justify-center md:justify-start mb-6">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-xs uppercase tracking-widest font-bold text-muted-foreground">Session Active</span>
               </div>
+
+              {/* Host a Room Button acting like Edit Profile */}
+              <Button 
+                onClick={handleCreateRoom} 
+                disabled={creating}
+                className="w-full h-11 rounded-lg text-sm font-bold shadow-sm transition-all bg-secondary hover:bg-secondary/80 text-foreground border border-border hover:border-primary/50"
+              >
+                {creating ? 'Creating...' : 'Create Room'}
+              </Button>
             </motion.div>
           </div>
 
-          <AnimatePresence mode="wait">
-            {waitingApproval ? (
-              <motion.div 
-                key="waiting"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-md bg-card/50 backdrop-blur-xl border border-border/50 rounded-3xl p-10 flex flex-col items-center text-center shadow-2xl"
-              >
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 relative">
-                  <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-                  <Clock className="w-8 h-8 text-primary animate-spin" style={{ animationDuration: '4s' }} />
-                </div>
-                <h2 className="text-xl font-bold mb-2">Awaiting Host</h2>
-                <p className="text-sm text-muted-foreground mb-8">The host needs to approve your connection request before you can start transferring.</p>
-                <Button variant="outline" className="rounded-full px-8" onClick={() => { setWaitingApproval(false); setJoining(false); }}>
-                  Cancel Request
-                </Button>
-              </motion.div>
-            ) : (
-              <motion.div 
-                key="actions"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-6"
-              >
-                {/* Create Card */}
-                <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-4 group hover:border-primary/30 transition-all duration-500 active:scale-[0.98]">
-                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                    <Plus className="h-6 w-6 text-primary" />
+          {/* Main Content Area (Right Column) */}
+          <div className="flex-1 w-full flex flex-col min-w-0">
+            <AnimatePresence mode="wait">
+              {waitingApproval ? (
+                <motion.div 
+                  key="waiting"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  className="w-full bg-card/50 backdrop-blur-xl border border-border/50 rounded-2xl p-10 flex flex-col items-center text-center shadow-lg my-auto"
+                >
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 relative">
+                    <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
+                    <Clock className="w-8 h-8 text-primary animate-spin" style={{ animationDuration: '4s' }} />
                   </div>
-                  <div className="text-center">
-                    <h3 className="font-bold text-base mb-0.5">Host a Room</h3>
-                    <p className="text-[10px] text-muted-foreground">Start your own room and invite others using your code.</p>
-                  </div>
-                  <Button 
-                    onClick={handleCreateRoom} 
-                    disabled={creating}
-                    className="w-full h-12 rounded-xl text-sm font-bold volts-gradient shadow-xl shadow-primary/20 hover:shadow-primary/30 active:translate-y-0.5 transition-all"
-                  >
-                    {creating ? 'Starting Session...' : 'Create Room'}
+                  <h2 className="text-xl font-bold mb-2">Awaiting Host</h2>
+                  <p className="text-sm text-muted-foreground mb-8 max-w-sm">The host needs to approve your connection request before you can start transferring.</p>
+                  <Button variant="outline" className="rounded-full px-8" onClick={() => { setWaitingApproval(false); setJoining(false); }}>
+                    Cancel Request
                   </Button>
-                </div>
-
-                {/* Active Rooms Card */}
-                <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col group hover:border-primary/30 transition-all duration-500 overflow-hidden h-full">
+                </motion.div>
+              ) : (
+                <motion.div 
+                  key="actions"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="w-full flex flex-col pt-2"
+                >
                   <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-secondary/20 rounded-lg flex items-center justify-center">
-                        <LogIn className="h-4 w-4 text-primary" />
-                      </div>
-                      <h3 className="font-bold text-base">Active Rooms</h3>
-                    </div>
-                    <div className="relative">
+                    <h2 className="text-base font-normal tracking-wide text-muted-foreground mr-6">Active Rooms</h2>
+                    <div className="relative flex-1 max-w-[240px] ml-auto">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <Input
-                        placeholder="Search host..."
+                        placeholder="Search rooms..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-8 pl-9 rounded-full bg-muted/50 border-none text-xs focus-visible:ring-1 focus-visible:ring-primary/30 w-[140px] sm:w-[160px]"
+                        className="h-8 pl-9 rounded-md bg-transparent border-border/50 text-sm focus-visible:ring-1 focus-visible:ring-primary/50 w-full"
                       />
                     </div>
                   </div>
                   
-                  <div className="w-full h-[200px] flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     {activeRooms.filter(room => room.hostProfile.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
                       activeRooms.filter(room => room.hostProfile.name.toLowerCase().includes(searchQuery.toLowerCase())).map(room => (
-                        <div key={room.id} className="flex items-center justify-between p-3 rounded-xl bg-background/60 border border-border/30 hover:border-primary/30 transition-all hover:shadow-md hover:bg-background/80">
-                          <div className="flex items-center gap-3 overflow-hidden mr-2">
-                            {room.hostProfile.avatar_url ? (
-                              <img src={room.hostProfile.avatar_url} className="w-10 h-10 rounded-full object-cover border border-border" alt={room.hostProfile.name} />
-                            ) : (
-                              <div className="w-10 h-10 flex shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">
-                                {room.hostProfile.name.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            <div className="flex flex-col min-w-0">
-                              <span className="font-semibold text-sm truncate">{room.hostProfile.name}</span>
-                              <span className="text-[10px] text-muted-foreground truncate">{room.hostProfile.email}</span>
+                        <div key={room.id} className="border border-border/60 rounded-xl p-4 flex flex-col justify-between transition-all hover:bg-card/40 bg-transparent min-h-[120px]">
+                          <div>
+                            <div className="flex items-start justify-between mb-2">
+                              <a 
+                                href="#" 
+                                onClick={(e) => { e.preventDefault(); handleJoinRoom(room.room_id, room.hostProfile.name); }}
+                                className="font-semibold text-[15px] text-primary hover:underline truncate mr-2"
+                              >
+                                {room.hostProfile.name.toLowerCase()}-room
+                              </a>
+                              <span className="px-2 py-[1px] rounded-full border border-border/60 text-[11px] text-muted-foreground font-medium shrink-0">
+                                Public
+                              </span>
+                            </div>
+                            <p className="text-[13px] text-muted-foreground mb-4 line-clamp-2">
+                              Hosted by {room.hostProfile.email}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-4 mt-auto">
+                            <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                              <span className="w-3 h-3 rounded-full bg-blue-500" />
+                              Active
+                            </div>
+                            <div className="flex items-center gap-1 text-[12px] text-muted-foreground">
+                              <span className="opacity-70 text-[10px]">●</span>
+                              <span>P2P</span>
                             </div>
                           </div>
-                          <Button 
-                            size="sm" 
-                            variant="secondary"
-                            onClick={() => handleJoinRoom(room.room_id, room.hostProfile.name)} 
-                            disabled={joining}
-                            className="rounded-full shrink-0 font-bold hover:bg-primary hover:text-primary-foreground transition-colors"
-                          >
-                            Join
-                          </Button>
                         </div>
                       ))
                     ) : (
-                      <div className="flex flex-col items-center justify-center h-full opacity-50">
-                        <Clock className="w-8 h-8 mb-2 text-muted-foreground" />
-                        <p className="text-sm text-center text-muted-foreground">No active rooms found.</p>
+                      <div className="col-span-full py-12 flex flex-col items-center justify-center border border-border/40 rounded-xl bg-transparent">
+                        <p className="text-sm text-muted-foreground">User doesn't have any active environments yet.</p>
                       </div>
                     )}
                   </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </main>
 
