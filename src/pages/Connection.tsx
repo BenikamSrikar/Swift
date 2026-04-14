@@ -143,8 +143,8 @@ export default function Connection() {
   const [joining, setJoining] = useState(false);
   const [waitingApproval, setWaitingApproval] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [activeRooms, setActiveRooms] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [joinEmail, setJoinEmail] = useState('');
   const { refs: sectionRefs, revealedSet } = useElasticScrollReveal();
 
   useEffect(() => {
@@ -164,74 +164,10 @@ export default function Connection() {
       }, { onConflict: 'user_id' });
 
       // 2. Proactive Cleanup of any stale room state for THIS user
-      // While on this page, the user should NOT be a participant or an active host of any room.
       await supabase.from('room_participants').delete().eq('user_id', user.id);
       await supabase.from('rooms').update({ status: 'locked' }).eq('host_id', user.id).eq('status', 'active');
     };
     ensureSession();
-
-    const fetchRooms = async () => {
-      // 1. Fetch all rooms marked as active
-      const { data: rooms } = await supabase.from('rooms').select('*').eq('status', 'active');
-      if (!rooms) { setActiveRooms([]); return; }
-      
-      // 2. Fetch all online users who are actually INSIDE a room
-      const { data: activeSessions } = await supabase.from('sessions')
-        .select('user_id')
-        .eq('status', 'in_room');
-      const inRoomUserIds = new Set(activeSessions?.map(s => s.user_id) || []);
-      
-      // 3. Fetch all accepted participants to verify host is actually in the room
-      const { data: participants } = await supabase.from('room_participants')
-        .select('room_id, user_id')
-        .eq('status', 'accepted');
-      const activeParticipants = participants || [];
-      
-      // 4. A room is "Live" only if:
-      // - It belongs to SOMEONE ELSE (host_id !== user.id)
-      // - The host is currently INSIDE A ROOM (session status is 'in_room')
-      // - The host is actually an accepted participant in their own room
-      const liveRooms = rooms.filter(r => 
-        r.host_id !== user.id && 
-        inRoomUserIds.has(r.host_id) &&
-        activeParticipants.some(p => p.room_id === r.room_id && p.user_id === r.host_id)
-      );
-
-      if (liveRooms.length === 0) { setActiveRooms([]); return; }
-
-      const hostIds = liveRooms.map(r => r.host_id);
-      const { data: profiles } = await supabase.from('profiles').select('*').in('auth_user_id', hostIds);
-      if (!profiles) { setActiveRooms([]); return; }
-      
-      const combined = liveRooms.map(r => ({
-        ...r,
-        hostProfile: profiles.find(p => p.auth_user_id === r.host_id)
-      })).filter(r => r.hostProfile);
-        
-      setActiveRooms(combined);
-    };
-
-    fetchRooms();
-    const subRooms = supabase.channel('public:rooms')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, fetchRooms)
-      .subscribe();
-      
-    const subParticipants = supabase.channel('public:room_participants')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, fetchRooms)
-      .subscribe();
-
-    const subSessions = supabase.channel('public:sessions')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, fetchRooms)
-      .subscribe();
-
-    const poller = setInterval(fetchRooms, 10000);
- 
-    return () => { 
-      supabase.removeChannel(subRooms); 
-      supabase.removeChannel(subParticipants);
-      supabase.removeChannel(subSessions);
-      clearInterval(poller);
-    };
   }, [user, profile]);
 
   if (authLoading || !user || !profile) return null;
@@ -258,19 +194,53 @@ export default function Connection() {
     navigate(`/room/${roomId}`);
   };
 
-  const handleJoinRoom = async (rid: string, hostName: string) => {
-    if (!rid.trim()) return;
+  const handleJoinByEmail = async () => {
+    if (!joinEmail.trim() || !joinEmail.includes('@')) {
+      toast.error('Please enter a valid host email');
+      return;
+    }
     setJoining(true);
-    const { data: room } = await supabase.from('rooms').select('*').eq('room_id', rid).single();
-    if (!room) { toast.error('Room not found'); setJoining(false); return; }
-    if (room.status === 'locked') { toast.error('Room is locked'); setJoining(false); return; }
+
+    // 1. Find the host profile
+    const { data: hostProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('auth_user_id, name')
+      .eq('email', joinEmail.trim().toLowerCase())
+      .single();
+
+    if (profileError || !hostProfile) {
+      toast.error('No user found with this email');
+      setJoining(false);
+      return;
+    }
+
+    // 2. Find an active room they are hosting
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .select('room_id')
+      .eq('host_id', hostProfile.auth_user_id)
+      .eq('status', 'active')
+      .single();
+
+    if (roomError || !room) {
+      toast.error('No active room found for this host');
+      setJoining(false);
+      return;
+    }
+
+    const rid = room.room_id;
+    const hostName = hostProfile.name;
+
+    // 3. Check for existing blocked status
     const { data: existing } = await supabase.from('room_participants').select('status').eq('room_id', rid).eq('user_id', user.id).single();
-    if (existing?.status === 'blocked') { toast.error('You are blocked'); setJoining(false); return; }
-    // Remove any previous stale row before re-joining
+    if (existing?.status === 'blocked') { toast.error('You are blocked from this room'); setJoining(false); return; }
+    
+    // 4. Send Request
     if (existing) {
       await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
     }
     await supabase.from('room_participants').insert({ room_id: rid, user_id: user.id, status: 'pending' });
+    
     setWaitingApproval(true);
     const checkApproval = async () => {
       const { data } = await supabase.from('room_participants').select('status').eq('room_id', rid).eq('user_id', user.id).single();
@@ -281,21 +251,19 @@ export default function Connection() {
       } else if (data?.status === 'blocked') {
         channel.unsubscribe();
         clearInterval(joinPoller);
-        toast.error(`${hostName} had declined your request for joining.`);
+        toast.error(`${hostName} declined your join request.`);
         setWaitingApproval(false);
         setJoining(false);
       }
     };
 
     const joinPoller = setInterval(checkApproval, 3000);
-
     const channel = supabase.channel(`join-${user.id}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_participants' }, (payload) => {
       if (payload.new?.user_id === user.id) {
         checkApproval();
       }
     }).subscribe();
 
-    // Store poller in a way that we can clear it if the user cancels
     (window as any)._joinPoller = joinPoller;
   };
 
@@ -383,71 +351,42 @@ export default function Connection() {
                 </motion.div>
               ) : (
                 <motion.div 
-                  key="actions"
+                  key="join-email"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="w-full flex flex-col pt-2"
+                  className="w-full h-full flex flex-col items-center justify-center p-8 bg-card border border-border/60 rounded-2xl shadow-sm"
                 >
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-base font-normal tracking-wide text-muted-foreground mr-6">Created Rooms</h2>
-                    <div className="relative flex-1 max-w-[240px] ml-auto">
-                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="Search rooms..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-8 pl-9 rounded-md bg-transparent border-border/50 text-sm focus-visible:ring-1 focus-visible:ring-primary/50 w-full"
+                  <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-6">
+                    <LogIn className="w-8 h-8 text-primary/40" />
+                  </div>
+                  <h2 className="text-xl font-bold mb-2">Connect to Peer</h2>
+                  <p className="text-sm text-muted-foreground text-center mb-8 max-w-sm">
+                    Enter the Google email address of the host you would like to connect with.
+                  </p>
+                  
+                  <div className="w-full max-w-md flex flex-col gap-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input 
+                        placeholder="host@gmail.com"
+                        value={joinEmail}
+                        onChange={(e) => setJoinEmail(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleJoinByEmail()}
+                        className="h-12 pl-10 rounded-xl bg-background border-border/50 focus-visible:ring-primary/30"
                       />
                     </div>
+                    <Button 
+                      onClick={handleJoinByEmail}
+                      disabled={joining}
+                      className="h-12 w-full rounded-xl volts-gradient font-bold text-base shadow-lg shadow-primary/20"
+                    >
+                      {joining ? 'Searching...' : 'Request to Join'}
+                    </Button>
                   </div>
                   
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    {activeRooms.filter(room => room.hostProfile.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                      activeRooms.filter(room => room.hostProfile.name.toLowerCase().includes(searchQuery.toLowerCase())).map(room => (
-                        <div key={room.id} className="border border-border/60 rounded-xl p-4 flex flex-col justify-between transition-all hover:bg-card/40 bg-transparent min-h-[140px]">
-                          <div className="flex justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between mb-1">
-                                <h3 className="font-semibold text-[15px] text-foreground truncate mr-2">
-                                  {room.hostProfile.name.toLowerCase()}-room
-                                </h3>
-                                <span className="px-2 py-[1px] rounded-full border border-border/60 text-[10px] text-muted-foreground font-medium shrink-0 uppercase tracking-tight">
-                                  Public
-                                </span>
-                              </div>
-                              <p className="text-[13px] text-muted-foreground mb-4 line-clamp-1">
-                                {room.hostProfile.email}
-                              </p>
-                              
-                              <div className="flex items-center gap-4 mt-auto">
-                                <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
-                                  Live
-                                </div>
-                                <div className="flex items-center gap-1 text-[12px] text-muted-foreground">
-                                  <span className="opacity-70 text-[10px]">●</span>
-                                  <span>P2P</span>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex flex-col justify-center shrink-0">
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleJoinRoom(room.room_id, room.hostProfile.name)}
-                                className="h-9 px-4 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-sm transition-all"
-                              >
-                                Join Room
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="col-span-full py-12 flex flex-col items-center justify-center border border-border/40 rounded-xl bg-transparent">
-                        <p className="text-sm text-muted-foreground">User doesn't have any active environments yet.</p>
-                      </div>
-                    )}
+                  <div className="mt-8 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                    Secure P2P Signaling Active
                   </div>
                 </motion.div>
               )}
