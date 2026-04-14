@@ -260,14 +260,18 @@ export default function Room() {
     const channel = supabase
       .channel(`room-participants-${roomId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, (payload: any) => {
-        // Filter changes for this specific room in JS to bypass Replica Identity Full requirement
         if (payload.new?.room_id === roomId || payload.old?.room_id === roomId) {
           loadParticipants();
         }
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    const poller = setInterval(loadParticipants, 5000);
+
+    return () => { 
+      supabase.removeChannel(channel); 
+      clearInterval(poller);
+    };
   }, [roomId, loadParticipants]);
 
   // Signaling channel

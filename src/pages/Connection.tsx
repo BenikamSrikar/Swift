@@ -149,10 +149,13 @@ export default function Connection() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, fetchRooms)
       .subscribe();
 
+    const poller = setInterval(fetchRooms, 10000);
+ 
     return () => { 
       supabase.removeChannel(subRooms); 
       supabase.removeChannel(subParticipants);
       supabase.removeChannel(subSessions);
+      clearInterval(poller);
     };
   }, [user, profile]);
 
@@ -194,10 +197,31 @@ export default function Connection() {
     }
     await supabase.from('room_participants').insert({ room_id: rid, user_id: user.id, status: 'pending' });
     setWaitingApproval(true);
-    const channel = supabase.channel(`join-${user.id}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_participants', filter: `user_id=eq.${user.id}` }, (payload) => {
-      if (payload.new.status === 'accepted') { channel.unsubscribe(); navigate(`/room/${rid}`); }
-      else if (payload.new.status === 'blocked') { channel.unsubscribe(); toast.error(`${hostName} had declined your request for joining.`); setWaitingApproval(false); setJoining(false); }
+    const checkApproval = async () => {
+      const { data } = await supabase.from('room_participants').select('status').eq('room_id', rid).eq('user_id', user.id).single();
+      if (data?.status === 'accepted') {
+        channel.unsubscribe();
+        clearInterval(joinPoller);
+        navigate(`/room/${rid}`);
+      } else if (data?.status === 'blocked') {
+        channel.unsubscribe();
+        clearInterval(joinPoller);
+        toast.error(`${hostName} had declined your request for joining.`);
+        setWaitingApproval(false);
+        setJoining(false);
+      }
+    };
+
+    const joinPoller = setInterval(checkApproval, 3000);
+
+    const channel = supabase.channel(`join-${user.id}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_participants' }, (payload) => {
+      if (payload.new?.user_id === user.id) {
+        checkApproval();
+      }
     }).subscribe();
+
+    // Store poller in a way that we can clear it if the user cancels
+    (window as any)._joinPoller = joinPoller;
   };
 
   const handleLogout = async () => {
@@ -274,7 +298,11 @@ export default function Connection() {
                   </div>
                   <h2 className="text-xl font-bold mb-2">Awaiting Host</h2>
                   <p className="text-sm text-muted-foreground mb-8 max-w-sm">The host needs to approve your connection request before you can start transferring.</p>
-                  <Button variant="outline" className="rounded-full px-8" onClick={() => { setWaitingApproval(false); setJoining(false); }}>
+                  <Button variant="outline" className="rounded-full px-8" onClick={() => { 
+                    setWaitingApproval(false); 
+                    setJoining(false); 
+                    if ((window as any)._joinPoller) clearInterval((window as any)._joinPoller);
+                  }}>
                     Cancel Request
                   </Button>
                 </motion.div>
