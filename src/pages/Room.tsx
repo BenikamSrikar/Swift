@@ -11,7 +11,7 @@ import HistoryModal from '@/components/HistoryModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/sonner';
-import { Copy, Check, X, Loader2 } from 'lucide-react';
+import { Copy, Check, X, Loader2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import JSZip from 'jszip';

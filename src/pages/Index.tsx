@@ -184,7 +184,13 @@ export default function Index() {
 
   return (
     <div className="bg-background text-foreground scroll-smooth">
-      <VoltsNavbar onHistoryClick={() => setHistoryOpen(true)} />
+      <VoltsNavbar 
+        onHistoryClick={() => setHistoryOpen(true)} 
+        onLogout={async () => {
+          await supabase.auth.signOut();
+          navigate('/');
+        }}
+      />
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden">
@@ -259,8 +265,7 @@ export default function Index() {
             ref={(el) => { revealRefs.current[11] = el; }}
             className="hidden lg:block flex-[1.2] relative reveal-right h-[600px]" 
           >
-            <div className="absolute inset-0 flex items-center justify-center p-8 bg-primary/5 rounded-[40px] border border-primary/10 backdrop-blur-3xl shadow-2xl overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-primary/10 opacity-50 group-hover:opacity-100 transition-opacity duration-1000" />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <SwiftBirdsMap />
             </div>
           </div>
