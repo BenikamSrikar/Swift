@@ -53,7 +53,7 @@ function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
       ))}
       {/* Outer glow ring */}
       <motion.div 
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[2rem] border border-primary/10"
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/10"
         style={{ width: '120%', height: '120%' }}
         animate={{ scale: [1, 1.05, 1], opacity: [0.05, 0.15, 0.05] }}
         transition={{ duration: 4, repeat: Infinity }}
@@ -81,27 +81,44 @@ export default function Connection() {
   useEffect(() => {
     if (!user || !profile) return;
     const ensureSession = async () => {
-      const { data: existing } = await supabase.from('sessions').select('id').eq('user_id', user.id).single();
-      if (!existing) {
-        await supabase.from('sessions').insert({
-          user_id: user.id,
-          name: profile.name,
-          status: 'active',
-        });
-      }
+      // 1. Atomic session update to 'online' status
+      await supabase.from('sessions').upsert({
+        user_id: user.id,
+        name: profile.name,
+        status: 'online',
+      }, { onConflict: 'user_id' });
+
+      // 2. Proactive Cleanup of any stale room state for THIS user
+      // While on this page, the user should NOT be a participant or an active host of any room.
+      await supabase.from('room_participants').delete().eq('user_id', user.id);
+      await supabase.from('rooms').update({ status: 'locked' }).eq('host_id', user.id).eq('status', 'active');
     };
     ensureSession();
 
     const fetchRooms = async () => {
+      // 1. Fetch all rooms marked as active
       const { data: rooms } = await supabase.from('rooms').select('*').eq('status', 'active');
       if (!rooms) { setActiveRooms([]); return; }
       
-      const { data: participants } = await supabase.from('room_participants').select('room_id, user_id').eq('status', 'accepted');
+      // 2. Fetch all online users who are actually INSIDE a room
+      const { data: activeSessions } = await supabase.from('sessions')
+        .select('user_id')
+        .eq('status', 'in_room');
+      const inRoomUserIds = new Set(activeSessions?.map(s => s.user_id) || []);
+      
+      // 3. Fetch all accepted participants to verify host is actually in the room
+      const { data: participants } = await supabase.from('room_participants')
+        .select('room_id, user_id')
+        .eq('status', 'accepted');
       const activeParticipants = participants || [];
       
-      // Filter for rooms where the host is actively present in that specific room
+      // 4. A room is "Live" only if:
+      // - It belongs to SOMEONE ELSE (host_id !== user.id)
+      // - The host is currently INSIDE A ROOM (session status is 'in_room')
+      // - The host is actually an accepted participant in their own room
       const liveRooms = rooms.filter(r => 
         r.host_id !== user.id && 
+        inRoomUserIds.has(r.host_id) &&
         activeParticipants.some(p => p.room_id === r.room_id && p.user_id === r.host_id)
       );
 
@@ -128,9 +145,14 @@ export default function Connection() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, fetchRooms)
       .subscribe();
 
+    const subSessions = supabase.channel('public:sessions')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, fetchRooms)
+      .subscribe();
+
     return () => { 
       supabase.removeChannel(subRooms); 
       supabase.removeChannel(subParticipants);
+      supabase.removeChannel(subSessions);
     };
   }, [user, profile]);
 
@@ -193,19 +215,19 @@ export default function Connection() {
           
           {/* Profile Section (Left Column) */}
           <div className="w-full md:w-[280px] lg:w-[320px] flex flex-col items-center md:items-start shrink-0 animate-fade-in-up">
-            <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-full md:aspect-square md:h-auto mb-6">
+            <div className="relative w-32 h-32 mb-8">
               <AvatarParticles />
-              <div className="absolute inset-0 rounded-3xl border border-border bg-card shadow-lg overflow-hidden z-20">
+              <div className="absolute inset-0 rounded-full border border-border bg-card shadow-lg overflow-hidden z-20">
                 {profile.avatar_url ? (
                   <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-6xl font-bold bg-primary/10 text-primary">
+                  <div className="w-full h-full flex items-center justify-center text-5xl font-bold bg-primary/10 text-primary">
                     {profile.name.charAt(0).toUpperCase()}
                   </div>
                 )}
               </div>
               <motion.div 
-                className="absolute bottom-4 right-4 md:bottom-8 md:right-8 bg-green-500 w-5 h-5 rounded-full border-4 border-background z-30 shadow-sm"
+                className="absolute bottom-1 right-1 bg-green-500 w-4 h-4 rounded-full border-2 border-background z-30 shadow-sm"
                 animate={{ scale: [1, 1.2, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               />

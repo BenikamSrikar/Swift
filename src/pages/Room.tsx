@@ -98,6 +98,17 @@ export default function Room() {
       }
 
       setRoom(roomData);
+      
+      // Proactively prune any other active rooms for this host to prevent duplicates
+      if (isHost) {
+        await supabase.from('rooms')
+          .update({ status: 'locked' })
+          .eq('host_id', userId)
+          .neq('room_id', roomId);
+      }
+      
+      // Update session status to indicate user is now actually INSIDE a room
+      await supabase.from('sessions').update({ status: 'in_room' }).eq('user_id', userId);
     };
 
     loadRoom();
@@ -201,39 +212,43 @@ export default function Room() {
   useEffect(() => {
     if (!userId || !roomId) return;
 
-    const cleanup = () => {
-      // Use sendBeacon for reliable fire-and-forget on unload
-      // Supabase REST: DELETE /rest/v1/room_participants?room_id=eq.X&user_id=eq.Y
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/room_participants?room_id=eq.${encodeURIComponent(roomId)}&user_id=eq.${encodeURIComponent(userId)}`;
-      const blob = new Blob([], { type: 'application/json' });
-      // Include auth headers via fetch (best-effort, non-blocking)
-      navigator.sendBeacon(url, blob);
+    const handleUnload = () => {
+      const headers = {
+        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        'Content-Type': 'application/json',
+      };
 
-      // Also kick off a normal delete as a backup (may not complete on unload)
-      supabase
-        .from('room_participants')
-        .delete()
-        .eq('user_id', userId)
-        .eq('room_id', roomId)
-        .then(() => {}, () => {});
+      // 1. Remove participant (keepalive ensures it finishes after tab close)
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/room_participants?room_id=eq.${encodeURIComponent(roomId)}&user_id=eq.${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        headers,
+        keepalive: true
+      });
 
-      supabase
-        .from('sessions')
-        .delete()
-        .eq('user_id', userId)
-        .then(() => {}, () => {});
+      // 2. Lock room if host
+      if (isHost) {
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rooms?room_id=eq.${encodeURIComponent(roomId)}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ status: 'locked' }),
+          keepalive: true
+        });
+      }
+
+      // 3. Mark session as offline
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/sessions?user_id=eq.${encodeURIComponent(userId)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status: 'offline' }),
+        keepalive: true
+      });
     };
 
-    const handleVisibility = () => {
-      // Intentionally empty to prevent kicking users on tab switch
-    };
-
-    window.addEventListener('beforeunload', cleanup);
-    // document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('beforeunload', handleUnload);
 
     return () => {
-      window.removeEventListener('beforeunload', cleanup);
-      // document.removeEventListener('visibilitychange', handleVisibility);
+      handleUnload();
+      window.removeEventListener('beforeunload', handleUnload);
     };
   }, [userId, roomId]);
 
@@ -243,8 +258,11 @@ export default function Room() {
 
     const channel = supabase
       .channel(`room-participants-${roomId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants', filter: `room_id=eq.${roomId}` }, () => {
-        loadParticipants();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, (payload: any) => {
+        // Filter changes for this specific room in JS to bypass Replica Identity Full requirement
+        if (payload.new?.room_id === roomId || payload.old?.room_id === roomId) {
+          loadParticipants();
+        }
       })
       .subscribe();
 
