@@ -263,6 +263,10 @@ export default function Index() {
           <p className="text-xs" style={{ color: 'hsl(0 0% 35%)' }}>
             &copy; {new Date().getFullYear()} SWIFT. All rights reserved.
           </p>
+          <div className="flex gap-4 text-xs font-semibold" style={{ color: 'hsl(0 0% 45%)' }}>
+            <a href="/privacy" className="hover:text-primary transition-colors">Privacy Policy</a>
+            <a href="/terms" className="hover:text-primary transition-colors">Terms of Service</a>
+          </div>
         </div>
       </footer>
     </div>
