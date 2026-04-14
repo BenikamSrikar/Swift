@@ -60,6 +60,7 @@ export default function Room() {
   const [statusText, setStatusText] = useState<string | null>(null);
   const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string; mode: 'file' | 'folder' } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [roomChannel, setRoomChannel] = useState<any>(null);
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
@@ -289,6 +290,11 @@ export default function Room() {
       if (targetUserId !== userId) return;
 
       if (signal.type === 'offer') {
+        // Prevent duplicate PC/DataChannel creation which causes double history logging
+        if (peerConnections.current.has(fromUserId)) {
+          const oldPc = peerConnections.current.get(fromUserId);
+          oldPc?.close();
+        }
         await handleIncomingOffer(fromUserId, signal, channel);
       } else if (signal.type === 'answer') {
         const pc = peerConnections.current.get(fromUserId);
@@ -297,6 +303,17 @@ export default function Room() {
         const pc = peerConnections.current.get(fromUserId);
         if (pc) await pc.addIceCandidate(new RTCIceCandidate(signal));
       }
+    });
+
+    channel.on('broadcast', { event: 'host-leaving' }, () => {
+      // If we are not the host, leave the meeting.
+      // Small delay prevents potential race conditions with navigation
+      setTimeout(() => {
+        if (!isHost) {
+          toast.info('Host has left the meeting. Returning to dashboard...', { duration: 5000 });
+          navigate('/connection');
+        }
+      }, 500);
     });
 
     channel.subscribe((status) => {
@@ -584,17 +601,6 @@ export default function Room() {
 
       if (!started) {
         setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'failed' } : t));
-      } else {
-        const targetName = participants.find(p => p.user_id === payload.targetUserId)?.name || 'Unknown';
-        await supabase.from('transfer_history').insert({
-          sender_id: userId!,
-          sender_name: userName!,
-          recipient_name: targetName,
-          file_name: next.name,
-          file_type: next.type,
-          sender_email: profile?.email || '',
-          direction: 'sent',
-        } as any);
       }
     };
 
@@ -613,13 +619,20 @@ export default function Room() {
       fileToSend = files[0];
       fileName = files[0].name;
     } else {
-      setStatusText(`Preparing ${files.length} files...`);
+      // For folders or multiple files, zip them first using 'STORE' (no compression) for maximum speed
       const zip = new JSZip();
-      files.forEach(f => {
+      files.forEach((f) => {
         const path = (f as any).webkitRelativePath || f.name;
         zip.file(path, f);
       });
-      fileToSend = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      
+      fileToSend = await zip.generateAsync({ 
+        type: 'blob',
+        compression: 'STORE', // Use STORE for instant preparation
+        streamFiles: true 
+      }, (metadata) => {
+        setStatusText(`Preparing folder: ${Math.round(metadata.percent || 0)}%`);
+      });
       fileName = `swift_batch_${format(new Date(), 'HHmm')}.zip`;
       fileType = 'folder';
     }
@@ -666,6 +679,14 @@ export default function Room() {
   const handleLeaveMeeting = async () => {
     if (isHost && roomId) {
       await supabase.from('rooms').update({ status: 'locked' }).eq('room_id', roomId);
+      // Notify all participants immediately via broadcast
+      if (roomChannel) {
+        await roomChannel.send({
+          type: 'broadcast',
+          event: 'host-leaving',
+          payload: { hostId: userId }
+        });
+      }
     }
     if (userId) {
       await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
