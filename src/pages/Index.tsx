@@ -7,6 +7,52 @@ import { supabase } from '@/integrations/supabase/client';
 import SwiftBirdsMap from '@/components/SwiftBirdsMap';
 import ParticleField from '@/components/ParticleField';
 import { Shield, Wifi, Zap, FolderOpen, RefreshCw, Cloud, Lock, History } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
+
+// ─── SWIFT Items Data ────────────────────────────────────────────────────────
+const SWIFT_ITEMS = [
+  {
+    letter: 'S',
+    word: 'Secure',
+    brief: 'Your privacy is non-negotiable.',
+    description: "Every transfer in SWIFT uses WebRTC for direct device-to-device streaming when possible. For massive files over 25MB, SWIFT securely utilizes your Google Drive to temporarily host and share the file exclusively with your intended recipient using strict access controls.",
+  },
+  {
+    letter: 'W',
+    word: 'Wideband',
+    brief: 'Unleash every last bit of bandwidth.',
+    description: "SWIFT doesn’t just use your connection — it dominates it. By establishing a raw WebRTC data channel directly between devices, every byte travels the shortest possible path with zero relay overhead.",
+  },
+  {
+    letter: 'I',
+    word: 'Instant',
+    brief: 'Zero friction, zero accounts.',
+    description: "Just sign in securely with your Google Account to begin. Create a room with one click, share a 6-character code, and start transferring instantly. No separate passwords to remember or verify.",
+  },
+  {
+    letter: 'F',
+    word: 'Files & Folders',
+    brief: 'Send anything — files, folders, or videos.',
+    description: "Whether it’s a single document, an entire project folder, or a large video file, SWIFT handles it all. Small files route directly via WebRTC, while anything larger than 25MB is intelligently routed through your Google Drive for maximum reliability.",
+  },
+  {
+    letter: 'T',
+    word: 'Transfer',
+    brief: 'Ephemeral by design.',
+    description: "SWIFT sessions are temporary. When you leave, your session data is wiped. There are no lingering files on a server, no account to delete later. Transfer history persists across sessions for your reference.",
+  },
+];
+
+const SWIFT_ICON_COMPONENTS = [SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon];
+
+const SECTION_STYLES = [
+  { anim: 'anim-scale' },
+  { anim: 'anim-slide-left' },
+  { anim: 'anim-slide-right' },
+  { anim: 'anim-flip' },
+  { anim: 'anim-rise' },
+];
 
 // ─── Feature Cards Data ───────────────────────────────────────────────────────
 const FEATURES = [
@@ -75,24 +121,41 @@ const HOW_IT_WORKS = [
   { step: '04', title: 'Auto-Cleanup', desc: 'Drive files are automatically deleted after 1 hour. Sessions clear when you leave. Nothing persists without your intent.' },
 ];
 
-function useScrollReveal() {
+function useElasticScrollReveal() {
   const refs = useRef<(HTMLElement | null)[]>([]);
+  const [revealedSet, setRevealedSet] = useState<Set<number>>(new Set());
+
   useEffect(() => {
     const observer = new IntersectionObserver(
-      (entries) => entries.forEach(e => e.isIntersecting && e.target.classList.add('revealed')),
-      { threshold: 0.1 }
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('revealed');
+            const idx = refs.current.indexOf(entry.target as HTMLElement);
+            if (idx >= 0) {
+              setRevealedSet((prev) => new Set(prev).add(idx));
+            }
+          }
+        });
+      },
+      { threshold: 0.12 }
     );
-    refs.current.forEach(r => r && observer.observe(r));
+
+    refs.current.forEach((ref) => {
+      if (ref) observer.observe(ref);
+    });
+
     return () => observer.disconnect();
   }, []);
-  return refs;
+
+  return { refs, revealedSet };
 }
 
 export default function Index() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { user, profile, loading: authLoading } = useAuth();
-  const revealRefs = useScrollReveal();
+  const { refs: revealRefs, revealedSet } = useElasticScrollReveal();
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -289,7 +352,7 @@ export default function Index() {
       {/* ── How It Works ──────────────────────────────────────────────────── */}
       <section
         ref={(el) => { revealRefs.current[3] = el; }}
-        className="scroll-section anim-rise py-24 px-6 sm:px-12 bg-muted/10"
+        className="scroll-section anim-rise py-24 px-6 sm:px-12 bg-muted/10 border-b border-border/50"
       >
         <div className="max-w-5xl mx-auto">
           <h2 className="text-4xl sm:text-5xl font-black text-center mb-16 tracking-tighter">How It Works</h2>
@@ -304,6 +367,44 @@ export default function Index() {
           </div>
         </div>
       </section>
+
+      {/* ── SWIFT Core Philosophy Breakdown ─────────────────────────────── */}
+      {SWIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
+        const style = SECTION_STYLES[i];
+        const IconComponent = SWIFT_ICON_COMPONENTS[i];
+        const isSectionRevealed = revealedSet.has(i + 20); // Offsetting indices to avoid collision with revealRefs usage
+
+        return (
+          <section
+            key={letter}
+            ref={(el: HTMLDivElement | null) => { revealRefs.current[i + 20] = el; }}
+            className={`scroll-section ${style.anim} min-h-[80vh] flex items-center justify-center px-6 sm:px-12 bg-background border-b border-border/10`}
+          >
+            <div
+              className={`w-full max-w-5xl flex flex-col ${
+                i % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'
+              } items-center gap-10 md:gap-20`}
+            >
+              <div className="scroll-image shrink-0 w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 transition-transform duration-500 hover:scale-110">
+                <IconComponent revealed={isSectionRevealed} />
+              </div>
+
+              <div className={`scroll-text text-center ${i % 2 === 0 ? 'md:text-left' : 'md:text-right'} max-w-xl`}>
+                <h2 className="text-4xl sm:text-5xl md:text-6xl font-black mb-4 text-foreground tracking-tighter">
+                  <span className="text-primary">{letter}</span>
+                  <span> — {word}</span>
+                </h2>
+                <p className="text-lg sm:text-xl font-bold mb-4 text-foreground/90">
+                  {brief}
+                </p>
+                <p className="text-sm sm:text-base leading-relaxed text-muted-foreground">
+                  {description}
+                </p>
+              </div>
+            </div>
+          </section>
+        );
+      })}
 
       {/* ── CTA ───────────────────────────────────────────────────────────── */}
       <section className="py-24 px-6 bg-background text-center">
