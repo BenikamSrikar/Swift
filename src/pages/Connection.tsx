@@ -381,8 +381,37 @@ export default function Connection() {
         </div>
       </main>
 
+      {/* ── SWIFT Letter Animation Strip ────────────────────────────────── */}
+      <div className="w-full overflow-hidden border-t border-border/20 py-8 bg-muted/5 z-0 relative">
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground/40 text-center mb-6">What SWIFT stands for</p>
+          <div className="flex flex-wrap justify-center gap-4 sm:gap-8">
+            {[
+              { letter: 'S', word: 'Secure', color: 'text-green-400', desc: 'End-to-end encrypted transfers' },
+              { letter: 'W', word: 'Wideband', color: 'text-blue-400', desc: 'Full bandwidth P2P channel' },
+              { letter: 'I', word: 'Instant', color: 'text-yellow-400', desc: 'Transfer starts in seconds' },
+              { letter: 'F', word: 'Files & Folders', color: 'text-purple-400', desc: 'Any file type, any size' },
+              { letter: 'T', word: 'Transfer', color: 'text-pink-400', desc: 'Ephemeral, no server storage' },
+            ].map(({ letter, word, color, desc }, i) => (
+              <div
+                key={letter}
+                className="flex flex-col items-center group"
+                style={{ animation: `fadeInUp 0.5s ease both`, animationDelay: `${i * 100}ms` }}
+              >
+                <div className={`text-5xl sm:text-6xl font-black ${color} group-hover:scale-110 transition-transform duration-300 leading-none`}>
+                  {letter}
+                </div>
+                <div className="text-xs font-bold text-foreground mt-1">{word}</div>
+                <div className="text-[10px] text-muted-foreground/60 max-w-[90px] text-center mt-0.5">{desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <HistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} senderEmail={profile.email} senderName={profile.name} />
     </div>
   );
 }
+
 

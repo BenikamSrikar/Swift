@@ -421,19 +421,33 @@ export default function Room() {
         } else if (msg.type === 'drive-link') {
           // Received a Google Drive link for a large file
           const { name, link, senderName } = msg;
-          const driveId = generateTransferId();
-          setQueuedTransfers(prev => [...prev, {
-            id: driveId,
-            name: `${name} (Google Drive)`,
-            size: 0,
-            status: 'completed',
-            progress: 100,
-            direction: 'receiving',
-            downloadUrl: link,
-            type: 'drive-link'
-          }]);
-          toast.success(`${senderName} shared a large file via Google Drive!`, { duration: 10000 });
-          await logHistory(name, 'drive-link', link);
+          
+          toast(
+            <div className="flex flex-col gap-2 w-full">
+              <div className="font-semibold text-sm">{senderName} shared a large file via Google Drive!</div>
+              <div className="text-xs text-muted-foreground truncate">{name}</div>
+              <div className="text-[10px] text-orange-400">Link expires in 15 minutes</div>
+              <div className="mt-2 flex gap-2">
+                <Button 
+                  size="sm" 
+                  className="w-full h-8 text-xs bg-primary hover:bg-primary/90"
+                  onClick={() => window.open(link, '_blank')}
+                >
+                  <svg className="w-3 h-3 mr-2" fill="none" strokeWidth="2" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                  Download
+                </Button>
+              </div>
+            </div>,
+            { 
+              duration: 900000, // 15 minutes, persists until action or timer expires
+              cancel: {
+                label: 'Dismiss',
+                onClick: () => {}
+              }
+            }
+          );
+          
+          // As per request, do not insert to history DB and do not add to local queue
         } else if (msg.type === 'done') {
           const blob = new Blob(chunks);
           const url = URL.createObjectURL(blob);
@@ -697,7 +711,7 @@ export default function Room() {
           setStatusText(null);
         });
 
-        // Set timeout to expire drive link (1 hour)
+        // Set timeout to expire drive link (15 minutes)
         setTimeout(async () => {
           try {
             await deleteFileFromDrive(driveFile.id, accessToken);
@@ -705,7 +719,7 @@ export default function Room() {
           } catch (e) {
             console.error('Failed to cleanup Drive file:', e);
           }
-        }, 3600000);
+        }, 900000);
 
         return;
       } catch (error: any) {
