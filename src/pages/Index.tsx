@@ -100,6 +100,10 @@ export default function Index() {
       provider: 'google',
       options: {
         redirectTo: window.location.origin,
+        scopes: 'https://www.googleapis.com/auth/drive.file',
+        queryParams: {
+          prompt: 'consent select_account',
+        },
       },
     });
 
@@ -117,8 +121,9 @@ export default function Index() {
       provider: 'google',
       options: {
         redirectTo: window.location.origin,
+        scopes: 'https://www.googleapis.com/auth/drive.file',
         queryParams: {
-          prompt: 'select_account',
+          prompt: 'select_account consent',
         },
       },
     });
