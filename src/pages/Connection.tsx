@@ -35,14 +35,13 @@ function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
             backgroundColor: 'var(--primary)',
             left: '50%',
             top: '50%',
-            filter: 'blur(1px)',
-            opacity: 0.6,
+            opacity: 0.3,
           }}
           animate={{
             x: [0, p.x, p.x * 1.1, 0],
             y: [0, p.y, p.y * 1.1, 0],
             scale: [1, 1.1, 0.9, 1],
-            opacity: [0.4, 0.6, 0.4],
+            opacity: [0.3, 0.5, 0.3],
           }}
           transition={{
             duration: p.duration,
@@ -54,7 +53,7 @@ function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
       ))}
       {/* Outer glow ring */}
       <motion.div 
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/10"
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[2rem] border border-primary/10"
         style={{ width: '120%', height: '120%' }}
         animate={{ scale: [1, 1.05, 1], opacity: [0.05, 0.15, 0.05] }}
         transition={{ duration: 4, repeat: Infinity }}
@@ -196,9 +195,9 @@ export default function Connection() {
           <div className="w-full md:w-[280px] lg:w-[320px] flex flex-col items-center md:items-start shrink-0 animate-fade-in-up">
             <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-full md:aspect-square md:h-auto mb-6">
               <AvatarParticles />
-              <div className="absolute inset-0 rounded-full border border-border bg-card shadow-lg overflow-hidden z-20">
+              <div className="absolute inset-0 rounded-3xl border border-border bg-card shadow-lg overflow-hidden z-20">
                 {profile.avatar_url ? (
-                  <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover rounded-full" />
+                  <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-6xl font-bold bg-primary/10 text-primary">
                     {profile.name.charAt(0).toUpperCase()}
@@ -206,7 +205,7 @@ export default function Connection() {
                 )}
               </div>
               <motion.div 
-                className="absolute bottom-4 right-4 md:bottom-8 md:right-8 bg-green-500 w-5 h-5 rounded-full border-4 border-background z-30"
+                className="absolute bottom-4 right-4 md:bottom-8 md:right-8 bg-green-500 w-5 h-5 rounded-full border-4 border-background z-30 shadow-sm"
                 animate={{ scale: [1, 1.2, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               />
@@ -265,7 +264,7 @@ export default function Connection() {
                   className="w-full flex flex-col pt-2"
                 >
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-base font-normal tracking-wide text-muted-foreground mr-6">Active Rooms</h2>
+                    <h2 className="text-base font-normal tracking-wide text-muted-foreground mr-6">Created Rooms</h2>
                     <div className="relative flex-1 max-w-[240px] ml-auto">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <Input
@@ -280,32 +279,41 @@ export default function Connection() {
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     {activeRooms.filter(room => room.hostProfile.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
                       activeRooms.filter(room => room.hostProfile.name.toLowerCase().includes(searchQuery.toLowerCase())).map(room => (
-                        <div key={room.id} className="border border-border/60 rounded-xl p-4 flex flex-col justify-between transition-all hover:bg-card/40 bg-transparent min-h-[120px]">
-                          <div>
-                            <div className="flex items-start justify-between mb-2">
-                              <a 
-                                href="#" 
-                                onClick={(e) => { e.preventDefault(); handleJoinRoom(room.room_id, room.hostProfile.name); }}
-                                className="font-semibold text-[15px] text-primary hover:underline truncate mr-2"
+                        <div key={room.id} className="border border-border/60 rounded-xl p-4 flex flex-col justify-between transition-all hover:bg-card/40 bg-transparent min-h-[140px]">
+                          <div className="flex justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between mb-1">
+                                <h3 className="font-semibold text-[15px] text-foreground truncate mr-2">
+                                  {room.hostProfile.name.toLowerCase()}-room
+                                </h3>
+                                <span className="px-2 py-[1px] rounded-full border border-border/60 text-[10px] text-muted-foreground font-medium shrink-0 uppercase tracking-tight">
+                                  Public
+                                </span>
+                              </div>
+                              <p className="text-[13px] text-muted-foreground mb-4 line-clamp-1">
+                                {room.hostProfile.email}
+                              </p>
+                              
+                              <div className="flex items-center gap-4 mt-auto">
+                                <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+                                  Live
+                                </div>
+                                <div className="flex items-center gap-1 text-[12px] text-muted-foreground">
+                                  <span className="opacity-70 text-[10px]">●</span>
+                                  <span>P2P</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-col justify-center shrink-0">
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleJoinRoom(room.room_id, room.hostProfile.name)}
+                                className="h-9 px-4 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-sm transition-all"
                               >
-                                {room.hostProfile.name.toLowerCase()}-room
-                              </a>
-                              <span className="px-2 py-[1px] rounded-full border border-border/60 text-[11px] text-muted-foreground font-medium shrink-0">
-                                Public
-                              </span>
-                            </div>
-                            <p className="text-[13px] text-muted-foreground mb-4 line-clamp-2">
-                              Hosted by {room.hostProfile.email}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-4 mt-auto">
-                            <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                              <span className="w-3 h-3 rounded-full bg-blue-500" />
-                              Active
-                            </div>
-                            <div className="flex items-center gap-1 text-[12px] text-muted-foreground">
-                              <span className="opacity-70 text-[10px]">●</span>
-                              <span>P2P</span>
+                                Join Room
+                              </Button>
                             </div>
                           </div>
                         </div>
