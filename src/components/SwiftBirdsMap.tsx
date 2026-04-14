@@ -98,7 +98,7 @@ export default function SwiftBirdsMap() {
 
       // Draw world map image
       if (imgRef.current && imgRef.current.complete) {
-        ctx.globalAlpha = 0.35;
+        ctx.globalAlpha = 0.45;
         ctx.drawImage(imgRef.current, 0, 0, w, h);
         ctx.globalAlpha = 1;
       }
@@ -108,13 +108,13 @@ export default function SwiftBirdsMap() {
         const cx = city.x * w;
         const cy = city.y * h;
         ctx.beginPath();
-        ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-        ctx.fillStyle = 'hsla(355, 82%, 56%, 0.5)';
+        ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'hsla(355, 82%, 56%, 0.65)';
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-        ctx.strokeStyle = 'hsla(355, 82%, 56%, 0.15)';
-        ctx.lineWidth = 0.6;
+        ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+        ctx.strokeStyle = 'hsla(355, 82%, 56%, 0.25)';
+        ctx.lineWidth = 1;
         ctx.stroke();
       });
 
@@ -164,7 +164,7 @@ export default function SwiftBirdsMap() {
           ctx.fill();
         }
 
-        drawBird(x, y, angle, 14);
+        drawBird(x, y, angle, 18);
       });
 
       frameRef.current = requestAnimationFrame(animate);

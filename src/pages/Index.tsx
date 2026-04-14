@@ -130,7 +130,10 @@ export default function Index() {
         <div className="lg:hidden absolute inset-0 z-0"><ParticleField /></div>
 
         <div className="w-full max-w-7xl mx-auto relative z-10 flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
-          <div className="flex-1 animate-fade-up" style={{ animationDelay: '100ms' }}>
+          <div 
+            ref={(el) => { revealRefs.current[10] = el; }}
+            className="flex-1 reveal-left"
+          >
             {/* App name & tagline */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary uppercase tracking-widest mb-6">
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -191,8 +194,12 @@ export default function Index() {
           </div>
 
           {/* Desktop map */}
-          <div className="hidden lg:block flex-1 relative" style={{ minHeight: 500 }}>
-            <div className="absolute inset-0 flex items-start" style={{ top: '-2rem' }}>
+          <div 
+            ref={(el) => { revealRefs.current[11] = el; }}
+            className="hidden lg:block flex-[1.4] relative reveal-right" 
+            style={{ minHeight: 600 }}
+          >
+            <div className="absolute inset-0 flex items-start" style={{ top: '-4rem' }}>
               <SwiftBirdsMap />
             </div>
           </div>
@@ -211,7 +218,7 @@ export default function Index() {
         className="scroll-section anim-scale py-24 px-6 sm:px-12 bg-background"
       >
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold mb-6">What is SWIFT Connect?</h2>
+          <h2 className="text-4xl sm:text-5xl font-black mb-8 italic tracking-tighter text-primary">What is SWIFT Connect?</h2>
           <p className="text-muted-foreground text-lg leading-relaxed mb-6">
             SWIFT Connect is a browser-based, peer-to-peer file transfer platform that lets you securely share any file with anyone — directly from your browser. No uploads to our servers. No waiting. No accounts beyond your existing Google login.
           </p>
@@ -227,7 +234,7 @@ export default function Index() {
         className="scroll-section anim-slide-left py-24 px-6 sm:px-12 bg-muted/10"
       >
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl sm:text-4xl font-bold text-center mb-4">Everything You Need</h2>
+          <h2 className="text-4xl sm:text-5xl font-black text-center mb-6 tracking-tighter">Everything You Need</h2>
           <p className="text-muted-foreground text-center mb-16 max-w-xl mx-auto">Built for speed, privacy, and reliability. Here's exactly what SWIFT does — and why we need the permissions we ask for.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {FEATURES.map((f) => (
@@ -254,7 +261,7 @@ export default function Index() {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-400/10 border border-orange-400/20 text-xs font-semibold text-orange-400 uppercase tracking-widest mb-6">
                 <Cloud className="w-3 h-3" /> Google Drive Integration
               </div>
-              <h2 className="text-3xl sm:text-4xl font-bold mb-6">Why We Use Your Google Drive</h2>
+              <h2 className="text-4xl sm:text-5xl font-black mb-8 tracking-tighter">Why We Use Your Google Drive</h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
                 WebRTC data channels work great for small-medium files but face performance challenges above 25MB. To deliver a reliable experience, SWIFT uses the <strong className="text-foreground">drive.file</strong> scope to temporarily stage large files in your own Google Drive.
               </p>
@@ -285,7 +292,7 @@ export default function Index() {
         className="scroll-section anim-rise py-24 px-6 sm:px-12 bg-muted/10"
       >
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16">How It Works</h2>
+          <h2 className="text-4xl sm:text-5xl font-black text-center mb-16 tracking-tighter">How It Works</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {HOW_IT_WORKS.map(({ step, title, desc }) => (
               <div key={step} className="relative">

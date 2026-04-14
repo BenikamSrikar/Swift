@@ -61,9 +61,18 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
     font-family: 'Space Grotesk', system-ui, sans-serif;
+    letter-spacing: -0.01em;
   }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight font-bold;
+    letter-spacing: -0.03em;
+  }
+
+  h1 { @apply leading-[1.1]; }
+  h2 { @apply leading-[1.2]; }
 
   code, .font-mono {
     font-family: 'JetBrains Mono', monospace;
@@ -89,7 +98,38 @@
     box-shadow: 0 4px 24px 0 hsla(355, 82%, 56%, 0.08);
   }
 
-  /* Scroll reveal — base hidden state */
+  /* Enhanced Scroll reveal — base state */
+  .reveal-base {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-base.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .reveal-left {
+    opacity: 0;
+    transform: translateX(-50px);
+    transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-left.revealed {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .reveal-right {
+    opacity: 0;
+    transform: translateX(50px);
+    transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-right.revealed {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* Legacy scroll sections */
   .scroll-section .scroll-image,
   .scroll-section .scroll-text {
     opacity: 0;
