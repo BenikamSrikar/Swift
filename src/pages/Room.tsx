@@ -366,9 +366,8 @@ export default function Room() {
       }, 500);
     });
 
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') transferChannelRef.current = channel;
-    });
+    channel.subscribe();
+    transferChannelRef.current = channel;
 
     return () => {
       transferChannelRef.current = null;
@@ -922,21 +921,32 @@ export default function Room() {
                       avatarUrl={p.avatar_url}
                       isHost={p.user_id === room?.host_id}
                       showHostControls={isHost}
-                      onRequestFile={() => {
-                        transferChannelRef.current?.send({
+                      onRequestFile={async () => {
+                        if (!transferChannelRef.current) {
+                          toast.error('Signaling channel not ready. Please wait...');
+                          return;
+                        }
+                        const res = await transferChannelRef.current.send({
                           type: 'broadcast',
                           event: 'transfer-request',
                           payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, type: 'file' },
                         });
-                        toast.info('File requested');
+                        console.log('File request broadcast result:', res);
+                        if (res === 'ok') toast.info('File requested');
+                        else toast.error('Failed to send request. Peer may be offline.');
                       }}
-                      onRequestFolder={() => {
-                        transferChannelRef.current?.send({
+                      onRequestFolder={async () => {
+                        if (!transferChannelRef.current) {
+                          toast.error('Signaling channel not ready. Please wait...');
+                          return;
+                        }
+                        const res = await transferChannelRef.current.send({
                           type: 'broadcast',
                           event: 'transfer-request',
                           payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, type: 'folder' },
                         });
-                        toast.info('Folder requested');
+                        if (res === 'ok') toast.info('Folder requested');
+                        else toast.error('Failed to send request. Peer may be offline.');
                       }}
                       onRemove={() => handleRemoveUser(p.user_id)}
                     />
