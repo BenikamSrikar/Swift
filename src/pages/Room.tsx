@@ -6,7 +6,6 @@ import UserCard from '@/components/UserCard';
 import UserAvatar from '@/components/UserAvatar';
 import SignalStrength from '@/components/SignalStrength';
 import JoinRequestDialog from '@/components/JoinRequestDialog';
-import TransferRequestDialog from '@/components/TransferRequestDialog';
 import UploadModal from '@/components/UploadModal';
 import HistoryModal from '@/components/HistoryModal';
 import { supabase } from '@/integrations/supabase/client';
@@ -55,7 +54,6 @@ export default function Room() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [currentRequest, setCurrentRequest] = useState<PendingRequest | null>(null);
-  const [transferRequest, setTransferRequest] = useState<TransferRequest | null>(null);
   const [copied, setCopied] = useState(false);
   const [queuedTransfers, setQueuedTransfers] = useState<QueuedTransfer[]>([]);
   const [statusText, setStatusText] = useState<string | null>(null);
@@ -286,7 +284,35 @@ export default function Room() {
     channel.on('broadcast', { event: 'transfer-request' }, (payload) => {
       const { targetUserId, fromUserId, fromName, type } = payload.payload;
       if (targetUserId === userId) {
-        setTransferRequest({ fromUserId, fromName, type });
+        toast.custom(
+          (t) => (
+            <div className="bg-card w-[356px] border border-border shadow-lg rounded-xl p-4 flex flex-col gap-3">
+              <div className="font-semibold text-sm">{fromName} is requesting a {type}</div>
+              <div className="text-xs text-muted-foreground">Select what you would like to do.</div>
+              <div className="flex gap-2 w-full mt-1">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="w-1/2 h-8 text-xs bg-muted hover:bg-background"
+                  onClick={() => toast.dismiss(t)}
+                >
+                  Decline
+                </Button>
+                <Button 
+                  size="sm" 
+                  className="w-1/2 h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+                  onClick={() => {
+                    toast.dismiss(t);
+                    setUploadModal({ open: true, targetUserId: fromUserId, mode: type === 'folder' ? 'folder' : 'file' });
+                  }}
+                >
+                  Send {type}
+                </Button>
+              </div>
+            </div>
+          ),
+          { duration: 20000 }
+        );
       }
     });
 
@@ -908,18 +934,6 @@ export default function Room() {
         }}
       />
 
-      <TransferRequestDialog
-        open={!!transferRequest}
-        requesterName={transferRequest?.fromName || ''}
-        type={transferRequest?.type || 'file'}
-        onAccept={() => {
-          if (!transferRequest) return;
-          const { fromUserId, type } = transferRequest;
-          setTransferRequest(null);
-          setUploadModal({ open: true, targetUserId: fromUserId, mode: type === 'folder' ? 'folder' : 'file' });
-        }}
-        onReject={() => setTransferRequest(null)}
-      />
 
       <UploadModal
         open={!!uploadModal?.open}
