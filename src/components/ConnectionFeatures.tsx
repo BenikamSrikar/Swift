@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Shield, Zap, Globe, FolderSync, Clock, AlertTriangle, ArrowRight, Cloud } from 'lucide-react';
+import { Shield, Zap, Globe, FolderSync, Clock, AlertTriangle, ArrowRight } from 'lucide-react';
+import GoogleDriveIcon from './GoogleDriveIcon';
 
 const NEW_FEATURES = [
   {
@@ -8,7 +9,7 @@ const NEW_FEATURES = [
     description: 'Works on Chrome, Firefox, Safari, and Edge — no extensions needed.',
   },
   {
-    icon: Cloud,
+    icon: GoogleDriveIcon,
     title: 'Smart Size Routing',
     description: 'Files <25MB transfer via WebRTC. Larger files auto-upload to Google Drive with 5-min expiry links.',
   },
@@ -31,7 +32,7 @@ const HOW_IT_WORKS = [
 ];
 
 const V1_COMPARISON = [
-  { v1: 'All files sent via WebRTC only', v12: 'Smart routing — WebRTC for <25MB, Google Drive for larger', icon: Cloud },
+  { v1: 'All files sent via WebRTC only', v12: 'Smart routing — WebRTC for <25MB, Google Drive for larger', icon: GoogleDriveIcon },
   { v1: 'No transfer history for receivers', v12: 'Both sender and receiver see full transfer history', icon: Clock },
   { v1: 'Only individual files could be sent', v12: 'Full folder support with auto-ZIP', icon: FolderSync },
   { v1: 'Intermittent issues on Safari & Edge', v12: 'Seamless cross-browser compatibility', icon: Globe },
@@ -84,7 +85,7 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
             Welcome back, <span className="text-primary">{userName.split(' ')[0]}</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Here's what's new in SWIFT v1.3</p>
+          <p className="text-sm text-muted-foreground mt-1">Here's what's new in SWIFT v1.4</p>
         </div>
       </div>
 
@@ -93,7 +94,7 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
         ref={(el) => { refs.current[1] = el; }}
         className={getRevealClass(1, 'up')}
       >
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">What's New in v1.3</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">What's New in v1.4</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {NEW_FEATURES.map((f, i) => (
             <div
@@ -102,7 +103,7 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
               style={{ transitionDelay: `${i * 100}ms` }}
             >
               <div className="shrink-0 w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                <f.icon className="w-4 h-4 text-primary" />
+                <f.icon className="w-4 h-4 text-primary" strokeWidth={1.5} />
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">{f.title}</p>
@@ -137,7 +138,7 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
         ref={(el) => { refs.current[3] = el; }}
         className={getRevealClass(3, 'right')}
       >
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">v1.0 vs v1.3</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">v1.0 vs v1.4</h3>
         <div className="space-y-3">
           {V1_COMPARISON.map((item, i) => (
             <div
@@ -145,7 +146,7 @@ export default function ConnectionFeatures({ userName }: { userName: string }) {
               className="flex items-center gap-3 p-4 rounded-xl border bg-card transition-all duration-500 hover:shadow-md"
               style={{ transitionDelay: `${i * 80}ms` }}
             >
-              <item.icon className="w-5 h-5 text-primary shrink-0" />
+              <item.icon className="w-5 h-5 text-primary shrink-0" strokeWidth={1.5} />
               <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0">
                 <span className="text-xs text-muted-foreground line-through flex-1">{item.v1}</span>
                 <ArrowRight className="w-3 h-3 text-primary shrink-0 hidden sm:block" />

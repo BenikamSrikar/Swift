@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Progress } from '@/components/ui/progress';
-import { ChevronDown, ChevronUp, Clock, CheckCircle2, XCircle, FileIcon, FolderIcon, Cloud } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, CheckCircle2, XCircle, FileIcon, FolderIcon } from 'lucide-react';
+import GoogleDriveIcon from './GoogleDriveIcon';
 
 export interface QueuedTransfer {
   id: string;
@@ -86,7 +87,7 @@ function QueueItem({ transfer }: { transfer: QueuedTransfer }) {
             {transfer.type === 'folder' ? (
               <FolderIcon className="h-4 w-4 text-primary" />
             ) : transfer.type === 'drive-link' ? (
-              <Cloud className="h-4 w-4 text-orange-500 hover:animate-pulse" />
+              <GoogleDriveIcon className="h-4 w-4 hover:animate-pulse" />
             ) : (
               <FileIcon className="h-4 w-4 text-blue-500" />
             )}
@@ -107,7 +108,7 @@ function QueueItem({ transfer }: { transfer: QueuedTransfer }) {
             <span className="text-[10px] font-mono font-bold text-primary">{Math.round(transfer.progress)}%</span>
           )}
           <button className="text-muted-foreground/50 hover:text-foreground">
-            {itemCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+            {itemCollapsed ? <ChevronDown className="h-3 w-3" strokeWidth={1.5} /> : <ChevronUp className="h-3 w-3" strokeWidth={1.5} />}
           </button>
         </div>
       </div>

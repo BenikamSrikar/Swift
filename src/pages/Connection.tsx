@@ -199,74 +199,82 @@ export default function Connection() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background selection:bg-primary selection:text-primary-foreground overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-[#050505] text-foreground selection:bg-primary/20 selection:text-primary overflow-x-hidden">
+      {/* Background gradients */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 blur-[120px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/5 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
+      </div>
+
       <VoltsNavbar onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
-      <main className="flex-1 w-full max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-8 md:py-12 relative">
-        <div className="flex flex-col md:flex-row gap-8 lg:gap-16 w-full z-10 relative">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12 md:py-20 relative z-10">
+        <div className="flex flex-col lg:flex-row gap-12 lg:gap-20 items-start">
           
           {/* Profile Section (Left Column) */}
-          <div className="w-full md:w-[280px] lg:w-[320px] flex flex-col items-center md:items-start shrink-0 animate-fade-in-up">
-            <div className="relative w-32 h-32 mb-8">
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="w-full lg:w-[320px] flex flex-col items-center lg:items-start shrink-0"
+          >
+            <div className="relative w-40 h-40 mb-10 group">
               <AvatarParticles />
-              <div className="absolute inset-0 rounded-full border border-border bg-card shadow-lg overflow-hidden z-20">
+              <div className="absolute inset-0 rounded-[40px] border border-white/10 bg-white/[0.03] backdrop-blur-xl shadow-2xl overflow-hidden z-20 group-hover:border-primary/50 transition-colors duration-500">
                 {profile.avatar_url ? (
-                  <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover" />
+                  <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover scale-100 group-hover:scale-110 transition-transform duration-500" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-5xl font-bold bg-primary/10 text-primary">
+                  <div className="w-full h-full flex items-center justify-center text-6xl font-black bg-gradient-to-br from-primary/20 to-transparent text-primary">
                     {profile.name.charAt(0).toUpperCase()}
                   </div>
                 )}
               </div>
               <motion.div 
-                className="absolute bottom-1 right-1 bg-green-500 w-4 h-4 rounded-full border-2 border-background z-30 shadow-sm"
+                className="absolute -bottom-2 -right-2 bg-green-500 w-6 h-6 rounded-full border-[4px] border-[#0a0a0a] z-30 shadow-lg"
                 animate={{ scale: [1, 1.2, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               />
             </div>
             
-            <motion.div 
-              initial={{ opacity: 0, x: -10 }} 
-              animate={{ opacity: 1, x: 0 }} 
-              className="text-center md:text-left w-full"
-            >
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1">{profile.name}</h1>
-              <p className="text-base sm:text-lg text-muted-foreground mb-4">{profile.email}</p>
+            <div className="text-center lg:text-left w-full space-y-2">
+              <h1 className="text-3xl sm:text-4xl font-black tracking-tighter">{profile.name}</h1>
+              <p className="text-lg text-muted-foreground font-medium mb-6">{profile.email}</p>
               
-              <div className="flex items-center gap-2 justify-center md:justify-start mb-6">
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-xs uppercase tracking-widest font-bold text-muted-foreground">Session Active</span>
+              <div className="flex items-center gap-2 justify-center lg:justify-start py-6">
+                <div className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-[10px] uppercase tracking-widest font-black text-green-500">Live Session</span>
+                </div>
               </div>
 
-              {/* Host a Room Button acting like Edit Profile */}
               <Button 
                 onClick={handleCreateRoom} 
                 disabled={creating}
-                className="w-full h-11 rounded-lg text-sm font-bold shadow-sm transition-all bg-secondary hover:bg-secondary/80 text-foreground border border-border hover:border-primary/50"
+                className="w-full h-14 rounded-2xl text-base font-bold shadow-xl transition-all bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-primary/50 group"
               >
-                {creating ? 'Creating...' : 'Create Room'}
+                <Plus className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" strokeWidth={1.5} />
+                {creating ? 'Initializing...' : 'Host New Room'}
               </Button>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
 
           {/* Main Content Area (Right Column) */}
-          <div className="flex-1 w-full flex flex-col min-w-0">
+          <div className="flex-1 w-full min-w-0">
             <AnimatePresence mode="wait">
               {waitingApproval ? (
                 <motion.div 
                   key="waiting"
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.98 }}
-                  className="w-full bg-card/50 backdrop-blur-xl border border-border/50 rounded-2xl p-10 flex flex-col items-center text-center shadow-lg my-auto"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="w-full aspect-[16/9] lg:aspect-auto lg:h-[500px] bg-white/[0.02] backdrop-blur-3xl border border-white/10 rounded-[40px] flex flex-col items-center justify-center text-center shadow-2xl p-12"
                 >
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 relative">
+                  <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mb-8 relative">
                     <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-                    <Clock className="w-8 h-8 text-primary animate-spin" style={{ animationDuration: '4s' }} />
+                    <Clock className="w-10 h-10 text-primary animate-spin" strokeWidth={1.5} style={{ animationDuration: '4s' }} />
                   </div>
-                  <h2 className="text-xl font-bold mb-2">Awaiting Host</h2>
-                  <p className="text-sm text-muted-foreground mb-8 max-w-sm">The host needs to approve your connection request before you can start transferring.</p>
-                  <Button variant="outline" className="rounded-full px-8" onClick={() => { 
+                  <h2 className="text-3xl font-black mb-4 tracking-tighter">Awaiting Host Approval</h2>
+                  <p className="text-lg text-muted-foreground mb-10 max-w-sm font-medium leading-relaxed">The host has been notified. We'll connect you as soon as they accept your request.</p>
+                  <Button variant="ghost" className="rounded-2xl px-10 h-14 font-bold text-muted-foreground hover:text-white hover:bg-white/5" onClick={() => { 
                     setWaitingApproval(false); 
                     setJoining(false); 
                     if ((window as any)._joinPoller) clearInterval((window as any)._joinPoller);
@@ -277,41 +285,45 @@ export default function Connection() {
               ) : (
                 <motion.div 
                   key="join-email"
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="w-full h-full flex flex-col items-center justify-center p-8 bg-card border border-border/60 rounded-2xl shadow-sm"
+                  className="w-full aspect-[16/9] lg:aspect-auto lg:h-[500px] flex flex-col items-center justify-center p-12 bg-white/[0.02] backdrop-blur-3xl border border-white/5 rounded-[40px] shadow-2xl relative overflow-hidden group"
                 >
-                  <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-6">
-                    <LogIn className="w-8 h-8 text-primary/40" />
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2" />
                   </div>
-                  <h2 className="text-xl font-bold mb-2">Connect to Peer</h2>
-                  <p className="text-sm text-muted-foreground text-center mb-8 max-w-sm">
-                    Enter the Google email address of the host you would like to connect with.
+
+                  <div className="w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center mb-8 rotate-6 group-hover:rotate-0 transition-transform duration-500">
+                    <LogIn className="w-10 h-10 text-primary" strokeWidth={1.5} />
+                  </div>
+                  <h2 className="text-3xl font-black mb-4 tracking-tighter">Enter Destination</h2>
+                  <p className="text-lg text-muted-foreground text-center mb-10 max-w-md font-medium">
+                    Looking for someone? Enter their Google email to establish a secure P2P link.
                   </p>
                   
-                  <div className="w-full max-w-md flex flex-col gap-3">
+                  <div className="w-full max-w-lg flex flex-col gap-4">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" strokeWidth={1.5} />
                       <Input 
-                        placeholder="host@gmail.com"
+                        placeholder="recipient@gmail.com"
                         value={joinEmail}
                         onChange={(e) => setJoinEmail(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleJoinByEmail()}
-                        className="h-12 pl-10 rounded-xl bg-background border-border/50 focus-visible:ring-primary/30"
+                        className="h-16 pl-14 pr-6 rounded-2xl bg-white/5 border-white/10 focus-visible:ring-primary/30 text-lg font-medium placeholder:text-muted-foreground/30"
                       />
                     </div>
                     <Button 
                       onClick={handleJoinByEmail}
                       disabled={joining}
-                      className="h-12 w-full rounded-xl volts-gradient font-bold text-base shadow-lg shadow-primary/20"
+                      className="h-16 w-full rounded-2xl volts-gradient font-black text-lg shadow-2xl shadow-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
                     >
-                      {joining ? 'Searching...' : 'Request to Join'}
+                      {joining ? 'Searching Network...' : 'Connect to Peer'}
                     </Button>
                   </div>
                   
-                  <div className="mt-8 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                    Secure P2P Signaling Active
+                  <div className="mt-12 flex items-center gap-3 py-2 px-4 rounded-full bg-white/5 border border-white/10">
+                    <span className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                    <span className="text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground">Encrypted Signaling Protocol Active</span>
                   </div>
                 </motion.div>
               )}

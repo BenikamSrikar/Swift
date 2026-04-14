@@ -6,8 +6,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import SwiftBirdsMap from '@/components/SwiftBirdsMap';
 import ParticleField from '@/components/ParticleField';
-import { Shield, Wifi, Zap, FolderOpen, RefreshCw, Cloud, Lock, History } from 'lucide-react';
-import { motion } from 'framer-motion';
+import HistoryModal from '@/components/HistoryModal';
+import GoogleDriveIcon from '@/components/GoogleDriveIcon';
+import { Shield, Wifi, Zap, FolderOpen, RefreshCw, Lock, History as HistoryIcon, Cloud } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
 
 // ─── SWIFT Items Data ────────────────────────────────────────────────────────
@@ -85,7 +87,7 @@ const FEATURES = [
     bg: 'bg-purple-400/10',
   },
   {
-    icon: Cloud,
+    icon: GoogleDriveIcon,
     title: 'Google Drive for Large Files',
     description: 'Files over 25MB are uploaded to your Google Drive and a secure private link is sent to the recipient. Auto-deleted after 1 hour.',
     color: 'text-orange-400',
@@ -99,7 +101,7 @@ const FEATURES = [
     bg: 'bg-red-400/10',
   },
   {
-    icon: History,
+    icon: HistoryIcon,
     title: 'Transfer History',
     description: 'Track everything you\'ve sent and received — including Google Drive links — across all sessions.',
     color: 'text-cyan-400',
@@ -123,7 +125,6 @@ const HOW_IT_WORKS = [
 
 function useElasticScrollReveal() {
   const refs = useRef<(HTMLElement | null)[]>([]);
-  const [revealedSet, setRevealedSet] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -131,14 +132,10 @@ function useElasticScrollReveal() {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add('revealed');
-            const idx = refs.current.indexOf(entry.target as HTMLElement);
-            if (idx >= 0) {
-              setRevealedSet((prev) => new Set(prev).add(idx));
-            }
           }
         });
       },
-      { threshold: 0.12 }
+      { threshold: 0.1 }
     );
 
     refs.current.forEach((ref) => {
@@ -148,14 +145,15 @@ function useElasticScrollReveal() {
     return () => observer.disconnect();
   }, []);
 
-  return { refs, revealedSet };
+  return { refs };
 }
 
 export default function Index() {
   const [loading, setLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const navigate = useNavigate();
   const { user, profile, loading: authLoading } = useAuth();
-  const { refs: revealRefs, revealedSet } = useElasticScrollReveal();
+  const { refs: revealRefs } = useElasticScrollReveal();
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -185,8 +183,8 @@ export default function Index() {
   };
 
   return (
-    <div className="bg-background text-foreground">
-      <VoltsNavbar />
+    <div className="bg-background text-foreground scroll-smooth">
+      <VoltsNavbar onHistoryClick={() => setHistoryOpen(true)} />
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden">
@@ -259,10 +257,10 @@ export default function Index() {
           {/* Desktop map */}
           <div 
             ref={(el) => { revealRefs.current[11] = el; }}
-            className="hidden lg:block flex-[1.4] relative reveal-right" 
-            style={{ minHeight: 600 }}
+            className="hidden lg:block flex-[1.2] relative reveal-right h-[600px]" 
           >
-            <div className="absolute inset-0 flex items-start" style={{ top: '-4rem' }}>
+            <div className="absolute inset-0 flex items-center justify-center p-8 bg-primary/5 rounded-[40px] border border-primary/10 backdrop-blur-3xl shadow-2xl overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-primary/10 opacity-50 group-hover:opacity-100 transition-opacity duration-1000" />
               <SwiftBirdsMap />
             </div>
           </div>
@@ -300,10 +298,15 @@ export default function Index() {
           <h2 className="text-4xl sm:text-5xl font-black text-center mb-6 tracking-tighter">Everything You Need</h2>
           <p className="text-muted-foreground text-center mb-16 max-w-xl mx-auto">Built for speed, privacy, and reliability. Here's exactly what SWIFT does — and why we need the permissions we ask for.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {FEATURES.map((f) => (
-              <div key={f.title} className="bg-card border border-border/50 rounded-2xl p-6 hover:border-primary/30 transition-all hover:-translate-y-1 duration-300">
+            {FEATURES.map((f, i) => (
+              <div 
+                key={f.title} 
+                ref={(el) => { revealRefs.current[50 + i] = el; }}
+                className="reveal-base bg-card border border-border/50 rounded-2xl p-6 hover:border-primary/30 transition-all hover:-translate-y-1 duration-300"
+                style={{ transitionDelay: `${i * 100}ms` }}
+              >
                 <div className={`w-10 h-10 rounded-xl ${f.bg} flex items-center justify-center mb-4`}>
-                  <f.icon className={`w-5 h-5 ${f.color}`} />
+                  <f.icon className={`w-5 h-5 ${f.color}`} strokeWidth={1.5} />
                 </div>
                 <h3 className="font-bold text-sm mb-2">{f.title}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">{f.description}</p>
@@ -322,7 +325,7 @@ export default function Index() {
           <div className="flex flex-col md:flex-row gap-10 items-center">
             <div className="flex-1">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-400/10 border border-orange-400/20 text-xs font-semibold text-orange-400 uppercase tracking-widest mb-6">
-                <Cloud className="w-3 h-3" /> Google Drive Integration
+                <GoogleDriveIcon className="w-3 h-3" /> Google Drive Integration
               </div>
               <h2 className="text-4xl sm:text-5xl font-black mb-8 tracking-tighter">Why We Use Your Google Drive</h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
@@ -343,7 +346,7 @@ export default function Index() {
               </ul>
             </div>
             <div className="flex-shrink-0 w-64 h-64 rounded-3xl bg-gradient-to-br from-orange-400/10 to-primary/10 border border-border flex items-center justify-center">
-              <Cloud className="w-24 h-24 text-orange-400/40" />
+              <GoogleDriveIcon className="w-24 h-24" />
             </div>
           </div>
         </div>
@@ -357,8 +360,13 @@ export default function Index() {
         <div className="max-w-5xl mx-auto">
           <h2 className="text-4xl sm:text-5xl font-black text-center mb-16 tracking-tighter">How It Works</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {HOW_IT_WORKS.map(({ step, title, desc }) => (
-              <div key={step} className="relative">
+            {HOW_IT_WORKS.map(({ step, title, desc }, i) => (
+              <div 
+                key={step} 
+                ref={(el) => { revealRefs.current[100 + i] = el; }}
+                className="reveal-base relative"
+                style={{ transitionDelay: `${i * 150}ms` }}
+              >
                 <div className="text-6xl font-black text-primary/10 mb-2 leading-none">{step}</div>
                 <h3 className="font-bold text-base mb-2">{title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
@@ -372,13 +380,12 @@ export default function Index() {
       {SWIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
         const style = SECTION_STYLES[i];
         const IconComponent = SWIFT_ICON_COMPONENTS[i];
-        const isSectionRevealed = revealedSet.has(i + 20); // Offsetting indices to avoid collision with revealRefs usage
 
         return (
           <section
             key={letter}
             ref={(el: HTMLDivElement | null) => { revealRefs.current[i + 20] = el; }}
-            className={`scroll-section ${style.anim} min-h-[80vh] flex items-center justify-center px-6 sm:px-12 bg-background border-b border-border/10`}
+            className={`scroll-section ${style.anim} min-h-[70vh] flex items-center justify-center px-6 sm:px-12 bg-background border-b border-white/[0.02] last:border-b-0`}
           >
             <div
               className={`w-full max-w-5xl flex flex-col ${
@@ -386,7 +393,7 @@ export default function Index() {
               } items-center gap-10 md:gap-20`}
             >
               <div className="scroll-image shrink-0 w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 transition-transform duration-500 hover:scale-110">
-                <IconComponent revealed={isSectionRevealed} />
+                <IconComponent revealed={true} />
               </div>
 
               <div className={`scroll-text text-center ${i % 2 === 0 ? 'md:text-left' : 'md:text-right'} max-w-xl`}>
@@ -435,23 +442,43 @@ export default function Index() {
       </section>
 
       {/* ── Footer ────────────────────────────────────────────────────────── */}
-      <footer className="py-10 px-6 border-t border-border/20" style={{ backgroundColor: 'hsl(0 0% 4%)' }}>
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-center sm:text-left">
-            <span className="text-xl font-bold text-primary">SWIFT</span>
-            <span className="text-xs font-mono ml-2" style={{ color: 'hsl(0 0% 50%)' }}>v1.4</span>
-            <p className="text-xs mt-1" style={{ color: 'hsl(0 0% 45%)' }}>Secure Wideband Instant File Transfer</p>
+      <footer className="py-12 px-6 border-t border-border/10 bg-black/80 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="text-center md:text-left">
+            <span className="text-2xl font-black text-primary tracking-tighter">SWIFT</span>
+            <span className="text-[10px] font-mono ml-2 py-0.5 px-2 bg-primary/10 text-primary border border-primary/20 rounded-full">v1.4</span>
+            <p className="text-xs mt-2 text-muted-foreground font-medium">Secure Wideband Instant File Transfer</p>
           </div>
-          <span className="text-xs" style={{ color: 'hsl(0 0% 40%)' }}>
-            P2P WebRTC &bull; Google Drive Integration &bull; Ephemeral Sessions
-          </span>
-          <div className="flex flex-col sm:flex-row items-center gap-4 text-xs" style={{ color: 'hsl(0 0% 45%)' }}>
-            <a href="/privacy" className="hover:text-primary transition-colors font-semibold">Privacy Policy</a>
-            <a href="/terms" className="hover:text-primary transition-colors font-semibold">Terms of Service</a>
-            <span style={{ color: 'hsl(0 0% 35%)' }}>&copy; {new Date().getFullYear()} SWIFT Connect</span>
+          
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-xs text-muted-foreground/60 font-medium">
+              Designed & Developed by
+            </span>
+            <span className="text-sm font-bold bg-gradient-to-r from-primary to-orange-400 bg-clip-text text-transparent">
+              Benikam Srikar
+            </span>
+          </div>
+
+          <div className="flex flex-col items-center md:items-end gap-4">
+            <div className="flex items-center gap-6 text-xs font-semibold">
+              <a href="/privacy" className="hover:text-primary transition-colors">Privacy</a>
+              <a href="/terms" className="hover:text-primary transition-colors">Terms</a>
+            </div>
+            <p className="text-[10px] text-muted-foreground/40 font-mono">
+              &copy; {new Date().getFullYear()} SWIFT CONNECT. NO RIGHTS RESERVED.
+            </p>
           </div>
         </div>
       </footer>
+
+      {user && profile && (
+        <HistoryModal 
+          open={historyOpen} 
+          onClose={() => setHistoryOpen(false)} 
+          senderEmail={profile.email} 
+          senderName={profile.name} 
+        />
+      )}
     </div>
   );
 }

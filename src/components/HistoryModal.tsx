@@ -156,9 +156,9 @@ export default function HistoryModal({ open, onClose, senderEmail, senderName }:
                             <tr key={r.id} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
                               <td className="px-3 py-2 text-center">
                                 {isSent ? (
-                                  <ArrowUpRight className="h-3.5 w-3.5 text-primary" />
+                                  <ArrowUpRight className="h-3.5 w-3.5 text-primary" strokeWidth={1.5} />
                                 ) : (
-                                  <ArrowDownLeft className="h-3.5 w-3.5 text-green-500" />
+                                  <ArrowDownLeft className="h-3.5 w-3.5 text-green-500" strokeWidth={1.5} />
                                 )}
                               </td>
                               <td className="px-3 py-2">
@@ -186,7 +186,7 @@ export default function HistoryModal({ open, onClose, senderEmail, senderName }:
                                     rel="noopener noreferrer"
                                     className="text-primary hover:text-primary/80 transition-colors"
                                   >
-                                    <Download className="h-3.5 w-3.5" />
+                                    <Download className="h-3.5 w-3.5" strokeWidth={1.5} />
                                   </a>
                                 )}
                               </td>
@@ -205,7 +205,7 @@ export default function HistoryModal({ open, onClose, senderEmail, senderName }:
         {records.length > 0 && (
           <div className="pt-4 border-t flex justify-end">
             <Button variant="default" size="sm" className="gap-2 volts-gradient" onClick={handleDownloadPdf}>
-              <Download className="h-4 w-4" />
+              <Download className="h-4 w-4" strokeWidth={1.5} />
               Download Log
             </Button>
           </div>
