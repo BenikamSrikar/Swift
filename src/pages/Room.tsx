@@ -10,7 +10,7 @@ import UploadModal from '@/components/UploadModal';
 import HistoryModal from '@/components/HistoryModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
@@ -283,35 +283,49 @@ export default function Room() {
 
     channel.on('broadcast', { event: 'transfer-request' }, (payload) => {
       const { targetUserId, fromUserId, fromName, type } = payload.payload;
-      if (targetUserId === userId) {
-        toast.custom(
-          (t) => (
-            <div className="bg-card w-[356px] border border-border shadow-lg rounded-xl p-4 flex flex-col gap-3">
-              <div className="font-semibold text-sm">{fromName} is requesting a {type}</div>
-              <div className="text-xs text-muted-foreground">Select what you would like to do.</div>
-              <div className="flex gap-2 w-full mt-1">
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  className="w-1/2 h-8 text-xs bg-muted hover:bg-background"
-                  onClick={() => toast.dismiss(t)}
-                >
-                  Decline
-                </Button>
-                <Button 
-                  size="sm" 
-                  className="w-1/2 h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
-                  onClick={() => {
-                    toast.dismiss(t);
-                    setUploadModal({ open: true, targetUserId: fromUserId, mode: type === 'folder' ? 'folder' : 'file' });
-                  }}
-                >
-                  Send {type}
-                </Button>
-              </div>
+      
+      // Safety check: ensure both IDs exist and match
+      if (userId && targetUserId === userId) {
+        console.log(`Received ${type} request from ${fromName}`);
+        
+        toast(
+          <div className="flex flex-col gap-3 w-full min-w-[280px]">
+            <div className="flex flex-col gap-1">
+              <div className="font-bold text-sm text-foreground">{fromName} is requesting a {type}</div>
+              <div className="text-xs text-muted-foreground">Select an option to respond</div>
             </div>
-          ),
-          { duration: 20000 }
+            <div className="flex gap-2">
+              <Button 
+                size="sm" 
+                variant="outline"
+                className="flex-1 h-9 text-xs font-semibold"
+                onClick={(e) => {
+                  // Prevent default behavior to keep toast open if needed, though dismiss is manual here
+                  toast.dismiss();
+                }}
+              >
+                Decline
+              </Button>
+              <Button 
+                size="sm" 
+                className="flex-1 h-9 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
+                onClick={() => {
+                  toast.dismiss();
+                  setUploadModal({ 
+                    open: true, 
+                    targetUserId: fromUserId, 
+                    mode: type === 'folder' ? 'folder' : 'file' 
+                  });
+                }}
+              >
+                Send {type}
+              </Button>
+            </div>
+          </div>,
+          { 
+            duration: 30000,
+            id: `request-${fromUserId}-${type}` 
+          }
         );
       }
     });
