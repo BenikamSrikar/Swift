@@ -14,7 +14,7 @@ const SWIFT_ITEMS = [
     word: 'Secure',
     brief: 'Your privacy is non-negotiable.',
     description:
-      "Every transfer in SWIFT is peer-to-peer using WebRTC — your files never pass through any server. With end-to-end encryption baked into the protocol, only the sender and receiver can access the data. No cloud storage, no logs, no traces.",
+      "Every transfer in SWIFT uses WebRTC for direct device-to-device streaming when possible. For massive files over 25MB, SWIFT securely utilizes your Google Drive to temporarily host and share the file exclusively with your intended recipient using strict access controls.",
   },
   {
     letter: 'W',
@@ -28,14 +28,14 @@ const SWIFT_ITEMS = [
     word: 'Instant',
     brief: 'Zero friction, zero accounts.',
     description:
-      "No sign-ups, no email verification, no passwords to remember. Just sign in with Google and you\u2019re in. Create a room with one click, share a 6-character code, and start transferring.",
+      "Just sign in securely with your Google Account to begin. Create a room with one click, share a 6-character code, and start transferring instantly. No separate passwords to remember or verify.",
   },
   {
     letter: 'F',
     word: 'Files & Folders',
     brief: 'Send anything — files, folders, or videos.',
     description:
-      "Whether it\u2019s a single document, an entire project folder, or a large video file, SWIFT handles it all. Large files are sent in chunks with real-time progress tracking on both sides.",
+      "Whether it\u2019s a single document, an entire project folder, or a large video file, SWIFT handles it all. Small files route directly via WebRTC, while anything larger than 25MB is intelligently routed through your Google Drive for maximum reliability.",
   },
   {
     letter: 'T',
@@ -152,7 +152,7 @@ export default function Index() {
               <span className="text-primary">SWIFT</span>
             </h1>
             <p className="text-base lg:text-lg text-muted-foreground leading-relaxed max-w-md mb-8">
-              Peer-to-peer file transfer built for speed and privacy. No accounts, no cloud — just a direct connection between you and the recipient.
+              Secure file transfer built for speed and privacy. Sign in securely with Google to establish direct connections, and leverage Google Drive automatically for seamless sharing of files larger than 25MB.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 items-start">
