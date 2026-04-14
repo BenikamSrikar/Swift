@@ -11,7 +11,7 @@ import HistoryModal from '@/components/HistoryModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/sonner';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import JSZip from 'jszip';
@@ -57,6 +57,7 @@ export default function Room() {
   const [copied, setCopied] = useState(false);
   const [queuedTransfers, setQueuedTransfers] = useState<QueuedTransfer[]>([]);
   const [statusText, setStatusText] = useState<string | null>(null);
+  const [driveUploadProgress, setDriveUploadProgress] = useState<number | null>(null);
   const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string; mode: 'file' | 'folder' } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [roomChannel, setRoomChannel] = useState<any>(null);
@@ -289,8 +290,15 @@ export default function Room() {
         console.log(`Received ${type} request from ${fromName}`);
         
         toast(
-          <div className="flex flex-col gap-3 w-full min-w-[280px]">
-            <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-3 w-full min-w-[280px] relative">
+            <button 
+              type="button"
+              onClick={() => toast.dismiss(`request-${fromUserId}-${type}`)}
+              className="absolute -top-1 -right-1 p-1 hover:bg-muted rounded-full transition-colors"
+            >
+              <X className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+            <div className="flex flex-col gap-1 pr-6">
               <div className="font-bold text-sm text-foreground">{fromName} is requesting a {type}</div>
               <div className="text-xs text-muted-foreground">Select an option to respond</div>
             </div>
@@ -299,10 +307,7 @@ export default function Room() {
                 size="sm" 
                 variant="outline"
                 className="flex-1 h-9 text-xs font-semibold"
-                onClick={(e) => {
-                  // Prevent default behavior to keep toast open if needed, though dismiss is manual here
-                  toast.dismiss();
-                }}
+                onClick={() => toast.dismiss(`request-${fromUserId}-${type}`)}
               >
                 Decline
               </Button>
@@ -310,7 +315,7 @@ export default function Room() {
                 size="sm" 
                 className="flex-1 h-9 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
                 onClick={() => {
-                  toast.dismiss();
+                  toast.dismiss(`request-${fromUserId}-${type}`);
                   setUploadModal({ 
                     open: true, 
                     targetUserId: fromUserId, 
@@ -463,15 +468,26 @@ export default function Room() {
           const { name, link, senderName } = msg;
           
           toast(
-            <div className="flex flex-col gap-2 w-full">
-              <div className="font-semibold text-sm">{senderName} shared a large file via Google Drive!</div>
+            <div className="flex flex-col gap-2 w-full relative">
+              <button 
+                type="button"
+                onClick={() => toast.dismiss(`drive-${link}`)}
+                className="absolute -top-1 -right-1 p-1 hover:bg-muted rounded-full transition-colors"
+              >
+                <X className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+              <div className="font-semibold text-sm pr-6">{senderName} shared a large file via Google Drive!</div>
               <div className="text-xs text-muted-foreground truncate">{name}</div>
               <div className="text-[10px] text-orange-400">Link expires in 15 minutes</div>
               <div className="mt-2 flex gap-2">
                 <Button 
                   size="sm" 
                   className="w-full h-8 text-xs bg-primary hover:bg-primary/90"
-                  onClick={() => window.open(link, '_blank')}
+                  onClick={async () => {
+                    window.open(link, '_blank');
+                    await logHistory(name, 'drive-link', link);
+                    toast.dismiss(`drive-${link}`);
+                  }}
                 >
                   <svg className="w-3 h-3 mr-2" fill="none" strokeWidth="2" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                   Download
@@ -479,11 +495,8 @@ export default function Room() {
               </div>
             </div>,
             { 
-              duration: 900000, // 15 minutes, persists until action or timer expires
-              cancel: {
-                label: 'Dismiss',
-                onClick: () => {}
-              }
+              duration: 900000, // 15 minutes
+              id: `drive-${link}`
             }
           );
           
@@ -731,7 +744,12 @@ export default function Room() {
           throw new Error('Could not find recipient email for Drive sharing');
         }
 
-        const driveFile = await uploadToDrive(fileToSend, fileName, accessToken);
+        setDriveUploadProgress(0);
+        const driveFile: any = await uploadToDrive(fileToSend, fileName, accessToken, (pct) => {
+          setDriveUploadProgress(pct);
+        });
+        setDriveUploadProgress(null);
+
         // Fallback email if participant.email is missing
         const targetEmail = targetParticipant.email || (await supabase.from('profiles').select('email').eq('auth_user_id', targetUserId).single()).data?.email;
         
@@ -763,6 +781,7 @@ export default function Room() {
 
         return;
       } catch (error: any) {
+        setDriveUploadProgress(null);
         toast.error(`Drive Transfer Failed: ${error.message}`);
         setStatusText(null);
         return;
@@ -837,7 +856,7 @@ export default function Room() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
+      <VoltsNavbar onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
       <main className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full">
         {removedByHost ? (
@@ -873,9 +892,20 @@ export default function Room() {
 
             {statusText && (
               <div className="mb-4 animate-in slide-in-from-top-2">
-                <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 py-3 border border-primary/20">
+                <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 py-3 border border-primary/20 relative overflow-hidden">
                   <div className="h-1.5 w-1.5 rounded-full bg-primary animate-ping shrink-0" />
-                  <span className="text-xs font-bold uppercase tracking-tight text-primary">{statusText}</span>
+                  <span className="text-xs font-bold uppercase tracking-tight text-primary flex-1">{statusText}</span>
+                  {driveUploadProgress !== null && (
+                    <div className="flex items-center gap-2">
+                       <div className="relative w-8 h-8 flex items-center justify-center">
+                        <svg className="w-full h-full -rotate-90">
+                          <circle cx="16" cy="16" r="14" fill="transparent" stroke="currentColor" strokeWidth="2" className="text-primary/10" />
+                          <circle cx="16" cy="16" r="14" fill="transparent" stroke="currentColor" strokeWidth="2" strokeDasharray={88} strokeDashoffset={88 - (88 * driveUploadProgress) / 100} className="text-primary transition-all duration-300" strokeLinecap="round" />
+                        </svg>
+                        <span className="absolute text-[8px] font-bold">{driveUploadProgress}%</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

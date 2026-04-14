@@ -307,7 +307,7 @@ export default function Connection() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary selection:text-primary-foreground overflow-hidden">
-      <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
+      <VoltsNavbar onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
       <main className="flex-1 w-full max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-8 md:py-12 relative">
         <div className="flex flex-col md:flex-row gap-8 lg:gap-16 w-full z-10 relative">

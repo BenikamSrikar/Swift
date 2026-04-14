@@ -12,30 +12,47 @@ export async function getGoogleAccessToken() {
   return (data.session as any).provider_token;
 }
 
-export async function uploadToDrive(file: Blob, fileName: string, accessToken: string) {
-  const metadata = {
-    name: fileName,
-    mimeType: file.type || 'application/octet-stream',
-  };
+export async function uploadToDrive(
+  file: Blob, 
+  fileName: string, 
+  accessToken: string, 
+  onProgress?: (percent: number) => void
+) {
+  return new Promise((resolve, reject) => {
+    const metadata = {
+      name: fileName,
+      mimeType: file.type || 'application/octet-stream',
+    };
 
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file', file);
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', file);
 
-  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: form,
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink');
+    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+
+    if (onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(percent);
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText));
+      } else {
+        const error = JSON.parse(xhr.responseText || '{}');
+        reject(new Error(error.error?.message || 'Failed to upload to Google Drive'));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Network error during Google Drive upload'));
+    xhr.send(form);
   });
-
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error?.message || 'Failed to upload to Google Drive');
-  }
-
-  return await response.json();
 }
 
 export async function shareFileWithEmail(fileId: string, email: string, accessToken: string) {
