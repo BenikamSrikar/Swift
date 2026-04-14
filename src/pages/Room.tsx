@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import JSZip from 'jszip';
 import TransferQueue, { QueuedTransfer } from '@/components/TransferQueue';
+import { getGoogleAccessToken, uploadToDrive, shareFileWithEmail, deleteFileFromDrive } from '@/lib/googleDrive';
 
 const DATA_CHANNEL_CHUNK_SIZE = 262144; // 256KB
 const DATA_CHANNEL_BUFFER_LIMIT = DATA_CHANNEL_CHUNK_SIZE * 8;
@@ -40,7 +41,7 @@ interface PendingRequest {
 interface TransferRequest {
   fromUserId: string;
   fromName: string;
-  type: 'file' | 'folder' | 'video';
+  type: 'file' | 'folder' | 'video' | 'drive';
 }
 
 export default function Room() {
@@ -328,7 +329,7 @@ export default function Room() {
       transferChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [roomId, userId]);
+  }, [roomId, userId, isHost, navigate]);
 
   const handleIncomingOffer = async (fromUserId: string, offer: RTCSessionDescriptionInit, channel: any) => {
     const pc = new RTCPeerConnection({
@@ -371,7 +372,7 @@ export default function Room() {
     let receivedBytes = 0;
     let messageQueue = Promise.resolve();
 
-    const logHistory = async (fileName: string, fileType: string) => {
+    const logHistory = async (fileName: string, fileType: string, downloadUrl?: string) => {
       let senderName = participants.find((p) => p.user_id === fromUserId)?.name;
       let senderEmail = participants.find((p) => p.user_id === fromUserId)?.email;
 
@@ -392,6 +393,7 @@ export default function Room() {
         file_type: fileType,
         sender_email: senderEmail || '',
         direction: 'received',
+        download_url: downloadUrl || null
       } as any);
     };
 
@@ -416,6 +418,22 @@ export default function Room() {
           }]);
 
           setStatusText(`Receiving: ${msg.name}`);
+        } else if (msg.type === 'drive-link') {
+          // Received a Google Drive link for a large file
+          const { name, link, senderName } = msg;
+          const driveId = generateTransferId();
+          setQueuedTransfers(prev => [...prev, {
+            id: driveId,
+            name: `${name} (Google Drive)`,
+            size: 0,
+            status: 'completed',
+            progress: 100,
+            direction: 'receiving',
+            downloadUrl: link,
+            type: 'drive-link'
+          }]);
+          toast.success(`${senderName} shared a large file via Google Drive!`, { duration: 10000 });
+          await logHistory(name, 'drive-link', link);
         } else if (msg.type === 'done') {
           const blob = new Blob(chunks);
           const url = URL.createObjectURL(blob);
@@ -640,8 +658,63 @@ export default function Room() {
       fileName = `swift_batch_${format(new Date(), 'HHmm')}.zip`;
       fileType = 'folder';
     }
-
+ 
     const transferId = generateTransferId();
+    const totalSize = fileToSend.size;
+
+    // Google Drive Integration for files > 25MB
+    if (totalSize > 25 * 1024 * 1024) {
+      const accessToken = await getGoogleAccessToken();
+      if (!accessToken) {
+        toast.error('Large file detected. Please sign in with Google to use Drive transfer.');
+        return;
+      }
+
+      try {
+        setStatusText(`Large file (>25MB) detected. Uploading to Google Drive...`);
+        const targetParticipant = participants.find(p => p.user_id === targetUserId);
+        if (!targetParticipant) {
+          throw new Error('Could not find recipient email for Drive sharing');
+        }
+
+        const driveFile = await uploadToDrive(fileToSend, fileName, accessToken);
+        // Fallback email if participant.email is missing
+        const targetEmail = targetParticipant.email || (await supabase.from('profiles').select('email').eq('auth_user_id', targetUserId).single()).data?.email;
+        
+        if (targetEmail) {
+          await shareFileWithEmail(driveFile.id, targetEmail, accessToken);
+        }
+        
+        // Notify receiver via WebRTC with the link
+        await createTransferPeer(targetUserId, async (dc) => {
+          dc.send(JSON.stringify({ 
+            type: 'drive-link', 
+            name: fileName,
+            link: driveFile.webViewLink,
+            senderName: userName
+          }));
+          toast.success('Large file shared via Google Drive!');
+          setStatusText(null);
+        });
+
+        // Set timeout to expire drive link (1 hour)
+        setTimeout(async () => {
+          try {
+            await deleteFileFromDrive(driveFile.id, accessToken);
+            console.log(`Cleaned up Drive file: ${driveFile.id}`);
+          } catch (e) {
+            console.error('Failed to cleanup Drive file:', e);
+          }
+        }, 3600000);
+
+        return;
+      } catch (error: any) {
+        toast.error(`Drive Transfer Failed: ${error.message}`);
+        setStatusText(null);
+        return;
+      }
+    }
+
     transferPayloads.current.set(transferId, { blob: fileToSend, targetUserId });
 
     setQueuedTransfers(prev => [...prev, {

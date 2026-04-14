@@ -12,7 +12,7 @@ import {
 interface TransferRequestDialogProps {
   open: boolean;
   requesterName: string;
-  type: 'file' | 'folder' | 'video';
+  type: 'file' | 'folder' | 'video' | 'drive';
   onAccept: () => void;
   onReject: () => void;
 }

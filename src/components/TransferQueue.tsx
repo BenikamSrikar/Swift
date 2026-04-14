@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Progress } from '@/components/ui/progress';
-import { ChevronDown, ChevronUp, Clock, CheckCircle2, XCircle, FileIcon, FolderIcon } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, CheckCircle2, XCircle, FileIcon, FolderIcon, Cloud } from 'lucide-react';
 
 export interface QueuedTransfer {
   id: string;
@@ -9,7 +9,8 @@ export interface QueuedTransfer {
   progress: number;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   direction: 'sending' | 'receiving';
-  type: 'file' | 'folder' | 'video';
+  type: 'file' | 'folder' | 'video' | 'drive-link';
+  downloadUrl?: string;
 }
 
 interface TransferQueueProps {
@@ -84,6 +85,8 @@ function QueueItem({ transfer }: { transfer: QueuedTransfer }) {
           <div className="shrink-0">
             {transfer.type === 'folder' ? (
               <FolderIcon className="h-4 w-4 text-primary" />
+            ) : transfer.type === 'drive-link' ? (
+              <Cloud className="h-4 w-4 text-orange-500 hover:animate-pulse" />
             ) : (
               <FileIcon className="h-4 w-4 text-blue-500" />
             )}
