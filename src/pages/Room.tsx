@@ -712,7 +712,7 @@ export default function Room() {
     }
     peerConnections.current.forEach((pc) => pc.close());
     peerConnections.current.clear();
-    navigate('/connection');
+    navigate('/');
   };
 
   const copyRoomId = () => {
@@ -780,32 +780,34 @@ export default function Room() {
               }}
             />
 
-            <div className={`grid gap-4 w-full transition-all duration-500 ${
-              participants.length <= 1 ? 'grid-cols-1 max-w-sm mx-auto' : 
-              participants.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
-              participants.length === 3 ? 'grid-cols-1 sm:grid-cols-3' :
+            <div className={`grid gap-6 w-full transition-all duration-700 ${
+              participants.filter(p => p.user_id !== userId).length === 1 ? 'grid-cols-1 max-w-4xl mx-auto' :
+              participants.filter(p => p.user_id !== userId).length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+              participants.filter(p => p.user_id !== userId).length === 3 ? 'grid-cols-1 sm:grid-cols-3' :
               'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
             }`}>
-              {/* Always show current user first */}
-              <div className="animate-in fade-in zoom-in-95 duration-500">
-                <UserCard name={userName || 'You'} avatarUrl={profile?.avatar_url} isHost={isHost} />
-              </div>
-
               {participants
                 .filter((p) => p.user_id !== userId)
-                .map((p, i) => (
-                  <div key={p.user_id} className="animate-in fade-in zoom-in-95 duration-500" style={{ animationDelay: `${(i + 1) * 150}ms` }}>
-                    <UserCard
-                      name={p.name}
-                      avatarUrl={p.avatar_url}
-                      isHost={p.user_id === room?.host_id}
-                      showHostControls={isHost}
-                      onSendFile={() => setUploadModal({ open: true, targetUserId: p.user_id, mode: 'file' })}
-                      onSendFolder={() => setUploadModal({ open: true, targetUserId: p.user_id, mode: 'folder' })}
-                      onRemove={() => handleRemoveUser(p.user_id)}
-                    />
-                  </div>
-                ))}
+                .map((p, i) => {
+                  const othersCount = participants.filter(op => op.user_id !== userId).length;
+                  return (
+                    <div 
+                      key={p.user_id} 
+                      className={`animate-in fade-in zoom-in-95 duration-500 ${othersCount === 1 ? 'h-[60vh] sm:h-[70vh]' : 'h-full'}`} 
+                      style={{ animationDelay: `${i * 150}ms` }}
+                    >
+                      <UserCard
+                        name={p.name}
+                        avatarUrl={p.avatar_url}
+                        isHost={p.user_id === room?.host_id}
+                        showHostControls={isHost}
+                        onSendFile={() => setUploadModal({ open: true, targetUserId: p.user_id, mode: 'file' })}
+                        onSendFolder={() => setUploadModal({ open: true, targetUserId: p.user_id, mode: 'folder' })}
+                        onRemove={() => handleRemoveUser(p.user_id)}
+                      />
+                    </div>
+                  );
+                })}
 
               {participants.length === 1 && isHost && (
                 <div className="col-span-full flex flex-col items-center justify-center py-20 text-muted-foreground animate-in fade-in">
