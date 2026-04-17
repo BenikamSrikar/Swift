@@ -254,15 +254,39 @@ export default function Room() {
   useEffect(() => {
     if (!roomId) return;
 
+    console.log(`Subscribing to participant changes for room: ${roomId}`);
     const channel = supabase
       .channel(`room-participants-${roomId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants', filter: `room_id=eq.${roomId}` }, () => {
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'room_participants', 
+        filter: `room_id=eq.${roomId}` 
+      }, (payload) => {
+        console.log('Participant change detected:', payload);
         loadParticipants();
+        
+        // If it's a new pending request and I'm the host, show a toast
+        if (payload.eventType === 'INSERT' && payload.new.status === 'pending' && isHost) {
+          toast.info('New connection request received');
+        }
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Subscription status for ${roomId}:`, status);
+      });
 
-    return () => { supabase.removeChannel(channel); };
-  }, [roomId, loadParticipants]);
+    // Heartbeat to keep room active
+    const heartbeat = setInterval(async () => {
+      if (isHost && roomId) {
+        await supabase.from('rooms').update({ status: 'active' }).eq('room_id', roomId);
+      }
+    }, 10000);
+
+    return () => { 
+      supabase.removeChannel(channel); 
+      clearInterval(heartbeat);
+    };
+  }, [roomId, loadParticipants, isHost]);
 
   // Signaling channel
   useEffect(() => {
