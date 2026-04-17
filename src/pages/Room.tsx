@@ -68,6 +68,19 @@ export default function Room() {
 
   const isHost = room?.host_id === userId;
   const [removedByHost, setRemovedByHost] = useState(false);
+  const isTransferPaused = useRef<Set<string>>(new Set());
+
+  // Browser Reload Protection
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (queuedTransfers.some(t => t.status === 'processing')) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [queuedTransfers]);
 
   const generateTransferId = () => {
     try {
@@ -453,12 +466,19 @@ export default function Room() {
   const sendBlobInChunks = async (
     dc: RTCDataChannel,
     blob: Blob,
+    transferId: string,
     onProgress?: (sent: number, total: number) => void
   ) => {
     let offset = 0;
     const total = blob.size;
 
     while (offset < total) {
+      // Pause Logic
+      while (isTransferPaused.current.has(transferId)) {
+        await new Promise(r => setTimeout(r, 500));
+        if (dc.readyState !== 'open') return;
+      }
+
       if (dc.bufferedAmount > DATA_CHANNEL_BUFFER_LIMIT) {
         await waitForBufferedAmount(dc);
       }
@@ -547,7 +567,7 @@ export default function Room() {
           size: next.size 
         }));
 
-        await sendBlobInChunks(dc, payload.blob, (sent, total) => {
+        await sendBlobInChunks(dc, payload.blob, next.id, (sent, total) => {
           const pct = Math.min(Math.round((sent / total) * 100), 100);
           setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, progress: pct } : t));
         });
@@ -582,6 +602,20 @@ export default function Room() {
 
     startTransfer();
   }, [queuedTransfers, userId, userName, profile, participants]);
+
+  const handleRemoveUser = async (targetUserId: string) => {
+    if (!isHost || !roomId) return;
+    try {
+      await supabase
+        .from('room_participants')
+        .update({ status: 'blocked' })
+        .eq('room_id', roomId)
+        .eq('user_id', targetUserId);
+      toast.success('Participant removed');
+    } catch (error) {
+      toast.error('Failed to remove participant');
+    }
+  };
 
   // ── Send files ──
   const sendFilesViaPeer = async (targetUserId: string, files: File[]) => {
@@ -710,34 +744,40 @@ export default function Room() {
               </div>
             )}
 
-            <TransferQueue transfers={queuedTransfers} />
+            <TransferQueue 
+              transfers={queuedTransfers} 
+              onPause={(id) => {
+                isTransferPaused.current.add(id);
+                setQueuedTransfers(prev => prev.map(t => t.id === id ? { ...t, status: 'paused' } : t));
+              }}
+              onResume={(id) => {
+                isTransferPaused.current.delete(id);
+                setQueuedTransfers(prev => prev.map(t => t.id === id ? { ...t, status: 'processing' } : t));
+              }}
+            />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+            <div className={`grid gap-4 w-full transition-all duration-500 ${
+              participants.length <= 1 ? 'grid-cols-1 max-w-sm mx-auto' : 
+              participants.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+              participants.length === 3 ? 'grid-cols-1 sm:grid-cols-3' :
+              'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+            }`}>
+              {/* Always show current user first */}
+              <div className="animate-in fade-in zoom-in-95 duration-500">
+                <UserCard name={userName || 'You'} avatarUrl={profile?.avatar_url} isHost={isHost} />
+              </div>
+
               {participants
                 .filter((p) => p.user_id !== userId)
                 .map((p, i) => (
-                  <div key={p.user_id} className="animate-in fade-in zoom-in-95 duration-300" style={{ animationDelay: `${i * 100}ms` }}>
+                  <div key={p.user_id} className="animate-in fade-in zoom-in-95 duration-500" style={{ animationDelay: `${(i + 1) * 150}ms` }}>
                     <UserCard
                       name={p.name}
                       avatarUrl={p.avatar_url}
                       isHost={p.user_id === room?.host_id}
                       showHostControls={isHost}
-                      onRequestFile={() => {
-                        transferChannelRef.current?.send({
-                          type: 'broadcast',
-                          event: 'transfer-request',
-                          payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, type: 'file' },
-                        });
-                        toast.info('File requested');
-                      }}
-                      onRequestFolder={() => {
-                        transferChannelRef.current?.send({
-                          type: 'broadcast',
-                          event: 'transfer-request',
-                          payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, type: 'folder' },
-                        });
-                        toast.info('Folder requested');
-                      }}
+                      onSendFile={() => setUploadModal({ open: true, targetUserId: p.user_id, mode: 'file' })}
+                      onSendFolder={() => setUploadModal({ open: true, targetUserId: p.user_id, mode: 'folder' })}
                       onRemove={() => handleRemoveUser(p.user_id)}
                     />
                   </div>
