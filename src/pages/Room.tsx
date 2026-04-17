@@ -18,8 +18,8 @@ import { format } from 'date-fns';
 import JSZip from 'jszip';
 import TransferQueue, { QueuedTransfer } from '@/components/TransferQueue';
 
-const DATA_CHANNEL_CHUNK_SIZE = 262144; // 256KB
-const DATA_CHANNEL_BUFFER_LIMIT = DATA_CHANNEL_CHUNK_SIZE * 8;
+const DATA_CHANNEL_CHUNK_SIZE = 16384; // 16KB - Smaller chunks but more frequent for better flow control
+const DATA_CHANNEL_BUFFER_LIMIT = 64 * 1024 * 1024; // 64MB - Dramatically increased for speed
 const SIZE_THRESHOLD = 25 * 1024 * 1024; // 25MB
 
 interface Participant {
@@ -69,6 +69,7 @@ export default function Room() {
   const isHost = room?.host_id === userId;
   const [removedByHost, setRemovedByHost] = useState(false);
   const isTransferPaused = useRef<Set<string>>(new Set());
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
 
   // Browser Reload Protection
   useEffect(() => {
@@ -98,19 +99,29 @@ export default function Room() {
     }
 
     const loadRoom = async () => {
-      const { data: roomData } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('room_id', roomId)
-        .single();
+      try {
+        const normalizedRoomId = roomId.trim().toUpperCase();
+        const { data: roomData, error } = await supabase
+          .from('rooms')
+          .select('*')
+          .eq('room_id', normalizedRoomId)
+          .single();
 
-      if (!roomData) {
-        toast.error('Room not found');
-        navigate(`/connection?userId=${userId}`);
-        return;
+        if (error || !roomData) {
+          toast.error('Room not found or inaccessible');
+          navigate(`/connection?userId=${userId}`);
+          return;
+        }
+
+        setRoom(roomData);
+        if (roomData.status === 'locked' && roomData.host_id !== userId) {
+          toast.error('This room has been closed by the host');
+          navigate('/connection');
+        }
+      } catch (err) {
+        console.error('Room load error:', err);
+        navigate('/');
       }
-
-      setRoom(roomData);
     };
 
     loadRoom();
@@ -196,14 +207,14 @@ export default function Room() {
     });
 
     setPendingRequests(newPending);
-    if (newPending.length > 0) {
-      setCurrentRequest((prev) => {
-        const stillInList = newPending.find(np => np.userId === prev?.userId);
-        return (stillInList ? prev : newPending[0]) || null;
-      });
-    } else {
-      setCurrentRequest(null);
-    }
+    
+    // Auto-select the next request if we aren't currently processing one
+    setCurrentRequest((prev) => {
+      if (!newPending.length) return null;
+      const stillInList = newPending.find(np => np.userId === prev?.userId);
+      if (stillInList) return stillInList; // Keep current if still pending
+      return newPending[0]; // Otherwise take the first one
+    });
   }, [roomId, userId, room?.host_id, isHost, navigate]);
 
   useEffect(() => {
@@ -496,22 +507,32 @@ export default function Room() {
     let offset = 0;
     const total = blob.size;
 
+    // Use larger chunks for files > 25MB if possible, but stay within reliable limits
+    const currentChunkSize = total > SIZE_THRESHOLD ? 65536 : DATA_CHANNEL_CHUNK_SIZE;
+
     while (offset < total) {
-      // Pause Logic
-      while (isTransferPaused.current.has(transferId)) {
+      if (isTransferPaused.current.has(transferId)) {
         await new Promise(r => setTimeout(r, 500));
         if (dc.readyState !== 'open') return;
+        continue;
       }
 
       if (dc.bufferedAmount > DATA_CHANNEL_BUFFER_LIMIT) {
         await waitForBufferedAmount(dc);
       }
 
-      const end = Math.min(offset + DATA_CHANNEL_CHUNK_SIZE, total);
+      const end = Math.min(offset + currentChunkSize, total);
       const chunk = await blob.slice(offset, end).arrayBuffer();
-      dc.send(chunk);
-      offset = end;
-      onProgress?.(offset, total);
+      
+      try {
+        dc.send(chunk);
+        offset = end;
+        onProgress?.(offset, total);
+      } catch (e) {
+        console.error('Send error:', e);
+        if (dc.readyState !== 'open') break;
+        await new Promise(r => setTimeout(r, 100)); // Short backoff
+      }
     }
   };
 
@@ -828,19 +849,52 @@ export default function Room() {
       </main>
 
       <JoinRequestDialog
-        open={!!currentRequest && isHost}
+        open={!!currentRequest && isHost && !processingRequestId}
         requesterName={currentRequest?.name || ''}
         requesterEmail={currentRequest?.email}
         requesterAvatar={currentRequest?.avatar_url}
         onAccept={async () => {
-          if (!currentRequest) return;
-          await supabase.from('room_participants').update({ status: 'accepted' }).eq('room_id', roomId!).eq('user_id', currentRequest.userId);
-          loadParticipants();
+          if (!currentRequest || processingRequestId) return;
+          const targetId = currentRequest.userId;
+          setProcessingRequestId(targetId);
+          try {
+            const { error } = await supabase
+              .from('room_participants')
+              .update({ status: 'accepted' })
+              .eq('room_id', roomId?.toUpperCase() || '')
+              .eq('user_id', targetId);
+            
+            if (error) throw error;
+            toast.success('Request accepted');
+            // Notification handled by realtime subscription
+          } catch (err) {
+            console.error('Approval error:', err);
+            toast.error('Failed to accept request');
+          } finally {
+            setProcessingRequestId(null);
+            loadParticipants();
+          }
         }}
         onReject={async () => {
-          if (!currentRequest) return;
-          await supabase.from('room_participants').update({ status: 'blocked' }).eq('room_id', roomId!).eq('user_id', currentRequest.userId);
-          loadParticipants();
+          if (!currentRequest || processingRequestId) return;
+          const targetId = currentRequest.userId;
+          setProcessingRequestId(targetId);
+          try {
+            const { error } = await supabase
+              .from('room_participants')
+              .update({ status: 'blocked' })
+              .eq('room_id', roomId?.toUpperCase() || '')
+              .eq('user_id', targetId);
+              
+            if (error) throw error;
+            toast.info('Request rejected');
+          } catch (err) {
+            console.error('Rejection error:', err);
+            toast.error('Failed to reject request');
+          } finally {
+            setProcessingRequestId(null);
+            loadParticipants();
+          }
         }}
       />
 
