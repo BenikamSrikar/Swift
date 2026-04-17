@@ -199,7 +199,7 @@ export default function Room() {
     if (newPending.length > 0) {
       setCurrentRequest((prev) => {
         const stillInList = newPending.find(np => np.userId === prev?.userId);
-        return stillInList ? prev : newPending[0];
+        return (stillInList ? prev : newPending[0]) || null;
       });
     } else {
       setCurrentRequest(null);
@@ -691,7 +691,7 @@ export default function Room() {
 
   const handleLogout = async () => {
     if (isHost && roomId) {
-      await supabase.from('rooms').update({ status: 'locked' }).eq('room_id', roomId);
+      await supabase.from('rooms').update({ status: 'locked' }).eq('room_id', roomId!);
     }
     if (userId) {
       await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
@@ -705,7 +705,7 @@ export default function Room() {
 
   const handleLeaveMeeting = async () => {
     if (isHost && roomId) {
-      await supabase.from('rooms').update({ status: 'locked' }).eq('room_id', roomId);
+      await supabase.from('rooms').update({ status: 'locked' }).eq('room_id', roomId!);
     }
     if (userId) {
       await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
@@ -871,9 +871,4 @@ export default function Room() {
       />
     </div>
   );
-
-  async function handleRemoveUser(targetUserId: string) {
-    await supabase.from('room_participants').update({ status: 'blocked' }).eq('room_id', roomId!).eq('user_id', targetUserId);
-    toast.error('User disconnected');
-  }
 }
