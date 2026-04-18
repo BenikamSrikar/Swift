@@ -10,6 +10,13 @@ import { Plus, LogIn, Clock } from 'lucide-react';
 import HistoryModal from '@/components/HistoryModal';
 import ConnectionFeatures from '@/components/ConnectionFeatures';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
   const particles = useMemo(() => {
@@ -73,6 +80,7 @@ export default function Connection() {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const [activeRoomMember, setActiveRoomMember] = useState<{ roomId: string } | null>(null);
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && (!user || !profile)) {
@@ -152,6 +160,7 @@ export default function Connection() {
     const { data: existing } = await supabase.from('room_participants').select('status').eq('room_id', rid).eq('user_id', user.id).single();
     
     if (existing?.status === 'accepted') {
+      setIsJoinModalOpen(false);
       navigate(`/room/${rid}`);
       return;
     }
@@ -163,6 +172,7 @@ export default function Connection() {
       await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
     }
     await supabase.from('room_participants').insert({ room_id: rid, user_id: user.id, status: 'pending' });
+    setIsJoinModalOpen(false);
     setWaitingApproval(true);
     const channel = supabase.channel(`join-${user.id}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'room_participants', filter: `user_id=eq.${user.id}` }, (payload) => {
       if (payload.new.status === 'accepted') { channel.unsubscribe(); navigate(`/room/${rid}`); }
@@ -174,6 +184,14 @@ export default function Connection() {
     await supabase.from('sessions').delete().eq('user_id', user.id);
     await signOut();
     navigate('/');
+  };
+
+  const onJoinButtonClick = () => {
+    if (activeRoomMember) {
+      handleJoinRoom(activeRoomMember.roomId);
+    } else {
+      setIsJoinModalOpen(true);
+    }
   };
 
   return (
@@ -267,43 +285,28 @@ export default function Connection() {
                     <LogIn className="h-6 w-6 text-primary" />
                   </div>
                   <div className="text-center w-full">
-                    <h3 className="font-bold text-base mb-0.5">Join a Room {activeRoomMember && "(Invited)"}</h3>
+                    <h3 className="font-bold text-base mb-0.5">Join a Room</h3>
                     <div className="flex flex-col gap-3 mt-2">
-                      {activeRoomMember ? (
-                        <div className="flex flex-col gap-2">
-                          <p className="text-[10px] text-muted-foreground mb-1">You are a member of room <span className="text-primary font-bold">{activeRoomMember.roomId}</span></p>
-                          <Button 
-                            onClick={() => handleJoinRoom(activeRoomMember.roomId)}
-                            className="w-full h-12 rounded-xl text-sm font-bold bg-secondary hover:bg-secondary/80 text-secondary-foreground shadow-lg active:scale-95 transition-all"
-                          >
-                            Join Now
-                          </Button>
-                          <button 
-                            onClick={() => setActiveRoomMember(null)}
-                            className="text-[9px] text-muted-foreground hover:text-foreground underline underline-offset-2 opacity-60 hover:opacity-100 transition-opacity"
-                          >
-                            Enter a different code
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="text-[10px] text-muted-foreground">Join an existing room using a 6-digit code.</p>
-                          <Input
-                            placeholder="Enter 6-Digit Room Code"
-                            maxLength={6}
-                            value={roomInput}
-                            onChange={(e) => {
-                              const val = e.target.value.toUpperCase();
-                              if (val.length <= 6) {
-                                setRoomInput(val);
-                                if (val.length === 6) {
-                                  handleJoinRoom(val);
-                                }
-                              }
-                            }}
-                            className="h-12 rounded-xl bg-muted/50 border-none text-center text-[16px] font-bold placeholder:font-normal focus-visible:ring-1 focus-visible:ring-primary/30 tracking-widest placeholder:tracking-normal mt-2"
-                          />
-                        </>
+                       <p className="text-[10px] text-muted-foreground">
+                        {activeRoomMember 
+                          ? `You are a member of room ${activeRoomMember.roomId}`
+                          : "Enter a code to join an existing session."
+                        }
+                       </p>
+                       <Button 
+                        onClick={onJoinButtonClick}
+                        variant={activeRoomMember ? "default" : "secondary"}
+                        className={`w-full h-12 rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-all ${activeRoomMember ? 'volts-gradient text-white' : ''}`}
+                      >
+                        Join Now
+                      </Button>
+                      {activeRoomMember && (
+                        <button 
+                          onClick={() => setIsJoinModalOpen(true)}
+                          className="text-[9px] text-muted-foreground hover:text-foreground underline underline-offset-2 opacity-60 hover:opacity-100 transition-opacity"
+                        >
+                          Join with a different code
+                        </button>
                       )}
                     </div>
                   </div>
@@ -313,6 +316,45 @@ export default function Connection() {
           </AnimatePresence>
         </div>
       </main>
+
+      <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
+        <DialogContent className="sm:max-w-md bg-card/90 backdrop-blur-2xl border-border/50 rounded-3xl p-8">
+          <DialogHeader className="items-center text-center">
+            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
+              <LogIn className="h-6 w-6 text-primary" />
+            </div>
+            <DialogTitle className="text-xl font-bold">Enter Room Code</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Enter the 6-digit code shared by the host to request entry.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <Input
+              placeholder="000XXX"
+              maxLength={6}
+              value={roomInput}
+              autoFocus
+              onChange={(e) => {
+                const val = e.target.value.toUpperCase();
+                if (val.length <= 6) {
+                  setRoomInput(val);
+                  if (val.length === 6) {
+                    handleJoinRoom(val);
+                  }
+                }
+              }}
+              className="h-14 rounded-2xl bg-muted/50 border-none text-center text-2xl font-black tracking-[0.5em] placeholder:tracking-normal placeholder:font-normal focus-visible:ring-2 focus-visible:ring-primary/40 shadow-inner"
+            />
+            <Button 
+              onClick={() => handleJoinRoom()} 
+              disabled={joining || roomInput.length < 6}
+              className="w-full h-12 rounded-xl font-bold volts-gradient"
+            >
+              {joining ? 'Searching...' : 'Continue'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <HistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} senderEmail={profile.email} senderName={profile.name} />
     </div>
