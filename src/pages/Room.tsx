@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import JSZip from 'jszip';
 import TransferQueue, { QueuedTransfer } from '@/components/TransferQueue';
+import AddMembersSidebar from '@/components/AddMembersSidebar';
 
 const DATA_CHANNEL_CHUNK_SIZE = 16384; // 16KB - Smaller chunks but more frequent for better flow control
 const DATA_CHANNEL_BUFFER_LIMIT = 64 * 1024 * 1024; // 64MB - Dramatically increased for speed
@@ -746,6 +747,7 @@ export default function Room() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      {isHost && roomId && <AddMembersSidebar roomId={roomId} hostId={userId!} />}
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
       <main className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full">

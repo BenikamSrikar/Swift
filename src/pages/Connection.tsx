@@ -72,11 +72,31 @@ export default function Connection() {
   const [waitingApproval, setWaitingApproval] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  const [activeRoomMember, setActiveRoomMember] = useState<{ roomId: string } | null>(null);
+
   useEffect(() => {
     if (!authLoading && (!user || !profile)) {
       navigate('/');
     }
   }, [authLoading, user, profile, navigate]);
+
+  useEffect(() => {
+    if (!user) return;
+    const checkActiveRoom = async () => {
+      // Find rooms where user is an accepted participant
+      const { data: participation } = await supabase
+        .from('room_participants')
+        .select('room_id, rooms(status)')
+        .eq('user_id', user.id)
+        .eq('status', 'accepted')
+        .maybeSingle();
+
+      if (participation && (participation as any).rooms?.status === 'active') {
+        setActiveRoomMember({ roomId: participation.room_id });
+      }
+    };
+    checkActiveRoom();
+  }, [user]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -122,12 +142,23 @@ export default function Connection() {
     if (!rawVal.trim()) return;
     setJoining(true);
     const rid = rawVal.trim().toUpperCase();
+    
+    // Check if room exists and is active
     const { data: room } = await supabase.from('rooms').select('*').eq('room_id', rid).single();
     if (!room) { toast.error('Room not found'); setJoining(false); return; }
     if (room.status === 'locked') { toast.error('Room is locked'); setJoining(false); return; }
+
+    // Check if user is already accepted (e.g. added by host)
     const { data: existing } = await supabase.from('room_participants').select('status').eq('room_id', rid).eq('user_id', user.id).single();
+    
+    if (existing?.status === 'accepted') {
+      navigate(`/room/${rid}`);
+      return;
+    }
+
     if (existing?.status === 'blocked') { toast.error('You are blocked'); setJoining(false); return; }
-    // Remove any previous stale row before re-joining
+    
+    // If no existing or not accepted, request join
     if (existing) {
       await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
     }
@@ -236,23 +267,44 @@ export default function Connection() {
                     <LogIn className="h-6 w-6 text-primary" />
                   </div>
                   <div className="text-center w-full">
-                    <h3 className="font-bold text-base mb-0.5">Join a Room</h3>
-                    <div className="flex flex-col gap-2 mt-2">
-                      <Input
-                        placeholder="Enter 6-Digit Room Code"
-                        maxLength={6}
-                        value={roomInput}
-                        onChange={(e) => {
-                          const val = e.target.value.toUpperCase();
-                          if (val.length <= 6) {
-                            setRoomInput(val);
-                            if (val.length === 6) {
-                              handleJoinRoom(val);
-                            }
-                          }
-                        }}
-                        className="h-12 rounded-xl bg-muted/50 border-none text-center text-[16px] font-bold placeholder:font-normal focus-visible:ring-1 focus-visible:ring-primary/30 tracking-widest placeholder:tracking-normal"
-                      />
+                    <h3 className="font-bold text-base mb-0.5">Join a Room {activeRoomMember && "(Invited)"}</h3>
+                    <div className="flex flex-col gap-3 mt-2">
+                      {activeRoomMember ? (
+                        <div className="flex flex-col gap-2">
+                          <p className="text-[10px] text-muted-foreground mb-1">You are a member of room <span className="text-primary font-bold">{activeRoomMember.roomId}</span></p>
+                          <Button 
+                            onClick={() => handleJoinRoom(activeRoomMember.roomId)}
+                            className="w-full h-12 rounded-xl text-sm font-bold bg-secondary hover:bg-secondary/80 text-secondary-foreground shadow-lg active:scale-95 transition-all"
+                          >
+                            Join Now
+                          </Button>
+                          <button 
+                            onClick={() => setActiveRoomMember(null)}
+                            className="text-[9px] text-muted-foreground hover:text-foreground underline underline-offset-2 opacity-60 hover:opacity-100 transition-opacity"
+                          >
+                            Enter a different code
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-[10px] text-muted-foreground">Join an existing room using a 6-digit code.</p>
+                          <Input
+                            placeholder="Enter 6-Digit Room Code"
+                            maxLength={6}
+                            value={roomInput}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase();
+                              if (val.length <= 6) {
+                                setRoomInput(val);
+                                if (val.length === 6) {
+                                  handleJoinRoom(val);
+                                }
+                              }
+                            }}
+                            className="h-12 rounded-xl bg-muted/50 border-none text-center text-[16px] font-bold placeholder:font-normal focus-visible:ring-1 focus-visible:ring-primary/30 tracking-widest placeholder:tracking-normal mt-2"
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
