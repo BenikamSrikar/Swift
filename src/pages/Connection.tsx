@@ -334,16 +334,8 @@ export default function Connection() {
                         variant={activeRoomMember ? "default" : "secondary"}
                         className={`w-full h-12 rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-all ${activeRoomMember ? 'volts-gradient text-white' : ''}`}
                       >
-                        Join Now
+                        {activeRoomMember ? 'Join Room' : 'Join Now'}
                       </Button>
-                      {activeRoomMember && (
-                        <button 
-                          onClick={() => setIsJoinModalOpen(true)}
-                          className="text-[9px] text-muted-foreground hover:text-foreground underline underline-offset-2 opacity-60 hover:opacity-100 transition-opacity"
-                        >
-                          Join with a different code
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -353,7 +345,7 @@ export default function Connection() {
         </div>
       </main>
 
-      <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
+      <Dialog open={isJoinModalOpen && !activeRoomMember} onOpenChange={setIsJoinModalOpen}>
         <DialogContent className="sm:max-w-md bg-card/90 backdrop-blur-2xl border-border/50 rounded-3xl p-8">
           <DialogHeader className="items-center text-center">
             <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
