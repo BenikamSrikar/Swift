@@ -63,6 +63,10 @@ function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
   );
 }
 
+export default function Connection() {
+  const navigate = useNavigate();
+  const { user, profile, loading: authLoading, signOut } = useAuth();
+
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [waitingApproval, setWaitingApproval] = useState(false);

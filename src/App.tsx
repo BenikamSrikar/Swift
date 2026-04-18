@@ -5,10 +5,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import ThemePicker from "@/components/ThemePicker";
-import Index from "./pages/Index.tsx";
-import Connection from "./pages/Connection.tsx";
-import Room from "./pages/Room.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import Index from "./pages/Index";
+import Connection from "./pages/Connection";
+import Room from "./pages/Room";
+import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
