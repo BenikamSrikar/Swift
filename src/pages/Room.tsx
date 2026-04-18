@@ -12,12 +12,11 @@ import HistoryModal from '@/components/HistoryModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Copy, Check, Menu } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import JSZip from 'jszip';
 import TransferQueue, { QueuedTransfer } from '@/components/TransferQueue';
-import AddMembersSidebar from '@/components/AddMembersSidebar';
 
 const DATA_CHANNEL_CHUNK_SIZE = 16384; // 16KB - Smaller chunks but more frequent for better flow control
 const DATA_CHANNEL_BUFFER_LIMIT = 64 * 1024 * 1024; // 64MB - Dramatically increased for speed
@@ -71,7 +70,6 @@ export default function Room() {
   const [removedByHost, setRemovedByHost] = useState(false);
   const isTransferPaused = useRef<Set<string>>(new Set());
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Browser Reload Protection
   useEffect(() => {
@@ -119,25 +117,6 @@ export default function Room() {
         if (roomData.status === 'locked' && roomData.host_id !== userId) {
           toast.error('This room has been closed by the host');
           navigate('/connection');
-        }
-
-        // Auto-accept if invited
-        if (userId && roomId) {
-          const { data: participation } = await supabase
-            .from('room_participants')
-            .select('status')
-            .eq('room_id', normalizedRoomId)
-            .eq('user_id', userId)
-            .single();
-
-          if (participation?.status === 'invited') {
-            await supabase
-              .from('room_participants')
-              .update({ status: 'accepted' })
-              .eq('room_id', normalizedRoomId)
-              .eq('user_id', userId);
-            loadParticipants();
-          }
         }
       } catch (err) {
         console.error('Room load error:', err);
@@ -766,32 +745,18 @@ export default function Room() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background overflow-hidden selection:bg-primary/20">
+    <div className="min-h-screen flex flex-col bg-background">
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
-      
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Blending Sidebar - YouTube Style */}
-        {isHost && (
-          <AddMembersSidebar 
-            roomId={roomId || ''} 
-            hostId={userId || ''} 
-            isOpen={isSidebarOpen} 
-            setIsOpen={setIsSidebarOpen}
-          />
-        )}
 
-        <main className="flex-1 relative overflow-y-auto px-4 py-8 sm:px-8">
-          {isHost && (
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className={`fixed top-[72px] z-50 p-2.5 rounded-xl bg-card/60 backdrop-blur-xl border border-border/40 hover:bg-card transition-all shadow-lg active:scale-95 ${isSidebarOpen ? 'left-[332px]' : 'left-4 md:left-6'}`}
-            >
-              <Menu className="w-5 h-5 text-primary" />
-            </button>
-          )}
-
-          <div className={`w-full max-w-[1600px] mx-auto transition-all duration-300 ${isHost && isSidebarOpen ? 'pl-4' : isHost ? 'pl-14' : ''}`}>
-            {removedByHost ? (
+      <main className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full relative">
+        {!room ? (
+          <div className="flex-1 flex items-center justify-center h-[60vh]">
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+              <p className="text-sm font-medium text-muted-foreground animate-pulse">Establishing secure connection...</p>
+            </div>
+          </div>
+        ) : removedByHost ? (
           <div className="flex flex-col items-center justify-center h-[60vh] gap-4 animate-fade-in text-center">
             <p className="text-xl font-bold text-destructive">Room Access Revoked</p>
             <p className="text-muted-foreground">The host has ended your session or blocked your access.</p>
@@ -889,7 +854,6 @@ export default function Room() {
           </>
         )}
       </main>
-    </div>
 
       <JoinRequestDialog
         open={!!currentRequest && isHost && !processingRequestId}
