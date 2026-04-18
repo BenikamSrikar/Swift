@@ -20,7 +20,7 @@ interface AddMembersSidebarProps {
 }
 
 export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [allUsers, setAllUsers] = useState<Profile[]>([]);
   const [roomParticipants, setRoomParticipants] = useState<string[]>([]); // Array of user_ids
   const [busyUsers, setBusyUsers] = useState<string[]>([]); // Array of user_ids in OTHER rooms
@@ -157,26 +157,32 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
                   return (
                     <div 
                       key={u.auth_user_id}
-                      className="group flex items-center gap-3 p-3 rounded-2xl hover:bg-muted/40 transition-all border border-transparent hover:border-border/40"
+                      className={`group flex items-center gap-3 p-3 rounded-2xl transition-all border ${
+                        isMember 
+                          ? 'bg-primary/10 border-primary/30 shadow-sm' 
+                          : 'hover:bg-muted/40 border-transparent hover:border-border/40'
+                      }`}
                     >
                       <div className="relative shrink-0">
                         {u.avatar_url ? (
                           <img src={u.avatar_url} alt={u.name} className="w-10 h-10 rounded-full object-cover border border-border" />
                         ) : (
-                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                            isMember ? 'bg-primary text-primary-foreground' : 'bg-primary/20 text-primary'
+                          }`}>
                             {u.name.charAt(0)}
                           </div>
                         )}
                         <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card ${isMember ? 'bg-green-500' : 'bg-muted-foreground/30'}`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{u.name}</p>
+                        <p className={`text-sm font-bold truncate ${isMember ? 'text-primary' : ''}`}>{u.name}</p>
                         <p className="text-[10px] text-muted-foreground truncate">{u.email}</p>
                       </div>
                       <Checkbox 
                         checked={isMember}
                         onCheckedChange={() => toggleMember(u.auth_user_id, isMember)}
-                        className="rounded-full w-5 h-5 border-2 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                        className="rounded-full w-5 h-5 border-2 data-[state=checked]:bg-primary data-[state=checked]:border-primary shadow-sm"
                       />
                     </div>
                   );
