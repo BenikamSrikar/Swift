@@ -79,6 +79,11 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
   }, [roomId, hostId]);
 
   const toggleMember = async (userId: string, isMember: boolean) => {
+    // Optimistic Update
+    setRoomParticipants(prev => 
+      isMember ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+
     try {
       if (isMember) {
         // Remove from room
@@ -103,6 +108,8 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
     } catch (err) {
       toast.error('Failed to update member');
       console.error(err);
+      // Rollback on error
+      fetchData();
     }
   };
 
@@ -157,13 +164,14 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
                   return (
                     <div 
                       key={u.auth_user_id}
-                      className={`group flex items-center gap-3 p-3 rounded-2xl transition-all border ${
+                      onClick={() => toggleMember(u.auth_user_id, isMember)}
+                      className={`group flex items-center gap-3 p-3 rounded-2xl transition-all border cursor-pointer ${
                         isMember 
-                          ? 'bg-primary/10 border-primary/30 shadow-sm' 
+                          ? 'bg-primary/10 border-primary/40 shadow-sm' 
                           : 'hover:bg-muted/40 border-transparent hover:border-border/40'
                       }`}
                     >
-                      <div className="relative shrink-0">
+                      <div className="relative shrink-0 pointer-events-none">
                         {u.avatar_url ? (
                           <img src={u.avatar_url} alt={u.name} className="w-10 h-10 rounded-full object-cover border border-border" />
                         ) : (
@@ -175,16 +183,16 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
                         )}
                         <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card ${isMember ? 'bg-green-500' : 'bg-muted-foreground/30'}`} />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 pointer-events-none">
                         <div className="flex items-center gap-1.5">
-                          <p className={`text-sm font-bold truncate ${isMember ? 'text-primary' : ''}`}>{u.name}</p>
+                          <p className={`text-sm font-bold truncate ${isMember ? 'text-primary uppercase' : ''}`}>{u.name}</p>
                           {isMember && (
                             <motion.span 
                               initial={{ opacity: 0, scale: 0.8 }}
                               animate={{ opacity: 1, scale: 1 }}
-                              className="text-[8px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter shrink-0"
+                              className="text-[7px] bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-black uppercase tracking-widest shrink-0"
                             >
-                              Member Invited
+                              Invited
                             </motion.span>
                           )}
                         </div>
@@ -193,7 +201,8 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
                       <Checkbox 
                         checked={isMember}
                         onCheckedChange={() => toggleMember(u.auth_user_id, isMember)}
-                        className="rounded-full w-5 h-5 border-2 data-[state=checked]:bg-primary data-[state=checked]:border-primary shadow-sm"
+                        className="rounded-full w-6 h-6 border-2 border-primary data-[state=checked]:bg-primary shadow-md"
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </div>
                   );

@@ -112,9 +112,29 @@ export default function Connection() {
           roomId: participation.room_id,
           hostName: (participation as any).rooms?.profiles?.name || 'Unknown Host'
         });
+      } else {
+        setActiveRoomMember(null);
       }
     };
+
     checkActiveRoom();
+
+    // Add realtime subscription for invitations
+    const channel = supabase
+      .channel(`invitations-${user.id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'room_participants', 
+        filter: `user_id=eq.${user.id}` 
+      }, () => {
+        checkActiveRoom();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   useEffect(() => {
