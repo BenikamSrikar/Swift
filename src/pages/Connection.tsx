@@ -91,30 +91,46 @@ export default function Connection() {
   useEffect(() => {
     if (!user) return;
     const checkActiveRoom = async () => {
-      // Find rooms where user is an accepted or invited participant
-      // We removed the strict 'active' status check to be more resilient to heartbeat delays
-      const { data: participation } = await supabase
-        .from('room_participants')
-        .select(`
-          room_id, 
-          status,
-          rooms!inner (
-            status,
-            host_id,
-            profiles:host_id (name)
-          )
-        `)
-        .eq('user_id', user.id)
-        .in('status', ['accepted', 'invited'])
-        .order('created_at', { ascending: false });
+      try {
+        // 1. Find the participant entry
+        const { data: participations } = await supabase
+          .from('room_participants')
+          .select('room_id, status')
+          .eq('user_id', user.id)
+          .in('status', ['accepted', 'invited'])
+          .order('created_at', { ascending: false });
 
-      if (participation && participation.length > 0) {
-        const primary = participation[0];
-        setActiveRoomMember({ 
-          roomId: primary.room_id,
-          hostName: (primary as any).rooms?.profiles?.name || 'Unknown Host'
-        });
-      } else {
+        if (!participations || participations.length === 0) {
+          setActiveRoomMember(null);
+          return;
+        }
+
+        const part = participations[0];
+        
+        // 2. Fetch the room details
+        const { data: roomData } = await supabase
+          .from('rooms')
+          .select('room_id, host_id, status')
+          .eq('room_id', part.room_id)
+          .maybeSingle();
+
+        if (roomData) {
+          // 3. Fetch the host's profile
+          const { data: hostProfile } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('auth_user_id', roomData.host_id)
+            .maybeSingle();
+
+          setActiveRoomMember({ 
+            roomId: roomData.room_id,
+            hostName: hostProfile?.name || 'Unknown Host'
+          });
+        } else {
+          setActiveRoomMember(null);
+        }
+      } catch (err) {
+        console.error('Error checking active room:', err);
         setActiveRoomMember(null);
       }
     };
@@ -269,6 +285,38 @@ export default function Connection() {
           </div>
 
           <AnimatePresence mode="wait">
+            {activeRoomMember && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: -20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                className="w-full max-w-2xl mb-12 p-1 rounded-3xl bg-gradient-to-r from-primary/30 via-primary/10 to-primary/30 shadow-2xl relative group"
+              >
+                <div className="bg-card/80 backdrop-blur-2xl rounded-[22px] p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+                  <div className="flex items-center gap-5">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse" />
+                      <div className="relative w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center border border-primary/30">
+                        <LogIn className="w-8 h-8 text-primary" />
+                      </div>
+                    </div>
+                    <div className="text-center sm:text-left">
+                      <h2 className="text-lg font-bold tracking-tight">Special Invitation Active</h2>
+                      <p className="text-sm text-muted-foreground">
+                        You've been added to room <span className="text-primary font-black">{activeRoomMember.roomId}</span> by <span className="text-foreground font-bold">{activeRoomMember.hostName}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={() => handleJoinRoom(activeRoomMember.roomId)}
+                    className="volts-gradient h-14 px-10 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all w-full sm:w-auto"
+                  >
+                    Join with Special Access
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
             {waitingApproval ? (
               <motion.div 
                 key="waiting"
@@ -313,30 +361,26 @@ export default function Connection() {
                 </div>
 
                 {/* Join Card */}
-                <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-4 group hover:border-primary/30 transition-all duration-500">
-                  <div className="w-12 h-12 bg-secondary/20 rounded-xl flex items-center justify-center group-hover:bg-secondary/30 transition-colors">
+                <div className={`bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-4 group transition-all duration-500 ${activeRoomMember ? 'opacity-50 grayscale pointer-events-none' : 'hover:border-primary/30'}`}>
+                  <div className="w-12 h-12 bg-secondary/20 rounded-xl flex items-center justify-center">
                     <LogIn className="h-6 w-6 text-primary" />
                   </div>
                   <div className="text-center w-full">
-                    <h3 className="font-bold text-base mb-0.5">Join a Room</h3>
+                    <h3 className="font-bold text-base mb-0.5">Request Access</h3>
                     <div className="flex flex-col gap-3 mt-2">
-                       <p className="text-[10px] text-muted-foreground leading-relaxed">
+                       <p className="text-[10px] text-muted-foreground">
                         {activeRoomMember 
-                          ? (
-                            <>
-                              You are invited to <span className="text-primary font-bold">{activeRoomMember.roomId}</span><br />
-                              hosted by <span className="font-bold text-foreground">{activeRoomMember.hostName}</span>
-                            </>
-                          )
-                          : "Enter a code to join an existing session."
+                          ? "You already have an active invitation above."
+                          : "Enter a room code to ask the host for permission."
                         }
                        </p>
                        <Button 
-                        onClick={onJoinButtonClick}
-                        variant={activeRoomMember ? "default" : "secondary"}
-                        className={`w-full h-12 rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-all ${activeRoomMember ? 'volts-gradient text-white' : ''}`}
+                        onClick={() => setIsJoinModalOpen(true)}
+                        variant="secondary"
+                        disabled={!!activeRoomMember}
+                        className="w-full h-12 rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-all"
                       >
-                        {activeRoomMember ? 'Join Room' : 'Join Now'}
+                        Join via Code
                       </Button>
                     </div>
                   </div>
