@@ -79,7 +79,7 @@ export default function Connection() {
   const [waitingApproval, setWaitingApproval] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  const [activeRoomMember, setActiveRoomMember] = useState<{ roomId: string } | null>(null);
+  const [activeRoomMember, setActiveRoomMember] = useState<{ roomId: string; hostName: string } | null>(null);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
 
   useEffect(() => {
@@ -91,16 +91,27 @@ export default function Connection() {
   useEffect(() => {
     if (!user) return;
     const checkActiveRoom = async () => {
-      // Find rooms where user is an accepted participant
+      // Find rooms where user is an accepted or invited participant
       const { data: participation } = await supabase
         .from('room_participants')
-        .select('room_id, rooms(status)')
+        .select(`
+          room_id, 
+          status,
+          rooms (
+            status,
+            host_id,
+            profiles:host_id (name)
+          )
+        `)
         .eq('user_id', user.id)
         .in('status', ['accepted', 'invited'])
         .maybeSingle();
 
       if (participation && (participation as any).rooms?.status === 'active') {
-        setActiveRoomMember({ roomId: participation.room_id });
+        setActiveRoomMember({ 
+          roomId: participation.room_id,
+          hostName: (participation as any).rooms?.profiles?.name || 'Unknown Host'
+        });
       }
     };
     checkActiveRoom();
@@ -287,9 +298,14 @@ export default function Connection() {
                   <div className="text-center w-full">
                     <h3 className="font-bold text-base mb-0.5">Join a Room</h3>
                     <div className="flex flex-col gap-3 mt-2">
-                       <p className="text-[10px] text-muted-foreground">
+                       <p className="text-[10px] text-muted-foreground leading-relaxed">
                         {activeRoomMember 
-                          ? `You are a member of room ${activeRoomMember.roomId}`
+                          ? (
+                            <>
+                              You are invited to <span className="text-primary font-bold">{activeRoomMember.roomId}</span><br />
+                              hosted by <span className="font-bold text-foreground">{activeRoomMember.hostName}</span>
+                            </>
+                          )
                           : "Enter a code to join an existing session."
                         }
                        </p>

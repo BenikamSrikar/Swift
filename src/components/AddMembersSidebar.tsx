@@ -176,7 +176,18 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
                         <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card ${isMember ? 'bg-green-500' : 'bg-muted-foreground/30'}`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold truncate ${isMember ? 'text-primary' : ''}`}>{u.name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className={`text-sm font-bold truncate ${isMember ? 'text-primary' : ''}`}>{u.name}</p>
+                          {isMember && (
+                            <motion.span 
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="text-[8px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter shrink-0"
+                            >
+                              Member Invited
+                            </motion.span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-muted-foreground truncate">{u.email}</p>
                       </div>
                       <Checkbox 
