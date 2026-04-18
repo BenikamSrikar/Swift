@@ -65,10 +65,16 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
   useEffect(() => {
     fetchData();
 
-    // Subscribe to participant changes to keep list in sync
+    // Subscribe to participant changes ONLY for this room to prevent flickering/broad noise
     const channel = supabase
-      .channel('member-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, () => {
+      .channel(`member-updates-${roomId}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'room_participants',
+        filter: `room_id=eq.${roomId}`
+      }, () => {
+        // Only fetch if we are not in the middle of a local update to prevent overwrite flickering
         fetchData();
       })
       .subscribe();
@@ -79,14 +85,13 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
   }, [roomId, hostId]);
 
   const toggleMember = async (userId: string, isMember: boolean) => {
-    // Optimistic Update
+    // 1. Instant Optimistic UI Update
     setRoomParticipants(prev => 
       isMember ? prev.filter(id => id !== userId) : [...prev, userId]
     );
 
     try {
       if (isMember) {
-        // Remove from room
         await supabase
           .from('room_participants')
           .delete()
@@ -94,7 +99,6 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
           .eq('user_id', userId);
         toast.info('User removed from room');
       } else {
-        // Add to room as invited
         await supabase
           .from('room_participants')
           .insert({
@@ -104,12 +108,12 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
           });
         toast.success('User invited to room');
       }
-      fetchData();
+      // Note: We don't call fetchData() here because the realtime subscription 
+      // will catch the change and we want to avoid clashing with our optimistic state.
     } catch (err) {
       toast.error('Failed to update member');
       console.error(err);
-      // Rollback on error
-      fetchData();
+      fetchData(); // Rollback to source of truth on error
     }
   };
 

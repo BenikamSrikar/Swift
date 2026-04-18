@@ -92,12 +92,13 @@ export default function Connection() {
     if (!user) return;
     const checkActiveRoom = async () => {
       // Find rooms where user is an accepted or invited participant
+      // We removed the strict 'active' status check to be more resilient to heartbeat delays
       const { data: participation } = await supabase
         .from('room_participants')
         .select(`
           room_id, 
           status,
-          rooms (
+          rooms!inner (
             status,
             host_id,
             profiles:host_id (name)
@@ -105,12 +106,13 @@ export default function Connection() {
         `)
         .eq('user_id', user.id)
         .in('status', ['accepted', 'invited'])
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
-      if (participation && (participation as any).rooms?.status === 'active') {
+      if (participation && participation.length > 0) {
+        const primary = participation[0];
         setActiveRoomMember({ 
-          roomId: participation.room_id,
-          hostName: (participation as any).rooms?.profiles?.name || 'Unknown Host'
+          roomId: primary.room_id,
+          hostName: (primary as any).rooms?.profiles?.name || 'Unknown Host'
         });
       } else {
         setActiveRoomMember(null);
