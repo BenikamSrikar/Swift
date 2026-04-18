@@ -240,4 +240,4 @@ export default function AddMembersSidebar({ roomId, hostId, isOpen, setIsOpen }:
     </motion.div>
   );
 }
-}
+
