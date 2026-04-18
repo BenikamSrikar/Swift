@@ -119,6 +119,25 @@ export default function Room() {
           toast.error('This room has been closed by the host');
           navigate('/connection');
         }
+
+        // Auto-accept if invited
+        if (userId && roomId) {
+          const { data: participation } = await supabase
+            .from('room_participants')
+            .select('status')
+            .eq('room_id', normalizedRoomId)
+            .eq('user_id', userId)
+            .single();
+
+          if (participation?.status === 'invited') {
+            await supabase
+              .from('room_participants')
+              .update({ status: 'accepted' })
+              .eq('room_id', normalizedRoomId)
+              .eq('user_id', userId);
+            loadParticipants();
+          }
+        }
       } catch (err) {
         console.error('Room load error:', err);
         navigate('/');

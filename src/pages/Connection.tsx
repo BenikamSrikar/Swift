@@ -96,7 +96,7 @@ export default function Connection() {
         .from('room_participants')
         .select('room_id, rooms(status)')
         .eq('user_id', user.id)
-        .eq('status', 'accepted')
+        .in('status', ['accepted', 'invited'])
         .maybeSingle();
 
       if (participation && (participation as any).rooms?.status === 'active') {
@@ -159,7 +159,7 @@ export default function Connection() {
     // Check if user is already accepted (e.g. added by host)
     const { data: existing } = await supabase.from('room_participants').select('status').eq('room_id', rid).eq('user_id', user.id).single();
     
-    if (existing?.status === 'accepted') {
+    if (existing?.status === 'accepted' || existing?.status === 'invited') {
       setIsJoinModalOpen(false);
       navigate(`/room/${rid}`);
       return;

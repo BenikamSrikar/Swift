@@ -40,7 +40,7 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
       const { data: allParticipants } = await supabase
         .from('room_participants')
         .select('user_id, room_id, status, rooms(status)')
-        .in('status', ['accepted', 'pending']);
+        .in('status', ['accepted', 'pending', 'invited']);
 
       if (profiles) setAllUsers(profiles);
       
@@ -89,15 +89,15 @@ export default function AddMembersSidebar({ roomId, hostId }: AddMembersSidebarP
           .eq('user_id', userId);
         toast.info('User removed from room');
       } else {
-        // Add to room as accepted
+        // Add to room as invited
         await supabase
           .from('room_participants')
           .insert({
             room_id: roomId,
             user_id: userId,
-            status: 'accepted'
+            status: 'invited'
           });
-        toast.success('User added to room');
+        toast.success('User invited to room');
       }
       fetchData();
     } catch (err) {
