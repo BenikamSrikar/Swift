@@ -83,18 +83,29 @@ export default function Connection() {
 
   const fetchRooms = async () => {
     try {
-      const { data: roomsData } = await supabase
+      const { data: roomsData, error: roomsError } = await supabase
         .from('rooms')
         .select('room_id, host_id, created_at')
         .eq('status', 'active');
 
-      if (!roomsData) return;
+      if (roomsError) {
+        console.error('Error fetching rooms:', roomsError);
+        return;
+      }
+      if (!roomsData || roomsData.length === 0) {
+        setAvailableRooms([]);
+        return;
+      }
 
       const hostIds = roomsData.map(r => r.host_id);
-      const { data: profilesData } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('auth_user_id, name, email, avatar_url')
         .in('auth_user_id', hostIds);
+
+      if (profilesError) {
+        console.error('Error fetching host profiles:', profilesError);
+      }
 
       const profileMap = new Map(profilesData?.map(p => [p.auth_user_id, p]) || []);
 
@@ -113,6 +124,7 @@ export default function Connection() {
     if (!user) return;
     fetchRooms();
 
+    // Realtime listener (requires rooms table in supabase_realtime publication)
     const channel = supabase
       .channel('room-directory')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
@@ -120,8 +132,12 @@ export default function Connection() {
       })
       .subscribe();
 
+    // Polling fallback — ensures rooms always appear even if realtime is not enabled for this table
+    const pollInterval = setInterval(fetchRooms, 5000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [user]);
 
