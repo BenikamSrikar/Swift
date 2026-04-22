@@ -22,6 +22,7 @@ import TransferQueue, { QueuedTransfer } from '@/components/TransferQueue';
 const DATA_CHANNEL_CHUNK_SIZE = 262144; // 256KB
 const DATA_CHANNEL_BUFFER_LIMIT = DATA_CHANNEL_CHUNK_SIZE * 8;
 const SIZE_THRESHOLD = 25 * 1024 * 1024; // 25MB
+const STORAGE_THRESHOLD = 3 * 1024 * 1024; // 3MB
 
 interface Participant {
   user_id: string;
@@ -42,6 +43,11 @@ interface TransferRequest {
   fromUserId: string;
   fromName: string;
   type: 'file' | 'folder' | 'video' | 'link';
+  transferId: string;
+  isStorage?: boolean;
+  storagePath?: string;
+  fileName?: string;
+  fileSize?: number;
 }
 
 export default function Room() {
@@ -262,9 +268,9 @@ export default function Room() {
     });
 
     channel.on('broadcast', { event: 'transfer-request' }, (payload) => {
-      const { targetUserId, fromUserId, fromName, type, transferId } = payload.payload;
+      const { targetUserId, fromUserId, fromName, type, transferId, isStorage, storagePath, fileName, fileSize } = payload.payload;
       if (targetUserId === userId) {
-        setTransferRequest({ fromUserId, fromName, type, transferId } as any);
+        setTransferRequest({ fromUserId, fromName, type, transferId, isStorage, storagePath, fileName, fileSize } as any);
       }
     });
 
@@ -289,6 +295,33 @@ export default function Room() {
           setQueuedTransfers(prev => prev.filter(t => t.id !== transferId));
           transferPayloads.current.delete(transferId);
         }, 5000);
+      }
+    });
+
+    channel.on('broadcast', { event: 'transfer-completed' }, async (payload) => {
+      const { targetUserId, fromUserId, transferId } = payload.payload;
+      if (targetUserId === userId) {
+        setQueuedTransfers(prev => prev.map(t => 
+          t.id === transferId ? { ...t, status: 'completed', progress: 100 } : t
+        ));
+        
+        const next = queuedTransfers.find(t => t.id === transferId);
+        if (next) {
+          const targetName = participants.find(p => p.user_id === fromUserId)?.name || 'Unknown';
+          await supabase.from('transfer_history').insert({
+            sender_id: userId!,
+            sender_name: userName!,
+            recipient_name: targetName,
+            file_name: next.name,
+            file_type: next.type,
+            sender_email: profile?.email || '',
+            direction: 'sent',
+          } as any);
+        }
+
+        setTimeout(() => {
+          setQueuedTransfers(prev => prev.filter(t => t.id !== transferId));
+        }, 3000);
       }
     });
 
@@ -654,6 +687,58 @@ export default function Room() {
     }
 
     const transferId = generateTransferId();
+    
+    // Hybrid Transfer Logic: If > 3MB, use Supabase Storage
+    if (fileToSend.size > STORAGE_THRESHOLD) {
+      setStatusText(`Uploading ${fileName} to temporary storage...`);
+      const storagePath = `temp-transfers/${transferId}/${fileName}`;
+      
+      const { data, error } = await supabase.storage
+        .from('transfers')
+        .upload(storagePath, fileToSend, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        console.error('Storage upload error:', error);
+        toast.error('Failed to upload large file to storage');
+        setStatusText(null);
+        return;
+      }
+
+      setQueuedTransfers(prev => [...prev, {
+        id: transferId,
+        name: fileName,
+        size: fileToSend.size,
+        progress: 100,
+        status: 'awaiting-approval',
+        direction: 'sending',
+        type: fileType,
+        isStorage: true
+      } as any]);
+
+      transferChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'transfer-request',
+        payload: { 
+          targetUserId, 
+          fromUserId: userId, 
+          fromName: userName, 
+          type: fileType,
+          transferId,
+          isStorage: true,
+          storagePath: data.path,
+          fileName,
+          fileSize: fileToSend.size
+        },
+      });
+      
+      setStatusText(null);
+      toast.info(`Large file uploaded to secure storage. Waiting for ${targetName} to accept.`);
+      return;
+    }
+
     transferPayloads.current.set(transferId, { blob: fileToSend, targetUserId });
 
     setQueuedTransfers(prev => [...prev, {
@@ -890,12 +975,72 @@ export default function Room() {
         open={!!transferRequest}
         requesterName={transferRequest?.fromName || ''}
         type={transferRequest?.type || 'file'}
-        onAccept={() => {
+        onAccept={async () => {
           if (!transferRequest) return;
-          const { fromUserId, type, transferId } = transferRequest as any;
+          const { fromUserId, type, transferId, isStorage, storagePath, fileName, fileSize } = transferRequest as any;
           setTransferRequest(null);
           
-          // Notify sender to start
+          if (isStorage && storagePath) {
+            setStatusText(`Downloading large ${type}...`);
+            
+            try {
+              // 1. Download from Supabase
+              const { data, error } = await supabase.storage
+                .from('transfers')
+                .download(storagePath);
+
+              if (error) throw error;
+
+              // 2. Log History
+              let senderEmail = '';
+              const { data: senderProf } = await supabase.from('profiles').select('email').eq('auth_user_id', fromUserId).single();
+              if (senderProf) senderEmail = senderProf.email;
+
+              await supabase.from('transfer_history').insert({
+                sender_id: fromUserId,
+                sender_name: transferRequest.fromName,
+                recipient_name: userName!,
+                file_name: fileName || 'Unknown File',
+                file_type: type,
+                sender_email: senderEmail,
+                direction: 'received',
+              } as any);
+
+              // 3. Trigger Download
+              const url = URL.createObjectURL(data);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = fileName || 'download';
+              a.click();
+              URL.revokeObjectURL(url);
+
+              // 4. Delete from Storage
+              await supabase.storage
+                .from('transfers')
+                .remove([storagePath]);
+
+              setStatusText(null);
+              toast.success(`Large ${type} received: ${fileName}`);
+              
+              // Notify sender of completion
+              transferChannelRef.current?.send({
+                type: 'broadcast',
+                event: 'transfer-completed',
+                payload: { 
+                  targetUserId: fromUserId, 
+                  fromUserId: userId,
+                  transferId 
+                },
+              });
+            } catch (err) {
+              console.error('Storage transfer error:', err);
+              toast.error('Failed to complete storage transfer');
+              setStatusText(null);
+            }
+            return;
+          }
+
+          // Notify sender to start (WebRTC path)
           transferChannelRef.current?.send({
             type: 'broadcast',
             event: 'transfer-accepted',
