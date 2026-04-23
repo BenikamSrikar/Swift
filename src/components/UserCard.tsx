@@ -1,6 +1,6 @@
 import UserAvatar from './UserAvatar';
 import { Button } from '@/components/ui/button';
-import { File, FolderOpen, Link, X } from 'lucide-react';
+import { File, FolderOpen, X } from 'lucide-react';
 
 interface UserCardProps {
   name: string;
@@ -24,7 +24,7 @@ export default function UserCard({
   onRemove,
 }: UserCardProps) {
   return (
-    <div className="relative group volts-card p-5 flex flex-col items-center justify-center gap-4 aspect-video w-full transition-all duration-300 hover:shadow-xl hover:bg-muted/10 bg-muted/5 border-border/40">
+    <div className="relative group volts-card p-5 flex flex-col items-center justify-center gap-4 aspect-[4/3] w-full transition-all duration-300 hover:shadow-xl hover:bg-muted/10 bg-muted/5 border-border/40">
       {showHostControls && !isLocalUser && (
         <Button
           size="icon"

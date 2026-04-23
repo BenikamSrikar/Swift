@@ -18,6 +18,13 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import JSZip from 'jszip';
 import TransferQueue, { QueuedTransfer } from '@/components/TransferQueue';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const DATA_CHANNEL_CHUNK_SIZE = 262144; // 256KB
 const DATA_CHANNEL_BUFFER_LIMIT = DATA_CHANNEL_CHUNK_SIZE * 8;
@@ -882,7 +889,7 @@ export default function Room() {
 
                 <div className={`
                   grid gap-6 w-full transition-all duration-500 ease-in-out
-                  ${participants.filter(p => p.user_id !== userId).length === 1 ? 'grid-cols-1' : 
+                  ${participants.filter(p => p.user_id !== userId).length === 1 ? 'flex justify-center' : 
                     participants.filter(p => p.user_id !== userId).length === 2 ? 'grid-cols-1 md:grid-cols-2' : 
                     'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}
                 `}>
@@ -890,7 +897,11 @@ export default function Room() {
                   {participants
                     .filter(p => p.user_id !== userId)
                     .map((p, i) => (
-                      <div key={p.user_id} className="animate-in fade-in zoom-in-95 duration-300" style={{ animationDelay: `${i * 100}ms` }}>
+                      <div 
+                        key={p.user_id} 
+                        className={`animate-in fade-in zoom-in-95 duration-300 ${participants.filter(p => p.user_id !== userId).length === 1 ? 'w-full max-w-xl' : ''}`} 
+                        style={{ animationDelay: `${i * 100}ms` }}
+                      >
                         <UserCard
                           name={p.name}
                           avatarUrl={p.avatar_url}
@@ -942,28 +953,39 @@ export default function Room() {
 
             {/* Chat Sidebar */}
             <div className={`
-              fixed lg:relative inset-y-0 right-0 z-50 w-[380px] max-w-[90vw] flex flex-col bg-background/80 backdrop-blur-2xl border-l border-border/40 shadow-2xl transition-all duration-300 ease-in-out
+              fixed lg:relative inset-y-0 right-0 z-50 w-full lg:w-[380px] flex flex-col bg-background/80 backdrop-blur-2xl border-l border-border/40 shadow-2xl transition-all duration-300 ease-in-out
               ${chatOpen ? 'translate-x-0' : 'translate-x-full lg:w-0 lg:border-none lg:opacity-0'}
             `}>
               <div className="p-4 border-b border-border/40 flex items-center justify-between bg-muted/10">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary flex items-center gap-2 mb-0.5">
+                <div className="flex-1 mr-4">
+                  <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary flex items-center gap-2 mb-2">
                     {chatMode.type === 'group' ? <Users className="h-3 w-3" /> : <UserIcon className="h-3 w-3" />}
-                    {chatMode.type === 'group' ? 'Channel: Global' : 'Direct Message'}
+                    Chat Destination
                   </span>
-                  <span className="text-sm font-bold truncate max-w-[200px]">
-                    {chatMode.type === 'group' ? 'Room Broadcast' : chatMode.targetUser?.name}
-                  </span>
-                  {chatMode.type === 'individual' && (
-                    <button 
-                      onClick={() => setChatMode({ type: 'group' })}
-                      className="text-[10px] text-primary hover:underline transition-colors text-left font-bold mt-1"
-                    >
-                      ← Return to Global
-                    </button>
-                  )}
+                  
+                  <Select 
+                    value={chatMode.type === 'group' ? 'group' : chatMode.targetUser?.user_id}
+                    onValueChange={(val) => {
+                      if (val === 'group') {
+                        setChatMode({ type: 'group' });
+                      } else {
+                        const target = participants.find(p => p.user_id === val);
+                        if (target) setChatMode({ type: 'individual', targetUser: target });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full bg-background border-border/40 font-bold h-9 rounded-lg">
+                      <SelectValue placeholder="Select destination" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="group">Global Broadcast</SelectItem>
+                      {participants.filter(p => p.user_id !== userId).map(p => (
+                        <SelectItem key={p.user_id} value={p.user_id}>{p.name} (Direct)</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setChatOpen(false)} className="rounded-full h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all">
+                <Button variant="ghost" size="icon" onClick={() => setChatOpen(false)} className="rounded-full h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all shrink-0">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -1000,33 +1022,6 @@ export default function Room() {
                 <div ref={chatEndRef} />
               </div>
 
-              {/* Quick Select for Individual Chat */}
-              {participants.length > 1 && (
-                <div className="px-3 py-2 border-t border-border/10 bg-muted/5 flex gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
-                  <button
-                    onClick={() => setChatMode({ type: 'group' })}
-                    className={`shrink-0 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border ${
-                      chatMode.type === 'group' ? 'bg-primary border-primary text-primary-foreground shadow-md shadow-primary/10' : 'bg-background/50 border-border/40 text-muted-foreground hover:border-primary/40'
-                    }`}
-                  >
-                    Global
-                  </button>
-                  {participants.filter(p => p.user_id !== userId).map(p => (
-                    <button
-                      key={p.user_id}
-                      onClick={() => setChatMode({ type: 'individual', targetUser: p })}
-                      className={`shrink-0 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border ${
-                        chatMode.type === 'individual' && chatMode.targetUser?.user_id === p.user_id 
-                          ? 'bg-primary border-primary text-primary-foreground shadow-md shadow-primary/10' 
-                          : 'bg-background/50 border-border/40 text-muted-foreground hover:border-primary/40'
-                      }`}
-                    >
-                      {p.name.split(' ')[0]}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               <div className="p-4 border-t border-border/40 bg-muted/10 backdrop-blur-xl">
                 <form onSubmit={sendChatMessage} className="relative">
                   <input
@@ -1046,7 +1041,7 @@ export default function Room() {
                 </form>
                 <div className="mt-3 flex items-center justify-center gap-2 opacity-30">
                   <div className="h-px w-8 bg-muted-foreground" />
-                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Peer-to-Peer</span>
+                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Text & Links Only</span>
                   <div className="h-px w-8 bg-muted-foreground" />
                 </div>
               </div>
