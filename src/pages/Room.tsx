@@ -38,7 +38,11 @@ interface PendingRequest {
   avatar_url?: string | null;
 }
 
+interface TransferRequest {
+  fromUserId: string;
+  fromName: string;
   type: 'file' | 'folder' | 'video' | 'link';
+  transferId: string;
 }
 
 interface ChatMessage {
@@ -1028,12 +1032,6 @@ export default function Room() {
               )}
             </div>
           </>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-[60vh] gap-4 animate-fade-in text-center">
-            <p className="text-xl font-bold text-destructive">Room Access Revoked</p>
-            <p className="text-muted-foreground">The host has ended your session or blocked your access.</p>
-            <Button variant="outline" onClick={handleLogout}>Return to Landing</Button>
-          </div>
         )}
       </main>
 
