@@ -827,49 +827,50 @@ export default function Room() {
     <div className="min-h-screen flex flex-col bg-background">
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
-      <main className="flex-1 px-4 py-6 max-w-[1400px] mx-auto w-full">
+      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {removedByHost ? (
-          <div className="flex flex-col items-center justify-center h-[60vh] gap-4 animate-fade-in text-center">
+          <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4 animate-fade-in text-center">
             <p className="text-xl font-bold text-destructive">Room Access Revoked</p>
             <p className="text-muted-foreground">The host has ended your session or blocked your access.</p>
             <Button variant="outline" onClick={handleLogout}>Return to Landing</Button>
           </div>
         ) : (
-          <>
-            <div className="flex flex-row items-center justify-between gap-4 mb-8 animate-fade-up">
-              <div className="flex items-center gap-2 bg-muted/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-border/40 shadow-sm">
-                <div className="h-2 w-2 rounded-full bg-signal-strong animate-pulse" />
-                <span className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-wider">Room Code: {roomId}</span>
-                <button onClick={copyRoomId} className="ml-2 p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-all active:scale-95">
-                  {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-                </button>
-              </div>
+          <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar px-6 py-6 transition-all duration-500 ease-in-out">
+              <div className="max-w-6xl mx-auto w-full flex flex-col gap-8">
+                <div className="flex flex-row items-center justify-between gap-4 animate-fade-up">
+                  <div className="flex items-center gap-2 bg-muted/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-border/40 shadow-sm">
+                    <div className="h-2 w-2 rounded-full bg-signal-strong animate-pulse" />
+                    <span className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-wider">Room Code: {roomId}</span>
+                    <button onClick={copyRoomId} className="ml-2 p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-all active:scale-95">
+                      {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
 
-              <div className="flex items-center gap-4">
-                <SignalStrength />
-                <div className="relative">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setChatOpen(!chatOpen)}
-                    className={`h-10 w-10 rounded-2xl transition-all ${chatOpen ? 'bg-primary text-primary-foreground' : 'bg-muted/40'}`}
-                  >
-                    <MessageSquare className="h-5 w-5" />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center border-2 border-background animate-bounce">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </Button>
+                  <div className="flex items-center gap-4">
+                    <SignalStrength />
+                    <div className="relative">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setChatOpen(!chatOpen)}
+                        className={`h-10 w-10 rounded-2xl transition-all ${chatOpen ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'bg-muted/40'}`}
+                      >
+                        <MessageSquare className="h-5 w-5" />
+                        {unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center border-2 border-background animate-bounce">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </Button>
+                    </div>
+                    <Button variant="destructive" size="sm" onClick={handleLeaveMeeting} className="h-10 text-xs font-black uppercase tracking-widest px-6 rounded-2xl shadow-lg shadow-destructive/20 hover:shadow-destructive/40 transition-all">Leave Meeting</Button>
+                  </div>
                 </div>
-                <Button variant="destructive" size="sm" onClick={handleLeaveMeeting} className="h-10 text-xs font-black uppercase tracking-widest px-6 rounded-2xl shadow-lg shadow-destructive/20 hover:shadow-destructive/40 transition-all">Leave Meeting</Button>
-              </div>
-            </div>
 
-            <div className="flex flex-col lg:flex-row gap-6 items-start">
-              <div className={`flex-1 w-full transition-all duration-500 ${chatOpen ? 'lg:max-w-[calc(100%-350px)]' : 'max-w-5xl mx-auto'}`}>
                 {statusText && (
-                  <div className="mb-4 animate-in slide-in-from-top-2">
+                  <div className="animate-in slide-in-from-top-2">
                     <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 py-3 border border-primary/20">
                       <div className="h-1.5 w-1.5 rounded-full bg-primary animate-ping shrink-0" />
                       <span className="text-xs font-bold uppercase tracking-tight text-primary">{statusText}</span>
@@ -937,101 +938,120 @@ export default function Room() {
                   )}
                 </div>
               </div>
+            </div>
 
-              {/* Chat Sidebar */}
-              {chatOpen && (
-                <div className="w-full lg:w-[350px] h-[600px] lg:h-[calc(100vh-200px)] flex flex-col bg-card border border-border/40 rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-right-4 duration-300">
-                  <div className="p-4 border-b border-border/40 flex items-center justify-between bg-muted/20">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                        {chatMode.type === 'group' ? <Users className="h-4 w-4" /> : <UserIcon className="h-4 w-4" />}
-                        {chatMode.type === 'group' ? 'Group Chat' : chatMode.targetUser?.name}
-                      </span>
-                      {chatMode.type === 'individual' && (
-                        <button 
-                          onClick={() => setChatMode({ type: 'group' })}
-                          className="text-[10px] text-muted-foreground hover:text-primary transition-colors text-left"
-                        >
-                          Switch to Group Chat
-                        </button>
-                      )}
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => setChatOpen(false)} className="rounded-xl h-8 w-8">
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-                    {chatMessages
-                      .filter(m => chatMode.type === 'group' ? m.type === 'group' : (m.type === 'individual' && (m.senderId === chatMode.targetUser?.user_id || m.targetUserId === chatMode.targetUser?.user_id)))
-                      .map((msg) => (
-                      <div 
-                        key={msg.id} 
-                        className={`flex flex-col max-w-[85%] ${msg.senderId === userId ? 'ml-auto items-end' : 'mr-auto items-start'}`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-bold text-muted-foreground">{msg.senderId === userId ? 'You' : msg.senderName}</span>
-                          <span className="text-[10px] text-muted-foreground/50">{format(msg.timestamp, 'HH:mm')}</span>
-                        </div>
-                        <div 
-                          className={`px-4 py-2 rounded-2xl text-sm break-words whitespace-pre-wrap ${
-                            msg.senderId === userId 
-                              ? 'bg-primary text-primary-foreground rounded-tr-none' 
-                              : 'bg-muted rounded-tl-none border border-border/40'
-                          }`}
-                        >
-                          {renderMessageContent(msg.text)}
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={chatEndRef} />
-                  </div>
-
-                  {/* Quick Select for Individual Chat */}
-                  {participants.length > 1 && (
-                    <div className="px-4 py-2 border-t border-border/10 bg-muted/5 flex gap-2 overflow-x-auto no-scrollbar">
-                      <button
-                        onClick={() => setChatMode({ type: 'group' })}
-                        className={`shrink-0 px-3 py-1 rounded-full text-[10px] font-bold transition-all ${
-                          chatMode.type === 'group' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-                        }`}
-                      >
-                        All
-                      </button>
-                      {participants.filter(p => p.user_id !== userId).map(p => (
-                        <button
-                          key={p.user_id}
-                          onClick={() => setChatMode({ type: 'individual', targetUser: p })}
-                          className={`shrink-0 px-3 py-1 rounded-full text-[10px] font-bold transition-all ${
-                            chatMode.type === 'individual' && chatMode.targetUser?.user_id === p.user_id 
-                              ? 'bg-primary text-primary-foreground' 
-                              : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-                          }`}
-                        >
-                          {p.name.split(' ')[0]}
-                        </button>
-                      ))}
-                    </div>
+            {/* Chat Sidebar */}
+            <div className={`
+              fixed lg:relative inset-y-0 right-0 z-50 w-[380px] max-w-[90vw] flex flex-col bg-background/80 backdrop-blur-2xl border-l border-border/40 shadow-2xl transition-all duration-300 ease-in-out
+              ${chatOpen ? 'translate-x-0' : 'translate-x-full lg:w-0 lg:border-none lg:opacity-0'}
+            `}>
+              <div className="p-4 border-b border-border/40 flex items-center justify-between bg-muted/10">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary flex items-center gap-2 mb-0.5">
+                    {chatMode.type === 'group' ? <Users className="h-3 w-3" /> : <UserIcon className="h-3 w-3" />}
+                    {chatMode.type === 'group' ? 'Channel: Global' : 'Direct Message'}
+                  </span>
+                  <span className="text-sm font-bold truncate max-w-[200px]">
+                    {chatMode.type === 'group' ? 'Room Broadcast' : chatMode.targetUser?.name}
+                  </span>
+                  {chatMode.type === 'individual' && (
+                    <button 
+                      onClick={() => setChatMode({ type: 'group' })}
+                      className="text-[10px] text-primary hover:underline transition-colors text-left font-bold mt-1"
+                    >
+                      ← Return to Global
+                    </button>
                   )}
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setChatOpen(false)} className="rounded-full h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
 
-                  <form onSubmit={sendChatMessage} className="p-4 border-t border-border/40 bg-muted/20">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={messageInput}
-                        onChange={(e) => setMessageInput(e.target.value)}
-                        placeholder={chatMode.type === 'group' ? "Message everyone..." : `Message ${chatMode.targetUser?.name}...`}
-                        className="flex-1 bg-background border border-border/40 rounded-2xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                      />
-                      <Button type="submit" size="icon" className="rounded-2xl h-10 w-10 shrink-0">
-                        <Send className="h-4 w-4" />
-                      </Button>
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 custom-scrollbar">
+                {chatMessages.length === 0 && (
+                  <div className="flex-1 flex flex-col items-center justify-center opacity-20 gap-3">
+                    <MessageSquare className="h-12 w-12" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em]">Secure Session Started</p>
+                  </div>
+                )}
+                {chatMessages
+                  .filter(m => chatMode.type === 'group' ? m.type === 'group' : (m.type === 'individual' && (m.senderId === chatMode.targetUser?.user_id || m.targetUserId === chatMode.targetUser?.user_id)))
+                  .map((msg) => (
+                  <div 
+                    key={msg.id} 
+                    className={`flex flex-col max-w-[90%] animate-in slide-in-from-bottom-2 duration-300 ${msg.senderId === userId ? 'ml-auto items-end' : 'mr-auto items-start'}`}
+                  >
+                    <div className="flex items-center gap-2 mb-1 px-1">
+                      <span className="text-[9px] font-black uppercase tracking-tighter text-muted-foreground/60">{msg.senderId === userId ? 'Me' : msg.senderName}</span>
+                      <span className="text-[9px] text-muted-foreground/30 font-mono">{format(msg.timestamp, 'HH:mm')}</span>
                     </div>
-                  </form>
+                    <div 
+                      className={`px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm transition-all ${
+                        msg.senderId === userId 
+                          ? 'bg-primary text-primary-foreground rounded-tr-none shadow-primary/10' 
+                          : 'bg-muted/50 backdrop-blur-sm rounded-tl-none border border-border/40'
+                      }`}
+                    >
+                      {renderMessageContent(msg.text)}
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Quick Select for Individual Chat */}
+              {participants.length > 1 && (
+                <div className="px-3 py-2 border-t border-border/10 bg-muted/5 flex gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
+                  <button
+                    onClick={() => setChatMode({ type: 'group' })}
+                    className={`shrink-0 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border ${
+                      chatMode.type === 'group' ? 'bg-primary border-primary text-primary-foreground shadow-md shadow-primary/10' : 'bg-background/50 border-border/40 text-muted-foreground hover:border-primary/40'
+                    }`}
+                  >
+                    Global
+                  </button>
+                  {participants.filter(p => p.user_id !== userId).map(p => (
+                    <button
+                      key={p.user_id}
+                      onClick={() => setChatMode({ type: 'individual', targetUser: p })}
+                      className={`shrink-0 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border ${
+                        chatMode.type === 'individual' && chatMode.targetUser?.user_id === p.user_id 
+                          ? 'bg-primary border-primary text-primary-foreground shadow-md shadow-primary/10' 
+                          : 'bg-background/50 border-border/40 text-muted-foreground hover:border-primary/40'
+                      }`}
+                    >
+                      {p.name.split(' ')[0]}
+                    </button>
+                  ))}
                 </div>
               )}
+
+              <div className="p-4 border-t border-border/40 bg-muted/10 backdrop-blur-xl">
+                <form onSubmit={sendChatMessage} className="relative">
+                  <input
+                    type="text"
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    placeholder={chatMode.type === 'group' ? "Send global message..." : `Private to ${chatMode.targetUser?.name}...`}
+                    className="w-full bg-background border border-border/40 rounded-xl pl-4 pr-12 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground/40 font-medium"
+                  />
+                  <button 
+                    type="submit" 
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-primary-foreground p-2 rounded-lg hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+                    disabled={!messageInput.trim()}
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </form>
+                <div className="mt-3 flex items-center justify-center gap-2 opacity-30">
+                  <div className="h-px w-8 bg-muted-foreground" />
+                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Peer-to-Peer</span>
+                  <div className="h-px w-8 bg-muted-foreground" />
+                </div>
+              </div>
             </div>
-          </>
+          </div>
         )}
       </main>
 
