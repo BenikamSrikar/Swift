@@ -10,7 +10,6 @@ interface UserCardProps {
   showHostControls?: boolean;
   onRequestFile?: () => void;
   onRequestFolder?: () => void;
-  onRequestLink?: () => void;
   onRemove?: () => void;
 }
 
@@ -22,7 +21,6 @@ export default function UserCard({
   showHostControls,
   onRequestFile,
   onRequestFolder,
-  onRequestLink,
   onRemove,
 }: UserCardProps) {
   return (
@@ -60,10 +58,7 @@ export default function UserCard({
             <FolderOpen className="h-4 w-4" />
             Send Folder
           </Button>
-          <Button size="sm" variant="secondary" className="gap-2 text-xs h-9 px-4 font-bold rounded-full shadow-sm hover:bg-primary hover:text-primary-foreground transition-all" onClick={onRequestLink}>
-            <Link className="h-4 w-4" />
-            Send Link
-          </Button>
+
         </div>
       )}
     </div>

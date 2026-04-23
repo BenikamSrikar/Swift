@@ -13,7 +13,7 @@ import HistoryModal from '@/components/HistoryModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, MessageSquare, Send, Users, User as UserIcon, X, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import JSZip from 'jszip';
@@ -38,10 +38,17 @@ interface PendingRequest {
   avatar_url?: string | null;
 }
 
-interface TransferRequest {
-  fromUserId: string;
-  fromName: string;
   type: 'file' | 'folder' | 'video' | 'link';
+}
+
+interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: number;
+  type: 'group' | 'individual';
+  targetUserId?: string;
 }
 
 export default function Room() {
@@ -60,8 +67,15 @@ export default function Room() {
   const [queuedTransfers, setQueuedTransfers] = useState<QueuedTransfer[]>([]);
   const [statusText, setStatusText] = useState<string | null>(null);
   const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string; mode: 'file' | 'folder' } | null>(null);
-  const [linkModal, setLinkModal] = useState<{ open: boolean; targetUserId: string } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [messageInput, setMessageInput] = useState('');
+  const [chatMode, setChatMode] = useState<{ type: 'group' | 'individual'; targetUser?: Participant }>({ type: 'group' });
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
@@ -104,6 +118,20 @@ export default function Room() {
 
     loadRoom();
   }, [roomId, userId, userName, navigate]);
+
+  // Scroll to bottom of chat
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, chatOpen]);
+
+  // Handle unread messages
+  useEffect(() => {
+    if (chatOpen) {
+      setUnreadCount(0);
+    }
+  }, [chatOpen]);
 
   // Load participants — filter out ghosts (accepted but no active session)
   const loadParticipants = useCallback(async () => {
@@ -314,6 +342,17 @@ export default function Room() {
       } else if (signal.candidate) {
         const pc = peerConnections.current.get(fromUserId);
         if (pc) await pc.addIceCandidate(new RTCIceCandidate(signal));
+      }
+    });
+
+    channel.on('broadcast', { event: 'chat-message' }, (payload) => {
+      const msg = payload.payload;
+      // Only show if it's group chat OR if I'm the target user
+      if (msg.type === 'group' || msg.targetUserId === userId) {
+        setChatMessages((prev) => [...prev, msg]);
+        if (!chatOpen) {
+          setUnreadCount((prev) => prev + 1);
+        }
       }
     });
 
@@ -681,35 +720,54 @@ export default function Room() {
     });
   };
 
-  const handleSendLink = async (targetUserId: string, link: string) => {
-    const blob = new Blob([link], { type: 'text/plain' });
-    const fileName = "Shared Link";
-    const transferId = generateTransferId();
-    
-    transferPayloads.current.set(transferId, { blob, targetUserId });
+  const sendChatMessage = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!messageInput.trim() || !transferChannelRef.current) return;
 
-    setQueuedTransfers(prev => [...prev, {
-      id: transferId,
-      name: fileName,
-      size: blob.size,
-      progress: 0,
-      status: 'awaiting-approval',
-      direction: 'sending',
-      type: 'link'
-    } as any]);
+    const newMessage: ChatMessage = {
+      id: generateTransferId(),
+      senderId: userId!,
+      senderName: userName!,
+      text: messageInput.trim(),
+      timestamp: Date.now(),
+      type: chatMode.type,
+      targetUserId: chatMode.targetUser?.user_id
+    };
 
-    transferChannelRef.current?.send({
+    transferChannelRef.current.send({
       type: 'broadcast',
-      event: 'transfer-request',
-      payload: { 
-        targetUserId, 
-        fromUserId: userId, 
-        fromName: userName, 
-        type: 'link',
-        transferId
-      },
+      event: 'chat-message',
+      payload: newMessage,
+    });
+
+    // Add to local state
+    setChatMessages((prev) => [...prev, newMessage]);
+    setMessageInput('');
+  };
+
+  const renderMessageContent = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline inline-flex items-center gap-1 font-bold break-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part} <ExternalLink className="h-3 w-3" />
+          </a>
+        );
+      }
+      return part;
     });
   };
+
+
 
   const handleUploadFiles = async (files: File[]) => {
     if (!uploadModal) return;
@@ -765,7 +823,7 @@ export default function Room() {
     <div className="min-h-screen flex flex-col bg-background">
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
-      <main className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full">
+      <main className="flex-1 px-4 py-6 max-w-[1400px] mx-auto w-full">
         {removedByHost ? (
           <div className="flex flex-col items-center justify-center h-[60vh] gap-4 animate-fade-in text-center">
             <p className="text-xl font-bold text-destructive">Room Access Revoked</p>
@@ -785,87 +843,197 @@ export default function Room() {
 
               <div className="flex items-center gap-4">
                 <SignalStrength />
+                <div className="relative">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setChatOpen(!chatOpen)}
+                    className={`h-10 w-10 rounded-2xl transition-all ${chatOpen ? 'bg-primary text-primary-foreground' : 'bg-muted/40'}`}
+                  >
+                    <MessageSquare className="h-5 w-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center border-2 border-background animate-bounce">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </div>
                 <Button variant="destructive" size="sm" onClick={handleLeaveMeeting} className="h-10 text-xs font-black uppercase tracking-widest px-6 rounded-2xl shadow-lg shadow-destructive/20 hover:shadow-destructive/40 transition-all">Leave Meeting</Button>
               </div>
             </div>
 
-            {statusText && (
-              <div className="mb-4 animate-in slide-in-from-top-2">
-                <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 py-3 border border-primary/20">
-                  <div className="h-1.5 w-1.5 rounded-full bg-primary animate-ping shrink-0" />
-                  <span className="text-xs font-bold uppercase tracking-tight text-primary">{statusText}</span>
+            <div className="flex flex-col lg:flex-row gap-6 items-start">
+              <div className={`flex-1 w-full transition-all duration-500 ${chatOpen ? 'lg:max-w-[calc(100%-350px)]' : 'max-w-5xl mx-auto'}`}>
+                {statusText && (
+                  <div className="mb-4 animate-in slide-in-from-top-2">
+                    <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 py-3 border border-primary/20">
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary animate-ping shrink-0" />
+                      <span className="text-xs font-bold uppercase tracking-tight text-primary">{statusText}</span>
+                    </div>
+                  </div>
+                )}
+                
+                <TransferQueue transfers={queuedTransfers} />
+
+                <div className={`
+                  grid gap-6 w-full transition-all duration-500 ease-in-out
+                  ${participants.filter(p => p.user_id !== userId).length === 1 ? 'grid-cols-1' : 
+                    participants.filter(p => p.user_id !== userId).length === 2 ? 'grid-cols-1 md:grid-cols-2' : 
+                    'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}
+                `}>
+                  {/* Other Participants */}
+                  {participants
+                    .filter(p => p.user_id !== userId)
+                    .map((p, i) => (
+                      <div key={p.user_id} className="animate-in fade-in zoom-in-95 duration-300" style={{ animationDelay: `${i * 100}ms` }}>
+                        <UserCard
+                          name={p.name}
+                          avatarUrl={p.avatar_url}
+                          isHost={p.user_id === room?.host_id}
+                          showHostControls={isHost}
+                          onRequestFile={() => {
+                            setUploadModal({ open: true, targetUserId: p.user_id, mode: 'file' });
+                            transferChannelRef.current?.send({
+                              type: 'broadcast',
+                              event: 'pre-transfer-alert',
+                              payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'file' },
+                            });
+                          }}
+                          onRequestFolder={() => {
+                            setUploadModal({ open: true, targetUserId: p.user_id, mode: 'folder' });
+                            transferChannelRef.current?.send({
+                              type: 'broadcast',
+                              event: 'pre-transfer-alert',
+                              payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'folder' },
+                            });
+                          }}
+                          onRemove={() => handleRemoveUser(p.user_id)}
+                        />
+                      </div>
+                    ))}
+
+                  {participants.filter(p => p.user_id !== userId).length === 0 && (
+                    <div className="col-span-full mt-12 flex flex-col items-center justify-center py-12 text-muted-foreground animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                      <div className="w-12 h-12 bg-muted/20 rounded-full flex items-center justify-center mb-4 opacity-50">
+                        {isHost ? <Copy className="h-5 w-5" /> : <div className="h-5 w-5 rounded-full border-2 border-current border-t-transparent animate-spin" />}
+                      </div>
+                      <p className="text-sm font-medium">
+                        {isHost ? 'Ready and waiting for peers' : 'Connecting to host...'}
+                      </p>
+                      {isHost && (
+                        <>
+                          <p className="text-xs opacity-60 mt-1 mb-6">Share your Room Code to start transferring</p>
+                          <Button variant="outline" size="sm" className="gap-2 border-primary/20 text-primary hover:bg-primary/5 rounded-xl px-6" onClick={copyRoomId}>
+                            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                            Copy Room ID
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
 
-            <TransferQueue transfers={queuedTransfers} />
-
-            <div className={`
-              grid gap-6 w-full transition-all duration-500 ease-in-out
-              ${participants.filter(p => p.user_id !== userId).length === 1 ? 'grid-cols-1 max-w-3xl mx-auto' : 
-                participants.filter(p => p.user_id !== userId).length === 2 ? 'grid-cols-1 md:grid-cols-2' : 
-                'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}
-            `}>
-              {/* Other Participants */}
-              {participants
-                .filter(p => p.user_id !== userId)
-                .map((p, i) => (
-                  <div key={p.user_id} className="animate-in fade-in zoom-in-95 duration-300" style={{ animationDelay: `${i * 100}ms` }}>
-                    <UserCard
-                      name={p.name}
-                      avatarUrl={p.avatar_url}
-                      isHost={p.user_id === room?.host_id}
-                      showHostControls={isHost}
-                      onRequestFile={() => {
-                        setUploadModal({ open: true, targetUserId: p.user_id, mode: 'file' });
-                        transferChannelRef.current?.send({
-                          type: 'broadcast',
-                          event: 'pre-transfer-alert',
-                          payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'file' },
-                        });
-                      }}
-                      onRequestFolder={() => {
-                        setUploadModal({ open: true, targetUserId: p.user_id, mode: 'folder' });
-                        transferChannelRef.current?.send({
-                          type: 'broadcast',
-                          event: 'pre-transfer-alert',
-                          payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'folder' },
-                        });
-                      }}
-                      onRequestLink={() => {
-                        setLinkModal({ open: true, targetUserId: p.user_id });
-                        transferChannelRef.current?.send({
-                          type: 'broadcast',
-                          event: 'pre-transfer-alert',
-                          payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'link' as any },
-                        });
-                      }}
-                      onRemove={() => handleRemoveUser(p.user_id)}
-                    />
+              {/* Chat Sidebar */}
+              {chatOpen && (
+                <div className="w-full lg:w-[350px] h-[600px] lg:h-[calc(100vh-200px)] flex flex-col bg-card border border-border/40 rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-right-4 duration-300">
+                  <div className="p-4 border-b border-border/40 flex items-center justify-between bg-muted/20">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                        {chatMode.type === 'group' ? <Users className="h-4 w-4" /> : <UserIcon className="h-4 w-4" />}
+                        {chatMode.type === 'group' ? 'Group Chat' : chatMode.targetUser?.name}
+                      </span>
+                      {chatMode.type === 'individual' && (
+                        <button 
+                          onClick={() => setChatMode({ type: 'group' })}
+                          className="text-[10px] text-muted-foreground hover:text-primary transition-colors text-left"
+                        >
+                          Switch to Group Chat
+                        </button>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => setChatOpen(false)} className="rounded-xl h-8 w-8">
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                ))}
 
-              {participants.filter(p => p.user_id !== userId).length === 0 && (
-                <div className="col-span-full mt-12 flex flex-col items-center justify-center py-12 text-muted-foreground animate-in fade-in slide-in-from-bottom-4 duration-1000">
-                  <div className="w-12 h-12 bg-muted/20 rounded-full flex items-center justify-center mb-4 opacity-50">
-                    {isHost ? <Copy className="h-5 w-5" /> : <div className="h-5 w-5 rounded-full border-2 border-current border-t-transparent animate-spin" />}
+                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+                    {chatMessages
+                      .filter(m => chatMode.type === 'group' ? m.type === 'group' : (m.type === 'individual' && (m.senderId === chatMode.targetUser?.user_id || m.targetUserId === chatMode.targetUser?.user_id)))
+                      .map((msg) => (
+                      <div 
+                        key={msg.id} 
+                        className={`flex flex-col max-w-[85%] ${msg.senderId === userId ? 'ml-auto items-end' : 'mr-auto items-start'}`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-bold text-muted-foreground">{msg.senderId === userId ? 'You' : msg.senderName}</span>
+                          <span className="text-[10px] text-muted-foreground/50">{format(msg.timestamp, 'HH:mm')}</span>
+                        </div>
+                        <div 
+                          className={`px-4 py-2 rounded-2xl text-sm break-words whitespace-pre-wrap ${
+                            msg.senderId === userId 
+                              ? 'bg-primary text-primary-foreground rounded-tr-none' 
+                              : 'bg-muted rounded-tl-none border border-border/40'
+                          }`}
+                        >
+                          {renderMessageContent(msg.text)}
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={chatEndRef} />
                   </div>
-                  <p className="text-sm font-medium">
-                    {isHost ? 'Ready and waiting for peers' : 'Connecting to host...'}
-                  </p>
-                  {isHost && (
-                    <>
-                      <p className="text-xs opacity-60 mt-1 mb-6">Share your Room Code to start transferring</p>
-                      <Button variant="outline" size="sm" className="gap-2 border-primary/20 text-primary hover:bg-primary/5 rounded-xl px-6" onClick={copyRoomId}>
-                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                        Copy Room ID
-                      </Button>
-                    </>
+
+                  {/* Quick Select for Individual Chat */}
+                  {participants.length > 1 && (
+                    <div className="px-4 py-2 border-t border-border/10 bg-muted/5 flex gap-2 overflow-x-auto no-scrollbar">
+                      <button
+                        onClick={() => setChatMode({ type: 'group' })}
+                        className={`shrink-0 px-3 py-1 rounded-full text-[10px] font-bold transition-all ${
+                          chatMode.type === 'group' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                        }`}
+                      >
+                        All
+                      </button>
+                      {participants.filter(p => p.user_id !== userId).map(p => (
+                        <button
+                          key={p.user_id}
+                          onClick={() => setChatMode({ type: 'individual', targetUser: p })}
+                          className={`shrink-0 px-3 py-1 rounded-full text-[10px] font-bold transition-all ${
+                            chatMode.type === 'individual' && chatMode.targetUser?.user_id === p.user_id 
+                              ? 'bg-primary text-primary-foreground' 
+                              : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                          }`}
+                        >
+                          {p.name.split(' ')[0]}
+                        </button>
+                      ))}
+                    </div>
                   )}
+
+                  <form onSubmit={sendChatMessage} className="p-4 border-t border-border/40 bg-muted/20">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={messageInput}
+                        onChange={(e) => setMessageInput(e.target.value)}
+                        placeholder={chatMode.type === 'group' ? "Message everyone..." : `Message ${chatMode.targetUser?.name}...`}
+                        className="flex-1 bg-background border border-border/40 rounded-2xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      />
+                      <Button type="submit" size="icon" className="rounded-2xl h-10 w-10 shrink-0">
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </form>
                 </div>
               )}
             </div>
           </>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-[60vh] gap-4 animate-fade-in text-center">
+            <p className="text-xl font-bold text-destructive">Room Access Revoked</p>
+            <p className="text-muted-foreground">The host has ended your session or blocked your access.</p>
+            <Button variant="outline" onClick={handleLogout}>Return to Landing</Button>
+          </div>
         )}
       </main>
 
@@ -933,11 +1101,7 @@ export default function Room() {
         onFolderSelected={handleUploadFolder}
       />
 
-      <LinkModal
-        open={!!linkModal}
-        onClose={() => setLinkModal(null)}
-        onSend={(link) => linkModal && handleSendLink(linkModal.targetUserId, link)}
-      />
+
 
       <HistoryModal
         open={historyOpen}
