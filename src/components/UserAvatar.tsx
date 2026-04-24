@@ -2,6 +2,7 @@ interface UserAvatarProps {
   name: string;
   avatarUrl?: string | null;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  className?: string;
 }
 
 const COLORS = [
@@ -30,13 +31,13 @@ const sizes = {
   xl: 'w-20 h-20 text-2xl',
 };
 
-export default function UserAvatar({ name, avatarUrl, size = 'md' }: UserAvatarProps) {
+export default function UserAvatar({ name, avatarUrl, size = 'md', className = '' }: UserAvatarProps) {
   if (avatarUrl) {
     return (
       <img
         src={avatarUrl}
         alt={name}
-        className={`${sizes[size]} rounded-full shrink-0 object-cover`}
+        className={`${sizes[size]} rounded-full shrink-0 object-cover ${className}`}
       />
     );
   }
@@ -46,7 +47,7 @@ export default function UserAvatar({ name, avatarUrl, size = 'md' }: UserAvatarP
 
   return (
     <div
-      className={`${sizes[size]} rounded-full flex items-center justify-center font-bold text-white shrink-0`}
+      className={`${sizes[size]} rounded-full flex items-center justify-center font-bold text-white shrink-0 ${className}`}
       style={{ backgroundColor: bg }}
     >
       {letter}

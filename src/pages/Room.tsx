@@ -56,10 +56,12 @@ interface ChatMessage {
   id: string;
   senderId: string;
   senderName: string;
-  text: string;
+  text?: string;
+  audioData?: string; // Base64 for broadcast
   timestamp: number;
   type: 'group' | 'individual';
   targetUserId?: string;
+  msgType?: 'text' | 'voice';
 }
 
 export default function Room() {
@@ -86,7 +88,16 @@ export default function Room() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [messageInput, setMessageInput] = useState('');
   const [chatMode, setChatMode] = useState<{ type: 'group' | 'individual'; targetUser?: Participant }>({ type: 'group' });
+  const [chatView, setChatView] = useState<'list' | 'messages'>('list');
+  const [lastMessageTimes, setLastMessageTimes] = useState<Record<string, number>>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const durationIntervalRef = useRef<any>(null);
 
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
@@ -129,6 +140,14 @@ export default function Room() {
 
     loadRoom();
   }, [roomId, userId, userName, navigate]);
+
+  // Cleanup recording interval on unmount
+  useEffect(() => {
+    return () => {
+      if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+      if (mediaRecorderRef.current && isRecording) mediaRecorderRef.current.stop();
+    };
+  }, [isRecording]);
 
   // Scroll to bottom of chat
   useEffect(() => {
@@ -358,9 +377,17 @@ export default function Room() {
 
     channel.on('broadcast', { event: 'chat-message' }, (payload) => {
       const msg = payload.payload;
-      // Only show if it's group chat OR if I'm the target user
+      // Only show if it's group chat OR if I'm the target user OR if I'm the sender (for sync across tabs if needed, though here we add locally)
       if (msg.type === 'group' || msg.targetUserId === userId) {
         setChatMessages((prev) => [...prev, msg]);
+        
+        // Update last message time for sorting
+        const otherPartyId = msg.type === 'group' ? 'group' : msg.senderId;
+        setLastMessageTimes(prev => ({
+          ...prev,
+          [otherPartyId]: msg.timestamp
+        }));
+
         if (!chatOpen) {
           setUnreadCount((prev) => prev + 1);
         }
@@ -731,9 +758,9 @@ export default function Room() {
     });
   };
 
-  const sendChatMessage = (e?: React.FormEvent) => {
+  const sendChatMessage = (e?: React.FormEvent, customMsg?: Partial<ChatMessage>) => {
     if (e) e.preventDefault();
-    if (!messageInput.trim() || !transferChannelRef.current) return;
+    if ((!messageInput.trim() && !customMsg) || !transferChannelRef.current) return;
 
     const newMessage: ChatMessage = {
       id: generateTransferId(),
@@ -742,7 +769,9 @@ export default function Room() {
       text: messageInput.trim(),
       timestamp: Date.now(),
       type: chatMode.type,
-      targetUserId: chatMode.targetUser?.user_id
+      targetUserId: chatMode.targetUser?.user_id,
+      msgType: 'text',
+      ...customMsg
     };
 
     transferChannelRef.current.send({
@@ -753,10 +782,89 @@ export default function Room() {
 
     // Add to local state
     setChatMessages((prev) => [...prev, newMessage]);
+    
+    // Update last message time for sorting
+    const otherPartyId = chatMode.type === 'group' ? 'group' : chatMode.targetUser?.user_id;
+    if (otherPartyId) {
+      setLastMessageTimes(prev => ({
+        ...prev,
+        [otherPartyId]: newMessage.timestamp
+      }));
+    }
+
     setMessageInput('');
   };
 
-  const renderMessageContent = (text: string) => {
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          const base64data = reader.result as string;
+          sendChatMessage(undefined, { 
+            msgType: 'voice', 
+            audioData: base64data,
+            text: '🎤 Voice Message' 
+          });
+        };
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      durationIntervalRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+      toast.error('Could not access microphone');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      clearInterval(durationIntervalRef.current);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const renderMessageContent = (msg: ChatMessage) => {
+    if (msg.msgType === 'voice' && msg.audioData) {
+      return (
+        <div className="flex flex-col gap-2 min-w-[200px]">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
+              <MessageSquare className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 h-1 bg-muted-foreground/20 rounded-full overflow-hidden">
+              <div className="h-full bg-primary/40 w-full animate-pulse" />
+            </div>
+          </div>
+          <audio src={msg.audioData} controls className="h-8 w-full filter brightness-90 contrast-125" />
+        </div>
+      );
+    }
+
+    const text = msg.text || '';
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const parts = text.split(urlRegex);
     return parts.map((part, i) => {
@@ -842,13 +950,13 @@ export default function Room() {
             <Button variant="outline" onClick={handleLogout}>Return to Landing</Button>
           </div>
         ) : (
-          <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
+          <div className="relative flex flex-row flex-1 min-h-0 overflow-hidden">
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar px-6 py-6 transition-all duration-500 ease-in-out">
               <div className="max-w-6xl mx-auto w-full flex flex-col gap-8">
                 <div className="flex flex-row items-center justify-between gap-4 animate-fade-up">
-                  <div className="flex items-center gap-2 bg-muted/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-border/40 shadow-sm">
-                    <div className="h-2 w-2 rounded-full bg-signal-strong animate-pulse" />
+                  <div className="flex items-center gap-2 bg-muted/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-border/40 shadow-sm transition-all hover:bg-muted/30">
+                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                     <span className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-wider">Room Code: {roomId}</span>
                     <button onClick={copyRoomId} className="ml-2 p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-all active:scale-95">
                       {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
@@ -953,98 +1061,192 @@ export default function Room() {
 
             {/* Chat Sidebar */}
             <div className={`
-              fixed lg:relative inset-y-0 right-0 z-50 w-full lg:w-[380px] flex flex-col bg-background/80 backdrop-blur-2xl border-l border-border/40 shadow-2xl transition-all duration-300 ease-in-out
-              ${chatOpen ? 'translate-x-0' : 'translate-x-full lg:w-0 lg:border-none lg:opacity-0'}
+              fixed lg:absolute inset-y-0 right-0 z-[100] w-full lg:w-[420px] flex flex-col bg-background/95 backdrop-blur-2xl border-l border-border shadow-2xl transition-all duration-500 ease-in-out
+              ${chatOpen ? 'translate-x-0' : 'translate-x-full'}
             `}>
-              <div className="p-4 border-b border-border/40 flex items-center justify-between bg-muted/10">
-                <div className="flex-1 mr-4">
-                  <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary flex items-center gap-2 mb-2">
-                    {chatMode.type === 'group' ? <Users className="h-3 w-3" /> : <UserIcon className="h-3 w-3" />}
-                    Chat Destination
-                  </span>
-                  
-                  <Select 
-                    value={chatMode.type === 'group' ? 'group' : chatMode.targetUser?.user_id}
-                    onValueChange={(val) => {
-                      if (val === 'group') {
+              {chatView === 'list' ? (
+                // Chat List (WhatsApp Style)
+                <>
+                  <div className="p-6 border-b border-border/40 flex items-center justify-between bg-muted/5">
+                    <div>
+                      <h2 className="text-2xl font-black tracking-tight">Chats</h2>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mt-1">
+                        {participants.length} Active Participants
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => setChatOpen(false)} className="rounded-full h-10 w-10 hover:bg-destructive/10 hover:text-destructive transition-all">
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    {/* Group Chat Entry */}
+                    <button 
+                      onClick={() => {
                         setChatMode({ type: 'group' });
-                      } else {
-                        const target = participants.find(p => p.user_id === val);
-                        if (target) setChatMode({ type: 'individual', targetUser: target });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-full bg-background border-border/40 font-bold h-9 rounded-lg">
-                      <SelectValue placeholder="Select destination" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="group">Global Broadcast</SelectItem>
-                      {participants.filter(p => p.user_id !== userId).map(p => (
-                        <SelectItem key={p.user_id} value={p.user_id}>{p.name} (Direct)</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button variant="ghost" size="icon" onClick={() => setChatOpen(false)} className="rounded-full h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all shrink-0">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 custom-scrollbar">
-                {chatMessages.length === 0 && (
-                  <div className="flex-1 flex flex-col items-center justify-center opacity-20 gap-3">
-                    <MessageSquare className="h-12 w-12" />
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em]">Secure Session Started</p>
-                  </div>
-                )}
-                {chatMessages
-                  .filter(m => chatMode.type === 'group' ? m.type === 'group' : (m.type === 'individual' && (m.senderId === chatMode.targetUser?.user_id || m.targetUserId === chatMode.targetUser?.user_id)))
-                  .map((msg) => (
-                  <div 
-                    key={msg.id} 
-                    className={`flex flex-col max-w-[90%] animate-in slide-in-from-bottom-2 duration-300 ${msg.senderId === userId ? 'ml-auto items-end' : 'mr-auto items-start'}`}
-                  >
-                    <div className="flex items-center gap-2 mb-1 px-1">
-                      <span className="text-[9px] font-black uppercase tracking-tighter text-muted-foreground/60">{msg.senderId === userId ? 'Me' : msg.senderName}</span>
-                      <span className="text-[9px] text-muted-foreground/30 font-mono">{format(msg.timestamp, 'HH:mm')}</span>
-                    </div>
-                    <div 
-                      className={`px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm transition-all ${
-                        msg.senderId === userId 
-                          ? 'bg-primary text-primary-foreground rounded-tr-none shadow-primary/10' 
-                          : 'bg-muted/50 backdrop-blur-sm rounded-tl-none border border-border/40'
-                      }`}
+                        setChatView('messages');
+                      }}
+                      className="w-full p-4 flex items-center gap-4 hover:bg-muted/30 transition-all border-b border-border/10 group"
                     >
-                      {renderMessageContent(msg.text)}
-                    </div>
-                  </div>
-                ))}
-                <div ref={chatEndRef} />
-              </div>
+                      <div className="h-14 w-14 rounded-2xl bg-primary shadow-lg shadow-primary/20 flex items-center justify-center text-primary-foreground group-hover:scale-105 transition-transform">
+                        <Users className="h-7 w-7" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-base">Global Group</span>
+                          {lastMessageTimes['group'] && (
+                            <span className="text-[10px] text-muted-foreground/50">{format(lastMessageTimes['group'], 'HH:mm')}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate max-w-[220px]">
+                          {chatMessages.filter(m => m.type === 'group').slice(-1)[0]?.text || 'Broadcast to everyone in the room'}
+                        </p>
+                      </div>
+                    </button>
 
-              <div className="p-4 border-t border-border/40 bg-muted/10 backdrop-blur-xl">
-                <form onSubmit={sendChatMessage} className="relative">
-                  <input
-                    type="text"
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    placeholder={chatMode.type === 'group' ? "Send global message..." : `Private to ${chatMode.targetUser?.name}...`}
-                    className="w-full bg-background border border-border/40 rounded-xl pl-4 pr-12 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground/40 font-medium"
-                  />
-                  <button 
-                    type="submit" 
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-primary-foreground p-2 rounded-lg hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
-                    disabled={!messageInput.trim()}
-                  >
-                    <Send className="h-4 w-4" />
-                  </button>
-                </form>
-                <div className="mt-3 flex items-center justify-center gap-2 opacity-30">
-                  <div className="h-px w-8 bg-muted-foreground" />
-                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Text & Links Only</span>
-                  <div className="h-px w-8 bg-muted-foreground" />
-                </div>
-              </div>
+                    {/* Participants List sorted by last message time */}
+                    {[...participants]
+                      .filter(p => p.user_id !== userId)
+                      .sort((a, b) => (lastMessageTimes[b.user_id] || 0) - (lastMessageTimes[a.user_id] || 0))
+                      .map((p) => {
+                        const lastMsg = chatMessages.filter(m => m.type === 'individual' && (m.senderId === p.user_id || m.targetUserId === p.user_id)).slice(-1)[0];
+                        return (
+                          <button 
+                            key={p.user_id}
+                            onClick={() => {
+                              setChatMode({ type: 'individual', targetUser: p });
+                              setChatView('messages');
+                            }}
+                            className="w-full p-4 flex items-center gap-4 hover:bg-muted/30 transition-all border-b border-border/10 group"
+                          >
+                            <div className="h-14 w-14 rounded-2xl overflow-hidden shadow-md group-hover:scale-105 transition-transform">
+                              <UserAvatar name={p.name} avatarUrl={p.avatar_url} className="h-full w-full" />
+                            </div>
+                            <div className="flex-1 text-left">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-base">{p.name}</span>
+                                {lastMessageTimes[p.user_id] && (
+                                  <span className="text-[10px] text-muted-foreground/50">{format(lastMessageTimes[p.user_id], 'HH:mm')}</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate max-w-[220px]">
+                                {lastMsg ? lastMsg.text : 'Start a private conversation'}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })
+                    }
+                  </div>
+                </>
+              ) : (
+                // Message View
+                <>
+                  <div className="p-4 border-b border-border/40 flex items-center gap-3 bg-muted/5">
+                    <Button variant="ghost" size="icon" onClick={() => setChatView('list')} className="rounded-full h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all">
+                      <ExternalLink className="h-4 w-4 rotate-180" />
+                    </Button>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="h-10 w-10 rounded-xl overflow-hidden shrink-0">
+                        {chatMode.type === 'group' ? (
+                          <div className="h-full w-full bg-primary flex items-center justify-center text-primary-foreground">
+                            <Users className="h-5 w-5" />
+                          </div>
+                        ) : (
+                          <UserAvatar name={chatMode.targetUser?.name || ''} avatarUrl={chatMode.targetUser?.avatar_url} className="h-full w-full" />
+                        )}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-sm truncate">{chatMode.type === 'group' ? 'Global Group' : chatMode.targetUser?.name}</span>
+                        <span className="text-[10px] text-muted-foreground uppercase font-black tracking-tighter">
+                          {chatMode.type === 'group' ? `${participants.length} members` : 'Direct Message'}
+                        </span>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => setChatOpen(false)} className="rounded-full h-8 w-8 hover:bg-destructive/10 hover:text-destructive">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar bg-muted/5">
+                    {chatMessages
+                      .filter(m => chatMode.type === 'group' ? m.type === 'group' : (m.type === 'individual' && (m.senderId === chatMode.targetUser?.user_id || m.targetUserId === chatMode.targetUser?.user_id)))
+                      .length === 0 && (
+                      <div className="flex-1 flex flex-col items-center justify-center opacity-20 gap-3">
+                        <MessageSquare className="h-12 w-12" />
+                        <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Messages Yet</p>
+                      </div>
+                    )}
+                    {chatMessages
+                      .filter(m => chatMode.type === 'group' ? m.type === 'group' : (m.type === 'individual' && (m.senderId === chatMode.targetUser?.user_id || m.targetUserId === chatMode.targetUser?.user_id)))
+                      .map((msg) => (
+                      <div 
+                        key={msg.id} 
+                        className={`flex flex-col max-w-[85%] animate-in slide-in-from-bottom-1 duration-300 ${msg.senderId === userId ? 'ml-auto items-end' : 'mr-auto items-start'}`}
+                      >
+                        {chatMode.type === 'group' && msg.senderId !== userId && (
+                          <span className="text-[9px] font-black uppercase tracking-tighter text-primary/70 mb-1 ml-1">{msg.senderName}</span>
+                        )}
+                        <div 
+                          className={`px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm transition-all ${
+                            msg.senderId === userId 
+                              ? 'bg-primary text-primary-foreground rounded-tr-none shadow-primary/20' 
+                              : 'bg-background border border-border/40 rounded-tl-none'
+                          }`}
+                        >
+                          {renderMessageContent(msg)}
+                          <div className={`text-[8px] mt-1 text-right ${msg.senderId === userId ? 'text-primary-foreground/50' : 'text-muted-foreground/50'}`}>
+                            {format(msg.timestamp, 'HH:mm')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  <div className="p-4 border-t border-border/40 bg-background">
+                    {isRecording ? (
+                      <div className="flex items-center gap-3 bg-destructive/5 p-3 rounded-2xl border border-destructive/20 animate-pulse">
+                        <div className="h-3 w-3 rounded-full bg-destructive animate-ping" />
+                        <span className="flex-1 text-xs font-black text-destructive uppercase tracking-widest">
+                          Recording: {formatDuration(recordingDuration)}
+                        </span>
+                        <Button variant="destructive" size="sm" onClick={stopRecording} className="h-8 px-4 rounded-xl text-[10px] font-black uppercase">
+                          Stop & Send
+                        </Button>
+                      </div>
+                    ) : (
+                      <form onSubmit={sendChatMessage} className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            value={messageInput}
+                            onChange={(e) => setMessageInput(e.target.value)}
+                            placeholder="Type a message..."
+                            className="w-full bg-muted/40 border-none rounded-2xl pl-4 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground/40 font-medium"
+                          />
+                        </div>
+                        <Button 
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={startRecording}
+                          className="h-11 w-11 rounded-2xl hover:bg-primary/10 text-primary transition-all shrink-0"
+                        >
+                          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                        </Button>
+                        <Button 
+                          type="submit" 
+                          disabled={!messageInput.trim()}
+                          className="h-11 w-11 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all shrink-0"
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      </form>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
