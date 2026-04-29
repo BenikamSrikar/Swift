@@ -99,8 +99,6 @@ export default function Room() {
   const audioChunksRef = useRef<Blob[]>([]);
   const durationIntervalRef = useRef<any>(null);
 
-  const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const dataChannels = useRef<Map<string, RTCDataChannel>>(new Map());
   const transferChannelRef = useRef<any>(null);
   const transferPayloads = useRef<Map<string, { blob: Blob; targetUserId: string }>>(new Map());
 
@@ -360,34 +358,103 @@ export default function Room() {
       }
     });
 
-    channel.on('broadcast', { event: 'webrtc-signal' }, async (payload) => {
-      const { targetUserId, fromUserId, signal } = payload.payload;
+    channel.on('broadcast', { event: 'transfer-ready' }, async (payload) => {
+      const { targetUserId, fromUserId, fromName, transferId, name, size, type } = payload.payload;
       if (targetUserId !== userId) return;
 
-      if (signal.type === 'offer') {
-        await handleIncomingOffer(fromUserId, signal, channel);
-      } else if (signal.type === 'answer') {
-        const pc = peerConnections.current.get(fromUserId);
-        if (pc) await pc.setRemoteDescription(new RTCSessionDescription(signal));
-      } else if (signal.candidate) {
-        const pc = peerConnections.current.get(fromUserId);
-        if (pc) await pc.addIceCandidate(new RTCIceCandidate(signal));
+      // Start download
+      setQueuedTransfers(prev => [...prev, {
+        id: transferId,
+        name: name,
+        size: size,
+        progress: 0,
+        status: 'processing',
+        direction: 'receiving',
+        type: type
+      }]);
+      setStatusText(`Downloading: ${name}`);
+
+      try {
+        const filePath = `${roomId}/${transferId}/${name}`;
+        const { data: blob, error } = await supabase.storage.from('swift-transfers').download(filePath);
+        
+        if (error || !blob) {
+          throw new Error('Download failed');
+        }
+
+        const url = URL.createObjectURL(blob);
+        
+        setStatusText(null);
+        setQueuedTransfers(prev => prev.map(t => 
+          t.id === transferId ? { ...t, status: 'completed', progress: 100 } : t
+        ));
+
+        // Auto-remove completed transfer from UI after 3 seconds
+        setTimeout(() => {
+          setQueuedTransfers(prev => prev.filter(t => t.id !== transferId && t.progress !== 100));
+        }, 3000);
+
+        const isLink = type === 'link';
+        
+        // Log history
+        let senderEmail = '';
+        const { data: prof } = await supabase.from('profiles').select('email').eq('auth_user_id', fromUserId).single();
+        if (prof) {
+          senderEmail = prof.email;
+        }
+
+        await supabase.from('transfer_history').insert({
+          sender_id: fromUserId,
+          sender_name: fromName || 'Unknown Peer',
+          recipient_name: userName!,
+          file_name: name,
+          file_type: isLink ? 'link' : name.endsWith('.zip') ? 'folder' : 'file',
+          sender_email: senderEmail || '',
+          direction: 'received',
+        } as any);
+
+        toast.success(`${isLink ? 'Link' : 'File'} received: ${name}`, {
+          action: {
+            label: isLink ? 'Copy Link' : 'Download',
+            onClick: async () => {
+              if (isLink) {
+                const text = await blob.text();
+                navigator.clipboard.writeText(text);
+                toast.success('Link copied to clipboard');
+              } else {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = name;
+                a.click();
+                URL.revokeObjectURL(url);
+              }
+            },
+          },
+          duration: 15000,
+        });
+
+        // Cleanup from bucket
+        await supabase.storage.from('swift-transfers').remove([filePath]);
+
+      } catch (err) {
+        console.error('Download error:', err);
+        setStatusText(null);
+        toast.error('Failed to download file');
+        setQueuedTransfers(prev => prev.map(t => 
+          t.id === transferId ? { ...t, status: 'failed' } : t
+        ));
       }
     });
 
     channel.on('broadcast', { event: 'chat-message' }, (payload) => {
       const msg = payload.payload;
-      // Only show if it's group chat OR if I'm the target user OR if I'm the sender (for sync across tabs if needed, though here we add locally)
       if (msg.type === 'group' || msg.targetUserId === userId) {
         setChatMessages((prev) => [...prev, msg]);
-        
-        // Update last message time for sorting
         const otherPartyId = msg.type === 'group' ? 'group' : msg.senderId;
         setLastMessageTimes(prev => ({
           ...prev,
           [otherPartyId]: msg.timestamp
         }));
-
         if (!chatOpen) {
           setUnreadCount((prev) => prev + 1);
         }
@@ -404,247 +471,6 @@ export default function Room() {
     };
   }, [roomId, userId]);
 
-  const handleIncomingOffer = async (fromUserId: string, offer: RTCSessionDescriptionInit, channel: any) => {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ],
-    });
-    peerConnections.current.set(fromUserId, pc);
-
-    pc.ondatachannel = (event) => {
-      receiveFile(event.channel, fromUserId);
-    };
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        channel.send({
-          type: 'broadcast',
-          event: 'webrtc-signal',
-          payload: { targetUserId: fromUserId, fromUserId: userId, signal: event.candidate.toJSON() },
-        });
-      }
-    };
-
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    channel.send({
-      type: 'broadcast',
-      event: 'webrtc-signal',
-      payload: { targetUserId: fromUserId, fromUserId: userId, signal: answer },
-    });
-  };
-
-  // ── Receive logic ──
-  const receiveFile = (dc: RTCDataChannel, fromUserId: string) => {
-    const chunks: BlobPart[] = [];
-    let metadata: { id: string; name: string; size: number } | null = null;
-    let receivedBytes = 0;
-    let messageQueue = Promise.resolve();
-
-    const logHistory = async (fileName: string, fileType: string) => {
-      let senderName = participants.find((p) => p.user_id === fromUserId)?.name;
-      let senderEmail = participants.find((p) => p.user_id === fromUserId)?.email;
-
-      if (!senderName) {
-        // Fallback: check sessions or profiles directly if not in active list
-        const { data: prof } = await supabase.from('profiles').select('name, email').eq('auth_user_id', fromUserId).single();
-        if (prof) {
-          senderName = prof.name;
-          senderEmail = prof.email;
-        }
-      }
-
-      await supabase.from('transfer_history').insert({
-        sender_id: fromUserId,
-        sender_name: senderName || 'Unknown Peer',
-        recipient_name: userName!,
-        file_name: fileName,
-        file_type: fileType,
-        sender_email: senderEmail || '',
-        direction: 'received',
-      } as any);
-    };
-
-    const processIncomingData = async (data: string | Blob | ArrayBuffer) => {
-      if (typeof data === 'string') {
-        const msg = JSON.parse(data);
-
-        if (msg.type === 'metadata') {
-          metadata = msg;
-          receivedBytes = 0;
-          chunks.length = 0;
-          
-          const transferId = msg.id || generateTransferId();
-          setQueuedTransfers(prev => [...prev, {
-            id: transferId,
-            name: msg.name,
-            size: msg.size,
-            progress: 0,
-            status: 'processing',
-            direction: 'receiving',
-            type: msg.transferType || (msg.name.endsWith('.zip') ? 'folder' : 'file')
-          }]);
-
-          setStatusText(`Receiving: ${msg.name}`);
-        } else if (msg.type === 'done') {
-          const blob = new Blob(chunks);
-          const url = URL.createObjectURL(blob);
-          const currentMeta = metadata;
-          
-          setStatusText(null);
-          setQueuedTransfers(prev => prev.map(t => 
-            t.name === currentMeta?.name && t.status === 'processing' 
-              ? { ...t, status: 'completed', progress: 100 } 
-              : t
-          ));
-
-          // Auto-remove completed transfer from UI after 3 seconds
-          setTimeout(() => {
-            setQueuedTransfers(prev => prev.filter(t => t.id !== msg.id && t.progress !== 100));
-          }, 3000);
-
-          if (currentMeta) {
-            const isLink = (currentMeta as any).transferType === 'link';
-            await logHistory(currentMeta.name, isLink ? 'link' : currentMeta.name.endsWith('.zip') ? 'folder' : 'file');
-            toast.success(`${isLink ? 'Link' : 'File'} received: ${currentMeta.name}`, {
-              action: {
-                label: isLink ? 'Copy Link' : 'Download',
-                onClick: async () => {
-                  if (isLink) {
-                    const text = await blob.text();
-                    navigator.clipboard.writeText(text);
-                    toast.success('Link copied to clipboard');
-                  } else {
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = currentMeta.name;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }
-                },
-              },
-              duration: 15000,
-            });
-          }
-          dc.close();
-        }
-      } else {
-        chunks.push(data);
-        const byteLength = data instanceof ArrayBuffer ? data.byteLength : (data as Blob).size;
-        receivedBytes += byteLength;
-
-        if (metadata) {
-          const pct = Math.min(Math.round((receivedBytes / metadata.size) * 100), 100);
-          setQueuedTransfers(prev => prev.map(t => 
-            t.name === metadata?.name && t.status === 'processing' 
-              ? { ...t, progress: pct } 
-              : t
-          ));
-        }
-      }
-    };
-
-    dc.onmessage = (event) => {
-      messageQueue = messageQueue
-        .then(() => processIncomingData(event.data))
-        .catch((err) => {
-          console.error('Receive error:', err);
-          setStatusText(null);
-          toast.error('Internal receiver error');
-          dc.close();
-        });
-    };
-  };
-
-  // ── Send helpers ──
-  const waitForBufferedAmount = (dc: RTCDataChannel) =>
-    new Promise<void>((resolve) => {
-      if (dc.bufferedAmount <= DATA_CHANNEL_BUFFER_LIMIT) {
-        resolve();
-        return;
-      }
-      dc.addEventListener('bufferedamountlow', () => resolve(), { once: true });
-    });
-
-  const sendBlobInChunks = async (
-    dc: RTCDataChannel,
-    blob: Blob,
-    onProgress?: (sent: number, total: number) => void
-  ) => {
-    let offset = 0;
-    const total = blob.size;
-
-    while (offset < total) {
-      if (dc.bufferedAmount > DATA_CHANNEL_BUFFER_LIMIT) {
-        await waitForBufferedAmount(dc);
-      }
-
-      const end = Math.min(offset + DATA_CHANNEL_CHUNK_SIZE, total);
-      const chunk = await blob.slice(offset, end).arrayBuffer();
-      dc.send(chunk);
-      offset = end;
-      onProgress?.(offset, total);
-    }
-  };
-
-  const createTransferPeer = async (
-    targetUserId: string,
-    onOpen: (dc: RTCDataChannel) => Promise<void>
-  ) => {
-    const channel = transferChannelRef.current;
-    if (!channel) {
-      toast.error('Communication channel not ready');
-      return false;
-    }
-
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ],
-    });
-    peerConnections.current.set(targetUserId, pc);
-
-    const dc = pc.createDataChannel('file-transfer', { ordered: true });
-    dataChannels.current.set(targetUserId, dc);
-    dc.binaryType = 'arraybuffer';
-    dc.bufferedAmountLowThreshold = DATA_CHANNEL_BUFFER_LIMIT / 2;
-
-    dc.onopen = () => {
-      void onOpen(dc).catch((err) => {
-        console.error('DataChannel error:', err);
-        toast.error('Connection interrupted');
-        dc.close();
-        pc.close();
-      });
-    };
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        channel.send({
-          type: 'broadcast',
-          event: 'webrtc-signal',
-          payload: { targetUserId, fromUserId: userId, signal: event.candidate.toJSON() },
-        });
-      }
-    };
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    channel.send({
-      type: 'broadcast',
-      event: 'webrtc-signal',
-      payload: { targetUserId, fromUserId: userId, signal: offer },
-    });
-
-    return true;
-  };
-
   // ── Queue Processing ──
   useEffect(() => {
     const isAnyProcessing = queuedTransfers.some(t => t.status === 'processing');
@@ -657,23 +483,36 @@ export default function Room() {
     if (!payload) return;
 
     const startTransfer = async () => {
-      setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'processing' } : t));
+      setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'processing', progress: 0 } : t));
+      setStatusText(`Uploading ${next.name}...`);
       
-      const started = await createTransferPeer(payload.targetUserId, async (dc) => {
-        dc.send(JSON.stringify({ 
-          type: 'metadata', 
-          id: next.id,
-          name: next.name, 
-          size: next.size,
-          transferType: next.type
-        }));
-
-        await sendBlobInChunks(dc, payload.blob, (sent, total) => {
-          const pct = Math.min(Math.round((sent / total) * 100), 100);
-          setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, progress: pct } : t));
+      try {
+        const filePath = `${roomId}/${next.id}/${next.name}`;
+        
+        const { error } = await supabase.storage.from('swift-transfers').upload(filePath, payload.blob, {
+          cacheControl: '3600',
+          upsert: false
         });
 
-        dc.send(JSON.stringify({ type: 'done' }));
+        if (error) {
+          throw error;
+        }
+
+        // Notify receiver
+        transferChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'transfer-ready',
+          payload: { 
+            targetUserId: payload.targetUserId, 
+            fromUserId: userId,
+            fromName: userName,
+            transferId: next.id,
+            name: next.name,
+            size: next.size,
+            type: next.type
+          },
+        });
+
         setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'completed', progress: 100 } : t));
         setStatusText(null);
         toast.success(`Successfully sent ${next.name}`);
@@ -683,13 +522,8 @@ export default function Room() {
           setQueuedTransfers(prev => prev.filter(t => t.id !== next.id));
           transferPayloads.current.delete(next.id);
         }, 3000);
-      });
 
-      if (!started) {
-        setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'failed' } : t));
-      } else {
         const targetName = participants.find(p => p.user_id === payload.targetUserId)?.name || 'Unknown';
-        const fileList = payload.blob.type.includes('zip') ? null : [next.name]; // Placeholder if not folder
         
         await supabase.from('transfer_history').insert({
           sender_id: userId!,
@@ -701,6 +535,12 @@ export default function Room() {
           direction: 'sent',
           file_list: (next as any).file_list || null
         } as any);
+
+      } catch (err) {
+        console.error('Upload error:', err);
+        setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'failed' } : t));
+        setStatusText(null);
+        toast.error(`Failed to send ${next.name}`);
       }
     };
 
@@ -907,8 +747,6 @@ export default function Room() {
       await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
       await supabase.from('sessions').delete().eq('user_id', userId);
     }
-    peerConnections.current.forEach((pc) => pc.close());
-    peerConnections.current.clear();
     await signOut();
     navigate('/');
   };
@@ -920,8 +758,6 @@ export default function Room() {
     if (userId) {
       await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
     }
-    peerConnections.current.forEach((pc) => pc.close());
-    peerConnections.current.clear();
     navigate('/connection');
   };
 
