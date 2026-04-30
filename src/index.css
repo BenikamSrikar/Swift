@@ -296,4 +296,15 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Particle Animation */
+  @keyframes particle-float {
+    0% { transform: translateY(0) scale(0.8); opacity: 0; }
+    20% { opacity: 0.15; }
+    80% { opacity: 0.15; }
+    100% { transform: translateY(-100vh) scale(1.2); opacity: 0; }
+  }
+  .animate-particle-float {
+    animation: particle-float 15s linear infinite;
+  }
 }

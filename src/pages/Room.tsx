@@ -10,6 +10,7 @@ import TransferRequestDialog from '@/components/TransferRequestDialog';
 import UploadModal from '@/components/UploadModal';
 import LinkModal from '@/components/LinkModal';
 import HistoryModal from '@/components/HistoryModal';
+import ConfirmTransferModal from '@/components/ConfirmTransferModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
@@ -80,6 +81,7 @@ export default function Room() {
   const [queuedTransfers, setQueuedTransfers] = useState<QueuedTransfer[]>([]);
   const [statusText, setStatusText] = useState<string | null>(null);
   const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string; mode: 'file' | 'folder' } | null>(null);
+  const [fileConfirmModal, setFileConfirmModal] = useState<{ open: boolean; files: File[]; targetUserId: string } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   
   // Chat state
@@ -871,13 +873,15 @@ export default function Room() {
 
   const handleUploadFiles = async (files: File[]) => {
     if (!uploadModal) return;
-    await sendFilesViaPeer(uploadModal.targetUserId, files);
+    setFileConfirmModal({ open: true, files, targetUserId: uploadModal.targetUserId });
+    setUploadModal(null);
   };
 
   const handleUploadFolder = async (files: FileList) => {
     if (!uploadModal) return;
     const fileArray = Array.from(files);
     await sendFilesViaPeer(uploadModal.targetUserId, fileArray);
+    setUploadModal(null);
   };
 
   const handleLogout = async () => {
@@ -916,10 +920,29 @@ export default function Room() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
+    <div className="min-h-screen flex flex-col bg-background relative overflow-hidden">
+      {/* Particle Effect */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+        {[...Array(25)].map((_, i) => (
+          <div 
+            key={i} 
+            className="absolute bottom-[-50px] bg-primary/20 rounded-full animate-particle-float"
+            style={{ 
+              left: `${Math.random() * 100}%`, 
+              width: `${Math.random() * 8 + 3}px`, 
+              height: `${Math.random() * 8 + 3}px`, 
+              animationDelay: `${Math.random() * 15}s`,
+              animationDuration: `${Math.random() * 10 + 15}s` 
+            }} 
+          />
+        ))}
+      </div>
 
-      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="relative z-10 w-full flex-none">
+        <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
+      </div>
+
+      <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative z-10">
         {removedByHost ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4 animate-fade-in text-center">
             <p className="text-xl font-bold text-destructive">Room Access Revoked</p>
@@ -1294,7 +1317,18 @@ export default function Room() {
         onFolderSelected={handleUploadFolder}
       />
 
-
+      <ConfirmTransferModal
+        open={!!fileConfirmModal}
+        files={fileConfirmModal?.files || []}
+        targetName={fileConfirmModal ? (participants.find(p => p.user_id === fileConfirmModal.targetUserId)?.name || 'Unknown') : ''}
+        onConfirm={async () => {
+          if (fileConfirmModal) {
+            await sendFilesViaPeer(fileConfirmModal.targetUserId, fileConfirmModal.files);
+            setFileConfirmModal(null);
+          }
+        }}
+        onCancel={() => setFileConfirmModal(null)}
+      />
 
       <HistoryModal
         open={historyOpen}
