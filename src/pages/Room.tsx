@@ -359,49 +359,62 @@ export default function Room() {
     });
 
     channel.on('broadcast', { event: 'transfer-ready' }, async (payload) => {
-      const { targetUserId, fromUserId, fromName, transferId, name, size, type } = payload.payload;
+      const { targetUserId, fromUserId, fromName, transferId, name, size, type, totalChunks } = payload.payload;
       if (targetUserId !== userId) return;
 
-      // Start download
+      // Add to queue
       setQueuedTransfers(prev => [...prev, {
         id: transferId,
-        name: name,
-        size: size,
+        name,
+        size,
         progress: 0,
         status: 'processing',
         direction: 'receiving',
-        type: type
+        type
       }]);
       setStatusText(`Downloading: ${name}`);
 
       try {
-        const filePath = `${roomId}/${transferId}/${name}`;
-        const { data: blob, error } = await supabase.storage.from('swift-transfers').download(filePath);
-        
-        if (error || !blob) {
-          throw new Error('Download failed');
+        const isLink = type === 'link';
+        const chunks: Blob[] = [];
+        const numChunks = totalChunks || 1;
+
+        // Download each chunk
+        for (let i = 0; i < numChunks; i++) {
+          const chunkPath = numChunks === 1
+            ? `${roomId}/${transferId}/${name}`
+            : `${roomId}/${transferId}/chunk_${i}`;
+
+          const { data: chunkBlob, error: chunkErr } = await supabase.storage
+            .from('swift-transfers')
+            .download(chunkPath);
+
+          if (chunkErr || !chunkBlob) throw new Error(`Failed to download chunk ${i}`);
+          chunks.push(chunkBlob);
+
+          const pct = Math.round(((i + 1) / numChunks) * 100);
+          setQueuedTransfers(prev => prev.map(t =>
+            t.id === transferId ? { ...t, progress: pct } : t
+          ));
+          setStatusText(`Downloading ${name}: ${pct}%`);
         }
 
+        // Reassemble
+        const blob = new Blob(chunks);
         const url = URL.createObjectURL(blob);
-        
+
         setStatusText(null);
-        setQueuedTransfers(prev => prev.map(t => 
+        setQueuedTransfers(prev => prev.map(t =>
           t.id === transferId ? { ...t, status: 'completed', progress: 100 } : t
         ));
-
-        // Auto-remove completed transfer from UI after 3 seconds
         setTimeout(() => {
-          setQueuedTransfers(prev => prev.filter(t => t.id !== transferId && t.progress !== 100));
+          setQueuedTransfers(prev => prev.filter(t => t.id !== transferId));
         }, 3000);
 
-        const isLink = type === 'link';
-        
         // Log history
         let senderEmail = '';
         const { data: prof } = await supabase.from('profiles').select('email').eq('auth_user_id', fromUserId).single();
-        if (prof) {
-          senderEmail = prof.email;
-        }
+        if (prof) senderEmail = prof.email;
 
         await supabase.from('transfer_history').insert({
           sender_id: fromUserId,
@@ -433,14 +446,17 @@ export default function Room() {
           duration: 15000,
         });
 
-        // Cleanup from bucket
-        await supabase.storage.from('swift-transfers').remove([filePath]);
+        // Cleanup all chunks from bucket
+        const pathsToDelete = numChunks === 1
+          ? [`${roomId}/${transferId}/${name}`]
+          : Array.from({ length: numChunks }, (_, i) => `${roomId}/${transferId}/chunk_${i}`);
+        await supabase.storage.from('swift-transfers').remove(pathsToDelete);
 
       } catch (err) {
         console.error('Download error:', err);
         setStatusText(null);
         toast.error('Failed to download file');
-        setQueuedTransfers(prev => prev.map(t => 
+        setQueuedTransfers(prev => prev.map(t =>
           t.id === transferId ? { ...t, status: 'failed' } : t
         ));
       }
@@ -483,48 +499,95 @@ export default function Room() {
     if (!payload) return;
 
     const startTransfer = async () => {
-      setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'processing', progress: 0 } : t));
-      setStatusText(`Uploading ${next.name}...`);
-      
-      try {
-        const filePath = `${roomId}/${next.id}/${next.name}`;
-        
-        const { error } = await supabase.storage.from('swift-transfers').upload(filePath, payload.blob, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      const CHUNK_SIZE = 45 * 1024 * 1024; // 45MB per chunk
+      const blob = payload.blob;
+      const totalSize = blob.size;
+      const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
 
-        if (error) {
-          throw error;
+      setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'processing', progress: 0 } : t));
+      setStatusText(`Uploading ${next.name}${totalChunks > 1 ? ` (${totalChunks} parts)` : ''}...`);
+
+      // Helper: upload one chunk via signed URL + XHR with progress
+      const uploadChunk = (chunkBlob: Blob, path: string, chunkIndex: number): Promise<void> => {
+        return new Promise(async (resolve, reject) => {
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from('swift-transfers')
+            .createSignedUploadUrl(path);
+
+          if (signedError || !signedData) {
+            return reject(new Error(`Signed URL failed for chunk ${chunkIndex}: ${signedError?.message}`));
+          }
+
+          const xhr = new XMLHttpRequest();
+          xhr.open('PUT', signedData.signedUrl);
+          xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              // Overall progress = chunks done + current chunk progress
+              const chunksDoneFraction = chunkIndex / totalChunks;
+              const currentChunkFraction = (e.loaded / e.total) / totalChunks;
+              const pct = Math.min(Math.round((chunksDoneFraction + currentChunkFraction) * 100), 99);
+              setQueuedTransfers(prev => prev.map(t =>
+                t.id === next.id ? { ...t, progress: pct } : t
+              ));
+              setStatusText(`Uploading ${next.name}: ${pct}%${totalChunks > 1 ? ` (part ${chunkIndex + 1}/${totalChunks})` : ''}`);
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new Error(`Chunk ${chunkIndex} upload failed: HTTP ${xhr.status}`));
+          };
+          xhr.onerror = () => reject(new Error(`Network error on chunk ${chunkIndex}`));
+          xhr.send(chunkBlob);
+        });
+      };
+
+      try {
+        if (totalChunks === 1) {
+          // Single file — upload directly
+          const filePath = `${roomId}/${next.id}/${next.name}`;
+          await uploadChunk(blob, filePath, 0);
+        } else {
+          // Multi-chunk upload
+          for (let i = 0; i < totalChunks; i++) {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, totalSize);
+            const chunkBlob = blob.slice(start, end);
+            const chunkPath = `${roomId}/${next.id}/chunk_${i}`;
+            await uploadChunk(chunkBlob, chunkPath, i);
+          }
         }
 
-        // Notify receiver
+        console.log('[Swift] All chunks uploaded successfully');
+
+        // Notify receiver with totalChunks info
         transferChannelRef.current?.send({
           type: 'broadcast',
           event: 'transfer-ready',
-          payload: { 
-            targetUserId: payload.targetUserId, 
+          payload: {
+            targetUserId: payload.targetUserId,
             fromUserId: userId,
             fromName: userName,
             transferId: next.id,
             name: next.name,
             size: next.size,
-            type: next.type
+            type: next.type,
+            totalChunks
           },
         });
 
         setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'completed', progress: 100 } : t));
         setStatusText(null);
         toast.success(`Successfully sent ${next.name}`);
-        
-        // Auto-remove after completion
+
         setTimeout(() => {
           setQueuedTransfers(prev => prev.filter(t => t.id !== next.id));
           transferPayloads.current.delete(next.id);
         }, 3000);
 
         const targetName = participants.find(p => p.user_id === payload.targetUserId)?.name || 'Unknown';
-        
         await supabase.from('transfer_history').insert({
           sender_id: userId!,
           sender_name: userName!,
@@ -540,7 +603,7 @@ export default function Room() {
         console.error('Upload error:', err);
         setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'failed' } : t));
         setStatusText(null);
-        toast.error(`Failed to send ${next.name}`);
+        toast.error(`Failed to send ${next.name}: ${(err as Error).message}`);
       }
     };
 
