@@ -100,10 +100,11 @@ export default function Room() {
   const durationIntervalRef = useRef<any>(null);
 
   const transferChannelRef = useRef<any>(null);
-  const transferPayloads = useRef<Map<string, { blob: Blob; targetUserId: string }>>(new Map());
+  const transferPayloads = useRef<Map<string, { files: File[]; targetUserId: string }>>(new Map());
 
   const isHost = room?.host_id === userId;
   const [removedByHost, setRemovedByHost] = useState(false);
+  const [remoteUploadProgress, setRemoteUploadProgress] = useState<Record<string, number>>({});
 
   const generateTransferId = () => {
     try {
@@ -358,6 +359,13 @@ export default function Room() {
       }
     });
 
+    channel.on('broadcast', { event: 'upload-progress' }, (payload) => {
+      const { targetUserId, fromUserId, progress } = payload.payload;
+      if (targetUserId === userId) {
+        setRemoteUploadProgress(prev => ({ ...prev, [fromUserId]: progress }));
+      }
+    });
+
     channel.on('broadcast', { event: 'transfer-ready' }, async (payload) => {
       const { targetUserId, fromUserId, fromName, transferId, name, size, type, totalChunks } = payload.payload;
       if (targetUserId !== userId) return;
@@ -373,6 +381,13 @@ export default function Room() {
         type
       }]);
       setStatusText(`Downloading: ${name}`);
+
+      // Clear remote upload progress since upload is done
+      setRemoteUploadProgress(prev => {
+        const next = { ...prev };
+        delete next[fromUserId];
+        return next;
+      });
 
       try {
         const isLink = type === 'link';
@@ -400,8 +415,28 @@ export default function Room() {
         }
 
         // Reassemble
-        const blob = new Blob(chunks);
-        const url = URL.createObjectURL(blob);
+        let finalBlob: Blob;
+        if (type === 'folder' && numChunks > 1) {
+          setStatusText(`Merging ${numChunks} parts...`);
+          const mergedZip = new JSZip();
+          for (let i = 0; i < chunks.length; i++) {
+            setStatusText(`Merging part ${i + 1} of ${numChunks}...`);
+            const tempZip = await JSZip.loadAsync(chunks[i]);
+            tempZip.forEach((relativePath, zipEntry) => {
+              if (!zipEntry.dir) {
+                mergedZip.file(relativePath, zipEntry.async('blob'));
+              }
+            });
+          }
+          setStatusText(`Finalizing folder...`);
+          finalBlob = await mergedZip.generateAsync({ type: 'blob', compression: 'STORE' });
+        } else if (type === 'folder' && numChunks === 1) {
+          finalBlob = chunks[0];
+        } else {
+          finalBlob = new Blob(chunks);
+        }
+        
+        const url = URL.createObjectURL(finalBlob);
 
         setStatusText(null);
         setQueuedTransfers(prev => prev.map(t =>
@@ -431,7 +466,7 @@ export default function Room() {
             label: isLink ? 'Copy Link' : 'Download',
             onClick: async () => {
               if (isLink) {
-                const text = await blob.text();
+                const text = await finalBlob.text();
                 navigator.clipboard.writeText(text);
                 toast.success('Link copied to clipboard');
               } else {
@@ -499,10 +534,31 @@ export default function Room() {
     if (!payload) return;
 
     const startTransfer = async () => {
-      const CHUNK_SIZE = 45 * 1024 * 1024; // 45MB per chunk
-      const blob = payload.blob;
-      const totalSize = blob.size;
-      const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
+      const CHUNK_SIZE = 40 * 1024 * 1024; // 40MB per chunk
+      const files = payload.files;
+      const isFolder = next.type === 'folder';
+      
+      let totalChunks = 1;
+      let batches: File[][] = [];
+
+      if (isFolder) {
+        let currentBatch: File[] = [];
+        let currentSize = 0;
+        for (const f of files) {
+          currentBatch.push(f);
+          currentSize += f.size;
+          if (currentSize >= CHUNK_SIZE) {
+             batches.push(currentBatch);
+             currentBatch = [];
+             currentSize = 0;
+          }
+        }
+        if (currentBatch.length > 0) batches.push(currentBatch);
+        totalChunks = batches.length;
+      } else {
+        const totalSize = files[0].size;
+        totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
+      }
 
       setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'processing', progress: 0 } : t));
       setStatusText(`Uploading ${next.name}${totalChunks > 1 ? ` (${totalChunks} parts)` : ''}...`);
@@ -532,6 +588,16 @@ export default function Room() {
                 t.id === next.id ? { ...t, progress: pct } : t
               ));
               setStatusText(`Uploading ${next.name}: ${pct}%${totalChunks > 1 ? ` (part ${chunkIndex + 1}/${totalChunks})` : ''}`);
+
+              transferChannelRef.current?.send({
+                type: 'broadcast',
+                event: 'upload-progress',
+                payload: {
+                  targetUserId: payload.targetUserId,
+                  fromUserId: userId,
+                  progress: pct
+                }
+              });
             }
           };
 
@@ -545,18 +611,36 @@ export default function Room() {
       };
 
       try {
-        if (totalChunks === 1) {
-          // Single file — upload directly
-          const filePath = `${roomId}/${next.id}/${next.name}`;
-          await uploadChunk(blob, filePath, 0);
+        if (!isFolder) {
+          const blob = files[0];
+          if (totalChunks === 1) {
+            // Single file — upload directly
+            const filePath = `${roomId}/${next.id}/${next.name}`;
+            await uploadChunk(blob, filePath, 0);
+          } else {
+            // Multi-chunk upload
+            for (let i = 0; i < totalChunks; i++) {
+              const start = i * CHUNK_SIZE;
+              const end = Math.min(start + CHUNK_SIZE, blob.size);
+              const chunkBlob = blob.slice(start, end);
+              const chunkPath = `${roomId}/${next.id}/chunk_${i}`;
+              await uploadChunk(chunkBlob, chunkPath, i);
+            }
+          }
         } else {
-          // Multi-chunk upload
+          // Folder upload: zip and upload in chunks
           for (let i = 0; i < totalChunks; i++) {
-            const start = i * CHUNK_SIZE;
-            const end = Math.min(start + CHUNK_SIZE, totalSize);
-            const chunkBlob = blob.slice(start, end);
-            const chunkPath = `${roomId}/${next.id}/chunk_${i}`;
-            await uploadChunk(chunkBlob, chunkPath, i);
+             setStatusText(`Zipping part ${i + 1} of ${totalChunks}...`);
+             const zip = new JSZip();
+             batches[i].forEach(f => {
+               const path = (f as any).webkitRelativePath || f.name;
+               zip.file(path, f);
+             });
+             const chunkBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+             const chunkPath = totalChunks === 1 
+                ? `${roomId}/${next.id}/${next.name}` 
+                : `${roomId}/${next.id}/chunk_${i}`;
+             await uploadChunk(chunkBlob, chunkPath, i);
           }
         }
 
@@ -614,37 +698,31 @@ export default function Room() {
   const sendFilesViaPeer = async (targetUserId: string, files: File[]) => {
     const targetName = participants.find((p) => p.user_id === targetUserId)?.name || 'Unknown';
     
-    let fileToSend: Blob;
     let fileName: string;
     let fileType: 'file' | 'folder' = 'file';
+    let totalSize = 0;
 
     if (files.length === 1) {
-      fileToSend = files[0];
       fileName = files[0].name;
+      totalSize = files[0].size;
     } else {
-      setStatusText(`Preparing ${files.length} files...`);
-      const zip = new JSZip();
-      files.forEach(f => {
-        const path = (f as any).webkitRelativePath || f.name;
-        zip.file(path, f);
-      });
-      fileToSend = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
       fileName = `swift_batch_${format(new Date(), 'HHmm')}.zip`;
       fileType = 'folder';
+      totalSize = files.reduce((acc, f) => acc + f.size, 0);
     }
 
     const transferId = generateTransferId();
-    transferPayloads.current.set(transferId, { blob: fileToSend, targetUserId });
+    transferPayloads.current.set(transferId, { files, targetUserId });
 
     setQueuedTransfers(prev => [...prev, {
       id: transferId,
       name: fileName,
-      size: fileToSend.size,
+      size: totalSize,
       progress: 0,
       status: 'awaiting-approval',
       direction: 'sending',
       type: fileType,
-      file_list: files.map(f => (f as any).webkitRelativePath || f.name)
+      file_list: files.length > 1 ? files.map(f => (f as any).webkitRelativePath || f.name) : undefined
     } as any]);
 
     // Send the actual transfer request to the receiver
@@ -914,6 +992,7 @@ export default function Room() {
                           avatarUrl={p.avatar_url}
                           isHost={p.user_id === room?.host_id}
                           showHostControls={isHost}
+                          uploadProgress={remoteUploadProgress[p.user_id]}
                           onRequestFile={() => {
                             setUploadModal({ open: true, targetUserId: p.user_id, mode: 'file' });
                             transferChannelRef.current?.send({

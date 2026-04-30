@@ -11,6 +11,7 @@ interface UserCardProps {
   onRequestFile?: () => void;
   onRequestFolder?: () => void;
   onRemove?: () => void;
+  uploadProgress?: number;
 }
 
 export default function UserCard({
@@ -22,10 +23,11 @@ export default function UserCard({
   onRequestFile,
   onRequestFolder,
   onRemove,
+  uploadProgress,
 }: UserCardProps) {
   return (
-    <div className="relative group volts-card p-5 flex flex-col items-center justify-center gap-4 aspect-[4/3] w-full transition-all duration-300 hover:shadow-xl hover:bg-muted/10 bg-muted/5 border-border/40">
-      {showHostControls && !isLocalUser && (
+    <div className="relative group volts-card p-5 flex flex-col items-center justify-center gap-4 aspect-[4/3] w-full transition-all duration-300 hover:shadow-xl hover:bg-muted/10 bg-muted/5 border-border/40 overflow-hidden">
+      {showHostControls && !isLocalUser && typeof uploadProgress !== 'number' && (
         <Button
           size="icon"
           variant="ghost"
@@ -42,6 +44,21 @@ export default function UserCard({
         <span className="absolute top-3 left-3 text-[10px] font-black uppercase tracking-[0.2em] bg-primary text-primary-foreground px-2 py-1 rounded-sm shadow-sm">
           Host
         </span>
+      )}
+
+      {typeof uploadProgress === 'number' && (
+        <>
+          <div className="absolute top-3 right-3 flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-black tracking-widest uppercase border border-primary/20 shadow-sm animate-pulse">
+            <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+            Uploading {uploadProgress}%
+          </div>
+          <div className="absolute inset-x-0 bottom-0 h-1.5 bg-primary/20">
+            <div 
+              className="h-full bg-primary transition-all duration-300 ease-out" 
+              style={{ width: `${uploadProgress}%` }} 
+            />
+          </div>
+        </>
       )}
 
       <div className="text-center w-full px-2">

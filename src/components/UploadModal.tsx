@@ -285,7 +285,7 @@ export default function UploadModal({ open, mode, onClose, onFileSelected, onFol
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={`transition-all duration-500 ease-out ${showConfirmation ? 'sm:max-w-2xl md:max-w-3xl' : 'sm:max-w-md'}`}>
         <DialogHeader>
           <DialogTitle>{mode === 'file' ? 'Send a File' : 'Send a Folder'}</DialogTitle>
         </DialogHeader>
@@ -298,7 +298,7 @@ export default function UploadModal({ open, mode, onClose, onFileSelected, onFol
                   <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Payload Structure</span>
                   <span className="text-[10px] font-mono opacity-40">{selectedFiles.length} items</span>
                 </div>
-                <div className="max-h-60 overflow-y-auto p-2 custom-scrollbar bg-card/40">
+                <div className="max-h-[50vh] overflow-y-auto p-3 custom-scrollbar bg-card/40 transition-all duration-500">
                   <TreeItem item={getFileTree(selectedFiles)} />
                 </div>
               </div>
