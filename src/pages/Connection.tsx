@@ -108,14 +108,33 @@ export default function Connection() {
       }
       
       const hostIds = [...new Set(rooms.map(r => r.host_id))];
+      
+      // Verify hosts are actually online by checking sessions
+      const { data: activeSessions } = await supabase
+        .from('sessions')
+        .select('user_id')
+        .in('user_id', hostIds);
+        
+      const activeHostIds = new Set(activeSessions?.map(s => s.user_id) || []);
+      
+      // Filter out stale rooms where the host has disconnected/closed tab
+      const validRooms = rooms.filter(r => activeHostIds.has(r.host_id));
+      
+      if (validRooms.length === 0) {
+        setActiveRooms([]);
+        return;
+      }
+      
+      const validHostIds = [...new Set(validRooms.map(r => r.host_id))];
+
       const { data: profiles } = await supabase
         .from('profiles')
         .select('auth_user_id, name, email, avatar_url')
-        .in('auth_user_id', hostIds);
+        .in('auth_user_id', validHostIds);
         
       const profileMap = new Map((profiles || []).map(p => [p.auth_user_id, p]));
       
-      const enriched = rooms.map(r => ({
+      const enriched = validRooms.map(r => ({
         room_id: r.room_id,
         host: profileMap.get(r.host_id) || { name: 'Unknown', email: 'Unknown', avatar_url: null, auth_user_id: r.host_id }
       }));
@@ -125,10 +144,14 @@ export default function Connection() {
     
     fetchRooms();
     
-    const channel = supabase.channel('public:rooms')
+    const channel = supabase.channel('public:rooms-and-sessions')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
         fetchRooms();
-      }).subscribe();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => {
+        fetchRooms();
+      })
+      .subscribe();
       
     return () => {
       supabase.removeChannel(channel);
@@ -239,8 +262,8 @@ export default function Connection() {
   };
 
   const filteredRooms = activeRooms.filter(r => 
-    r.host.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    r.host.email.toLowerCase().includes(searchQuery.toLowerCase())
+    (r.host?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (r.host?.email || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
