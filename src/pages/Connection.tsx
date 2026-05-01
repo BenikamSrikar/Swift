@@ -102,17 +102,24 @@ export default function Connection() {
   }, [user, profile]);
 
     const fetchRooms = useCallback(async () => {
-      const { data: rooms } = await supabase
+      const { data: rooms, error } = await supabase
         .from('rooms')
-        .select('room_id, host_id, created_at')
+        .select('*')
         .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Fetch rooms error:', error);
+        return 0;
+      }
       
       if (!rooms) return 0;
 
       const roomMap: Record<string, string> = {};
       for (const r of rooms) {
-        if (!roomMap[r.host_id]) {
-          roomMap[r.host_id] = r.room_id;
+        // Smart Detection: Find the host ID regardless of column name
+        const hostId = r.host_id || r.user_id || r.created_by || r.auth_user_id;
+        if (hostId && !roomMap[hostId]) {
+          roomMap[hostId] = r.room_id;
         }
       }
       setActiveRoomsMap(roomMap);
