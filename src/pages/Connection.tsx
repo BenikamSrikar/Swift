@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Plus, Clock, Search, Users } from 'lucide-react';
+import { Plus, Clock, Search, Users, RefreshCw } from 'lucide-react';
 import HistoryModal from '@/components/HistoryModal';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -104,45 +104,37 @@ export default function Connection() {
   useEffect(() => {
     if (!user || !profile) return;
 
-    const fetchRooms = async () => {
-      const { data: rooms } = await supabase
-        .from('rooms')
-        .select('room_id, host_id, created_at')
-        .eq('status', 'active')
-        .order('created_at', { ascending: false });
-      
-      if (!rooms) return;
+  const fetchRooms = useCallback(async () => {
+    const { data: rooms } = await supabase
+      .from('rooms')
+      .select('room_id, host_id, created_at')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+    
+    if (!rooms) return;
 
-      const { data: participants } = await supabase
-        .from('room_participants')
-        .select('room_id, user_id')
-        .eq('status', 'accepted')
-        .in('room_id', rooms.map(r => r.room_id));
-
-      const roomMap: Record<string, string> = {};
-      const activeParticipantRoomIds = new Set(participants?.map(p => `${p.room_id}-${p.user_id}`) || []);
-
-      for (const r of rooms) {
-        // Verify host is actually in the room to avoid ghost rooms
-        if (activeParticipantRoomIds.has(`${r.room_id}-${r.host_id}`)) {
-          if (!roomMap[r.host_id]) {
-            roomMap[r.host_id] = r.room_id;
-          }
-        }
+    const roomMap: Record<string, string> = {};
+    for (const r of rooms) {
+      if (!roomMap[r.host_id]) {
+        roomMap[r.host_id] = r.room_id;
       }
-      setActiveRoomsMap(roomMap);
-    };
+    }
+    setActiveRoomsMap(roomMap);
+  }, []);
 
-    const fetchProfiles = async () => {
-      setProfilesLoading(true);
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('auth_user_id, name, email, avatar_url')
-        .order('name', { ascending: true });
-        
-      if (profiles) setAllProfiles(profiles);
-      setProfilesLoading(false);
-    };
+  const fetchProfiles = useCallback(async () => {
+    setProfilesLoading(true);
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('auth_user_id, name, email, avatar_url')
+      .order('name', { ascending: true });
+      
+    if (profiles) setAllProfiles(profiles);
+    setProfilesLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!user || !profile) return;
     
     fetchRooms();
     fetchProfiles();
@@ -159,13 +151,21 @@ export default function Connection() {
       })
       .subscribe();
 
-    // Fallback polling every 10s for extra reliability
     const interval = setInterval(fetchRooms, 10000);
       
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
+  }, [user, profile, fetchRooms, fetchProfiles]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchRooms(), fetchProfiles()]);
+    setRefreshing(false);
+    toast.success('Live rooms updated', { duration: 2000 });
+  };
   }, [user, profile]);
 
   if (authLoading || !user || !profile) return null;
@@ -362,10 +362,21 @@ export default function Connection() {
               <motion.div key="rooms-list" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex-1 flex flex-col h-full overflow-hidden">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4 shrink-0">
                   <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                      <Users className="w-6 h-6 text-primary" />
-                      Live Rooms
-                    </h2>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-2xl font-bold flex items-center gap-2">
+                        <Users className="w-6 h-6 text-primary" />
+                        Live Rooms
+                      </h2>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={handleManualRefresh} 
+                        disabled={refreshing}
+                        className={`h-8 w-8 rounded-full hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all ${refreshing ? 'animate-spin' : ''}`}
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </Button>
+                    </div>
                     <p className="text-sm text-muted-foreground mt-1">Join an available session below.</p>
                   </div>
                   
