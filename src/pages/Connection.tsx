@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoltsNavbar from '@/components/VoltsNavbar';
 import { Button } from '@/components/ui/button';
@@ -166,7 +166,6 @@ export default function Connection() {
     setRefreshing(false);
     toast.success('Live rooms updated', { duration: 2000 });
   };
-  }, [user, profile]);
 
   if (authLoading || !user || !profile) return null;
 
