@@ -103,7 +103,6 @@ export default function Room() {
 
   const transferChannelRef = useRef<any>(null);
   const transferPayloads = useRef<Map<string, { files: File[]; targetUserId: string }>>(new Map());
-  const incomingTransfersRef = useRef<Map<string, any>>(new Map());
 
   const isHost = room?.host_id === userId;
   const [removedByHost, setRemovedByHost] = useState(false);
@@ -369,208 +368,11 @@ export default function Room() {
       }
     });
 
-    channel.on('broadcast', { event: 'transfer-started' }, (payload) => {
-      const { targetUserId, fromUserId, fromName, transferId, name, size, type, estimatedTotalChunks } = payload.payload;
-      if (targetUserId !== userId) return;
-
-      incomingTransfersRef.current.set(transferId, {
-        chunks: [],
-        chunksPaths: [],
-        downloadedCount: 0,
-        name,
-        size,
-        type,
-        fromUserId,
-        fromName,
-        estimatedTotalChunks,
-        isCompleteSignaled: false,
-        isAssembling: false,
-        batchStructure: null,
-        totalChunks: null
-      });
-
-      setQueuedTransfers(prev => [...prev, {
-        id: transferId,
-        name,
-        size,
-        progress: 0,
-        status: 'processing',
-        direction: 'receiving',
-        type
-      }]);
-      setStatusText(`Receiving: ${name}`);
-    });
-
-    const assembleTransfer = async (transferId: string) => {
-      const state = incomingTransfersRef.current.get(transferId);
-      if (!state) return;
-      state.isAssembling = true;
-
-      const { name, type, chunks, totalChunks, batchStructure, fromUserId, fromName, chunksPaths } = state;
-      const numChunks = totalChunks || 1;
-      const isLink = type === 'link';
-
-      try {
-        let finalBlob: Blob;
-        if (type === 'folder' && numChunks > 1) {
-          setStatusText(`Merging ${numChunks} parts...`);
-          const mergedZip = new JSZip();
-          
-          if (batchStructure) {
-            let chunkIndex = 0;
-            for (let i = 0; i < batchStructure.length; i++) {
-              setStatusText(`Merging part ${i + 1} of ${batchStructure.length}...`);
-              const numSlices = batchStructure[i];
-              const batchChunks = chunks.slice(chunkIndex, chunkIndex + numSlices);
-              chunkIndex += numSlices;
-              
-              const batchBlob = new Blob(batchChunks);
-              const tempZip = await JSZip.loadAsync(batchBlob);
-              tempZip.forEach((relativePath, zipEntry) => {
-                if (!zipEntry.dir) {
-                  mergedZip.file(relativePath, zipEntry.async('blob'));
-                }
-              });
-            }
-          } else {
-            for (let i = 0; i < chunks.length; i++) {
-              setStatusText(`Merging part ${i + 1} of ${numChunks}...`);
-              const tempZip = await JSZip.loadAsync(chunks[i]);
-              tempZip.forEach((relativePath, zipEntry) => {
-                if (!zipEntry.dir) {
-                  mergedZip.file(relativePath, zipEntry.async('blob'));
-                }
-              });
-            }
-          }
-          
-          setStatusText(`Finalizing folder...`);
-          finalBlob = await mergedZip.generateAsync({ type: 'blob', compression: 'STORE' });
-        } else if (type === 'folder' && numChunks === 1) {
-          finalBlob = chunks[0];
-        } else {
-          finalBlob = new Blob(chunks);
-        }
-        
-        const url = URL.createObjectURL(finalBlob);
-
-        setStatusText(null);
-        setQueuedTransfers(prev => prev.map(t =>
-          t.id === transferId ? { ...t, status: 'completed', progress: 100 } : t
-        ));
-        setTimeout(() => {
-          setQueuedTransfers(prev => prev.filter(t => t.id !== transferId));
-        }, 3000);
-
-        let senderEmail = '';
-        const { data: prof } = await supabase.from('profiles').select('email').eq('auth_user_id', fromUserId).single();
-        if (prof) senderEmail = prof.email;
-
-        await supabase.from('transfer_history').insert({
-          sender_id: fromUserId,
-          sender_name: fromName || 'Unknown Peer',
-          recipient_name: userName!,
-          file_name: name,
-          file_type: isLink ? 'link' : name.endsWith('.zip') ? 'folder' : 'file',
-          sender_email: senderEmail || '',
-          direction: 'received',
-        } as any);
-
-        toast.success(`${isLink ? 'Link' : 'File'} received: ${name}`, {
-          action: {
-            label: isLink ? 'Copy Link' : 'Download',
-            onClick: async () => {
-              if (isLink) {
-                const text = await finalBlob.text();
-                navigator.clipboard.writeText(text);
-                toast.success('Link copied to clipboard');
-              } else {
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = name;
-                a.click();
-                URL.revokeObjectURL(url);
-              }
-            },
-          },
-          duration: 15000,
-        });
-
-        incomingTransfersRef.current.delete(transferId);
-        await supabase.storage.from('swift-transfers').remove(chunksPaths);
-
-      } catch (err) {
-        console.error('Assemble error:', err);
-        setStatusText(null);
-        toast.error('Failed to assemble file');
-        setQueuedTransfers(prev => prev.map(t =>
-          t.id === transferId ? { ...t, status: 'failed' } : t
-        ));
-      }
-    };
-
-    channel.on('broadcast', { event: 'chunk-uploaded' }, async (payload) => {
-      const { targetUserId, transferId, chunkIndex, chunkPath } = payload.payload;
-      if (targetUserId !== userId) return;
-
-      const state = incomingTransfersRef.current.get(transferId);
-      if (!state) return;
-
-      try {
-        const { data: chunkBlob, error: chunkErr } = await supabase.storage
-          .from('swift-transfers')
-          .download(chunkPath);
-
-        if (chunkErr || !chunkBlob) throw new Error(`Failed to download chunk ${chunkIndex}`);
-        
-        state.chunks[chunkIndex] = chunkBlob;
-        state.chunksPaths.push(chunkPath);
-        state.downloadedCount++;
-
-        const total = state.totalChunks || state.estimatedTotalChunks || 1;
-        const pct = Math.min(Math.round((state.downloadedCount / total) * 100), 99);
-        
-        setQueuedTransfers(prev => prev.map(t =>
-          t.id === transferId ? { ...t, progress: pct } : t
-        ));
-        setStatusText(`Downloading ${state.name}: ${pct}%`);
-
-        if (state.isCompleteSignaled && state.downloadedCount === state.totalChunks && !state.isAssembling) {
-          assembleTransfer(transferId);
-        }
-      } catch (err) {
-        console.error('Download chunk error:', err);
-        setQueuedTransfers(prev => prev.map(t =>
-          t.id === transferId ? { ...t, status: 'failed' } : t
-        ));
-      }
-    });
-
     channel.on('broadcast', { event: 'transfer-ready' }, async (payload) => {
       const { targetUserId, fromUserId, fromName, transferId, name, size, type, totalChunks, batchStructure } = payload.payload;
       if (targetUserId !== userId) return;
 
-      const state = incomingTransfersRef.current.get(transferId);
-      
-      if (state) {
-        // Handle as completion signal for parallel download
-        state.isCompleteSignaled = true;
-        state.totalChunks = totalChunks;
-        state.batchStructure = batchStructure;
-
-        setRemoteUploadProgress(prev => {
-          const next = { ...prev };
-          delete next[fromUserId];
-          return next;
-        });
-
-        if (state.downloadedCount === totalChunks && !state.isAssembling) {
-          assembleTransfer(transferId);
-        }
-        return;
-      }
-
-      // FALLBACK: Legacy download behavior
+      // Add to queue
       setQueuedTransfers(prev => [...prev, {
         id: transferId,
         name,
@@ -582,6 +384,7 @@ export default function Room() {
       }]);
       setStatusText(`Downloading: ${name}`);
 
+      // Clear remote upload progress since upload is done
       setRemoteUploadProgress(prev => {
         const next = { ...prev };
         delete next[fromUserId];
@@ -593,6 +396,7 @@ export default function Room() {
         const chunks: Blob[] = [];
         const numChunks = totalChunks || 1;
 
+        // Download each chunk
         for (let i = 0; i < numChunks; i++) {
           const chunkPath = numChunks === 1
             ? `${roomId}/${transferId}/${name}`
@@ -612,6 +416,7 @@ export default function Room() {
           setStatusText(`Downloading ${name}: ${pct}%`);
         }
 
+        // Reassemble
         let finalBlob: Blob;
         if (type === 'folder' && numChunks > 1) {
           setStatusText(`Merging ${numChunks} parts...`);
@@ -663,6 +468,7 @@ export default function Room() {
           setQueuedTransfers(prev => prev.filter(t => t.id !== transferId));
         }, 3000);
 
+        // Log history
         let senderEmail = '';
         const { data: prof } = await supabase.from('profiles').select('email').eq('auth_user_id', fromUserId).single();
         if (prof) senderEmail = prof.email;
@@ -697,7 +503,8 @@ export default function Room() {
           duration: 15000,
         });
 
-        const pathsToDelete = numChunks === 1 && !batchStructure
+        // Cleanup all chunks from bucket
+        const pathsToDelete = numChunks === 1
           ? [`${roomId}/${transferId}/${name}`]
           : Array.from({ length: numChunks }, (_, i) => `${roomId}/${transferId}/chunk_${i}`);
         await supabase.storage.from('swift-transfers').remove(pathsToDelete);
@@ -781,21 +588,6 @@ export default function Room() {
       setQueuedTransfers(prev => prev.map(t => t.id === next.id ? { ...t, status: 'processing', progress: 0 } : t));
       setStatusText(`Uploading ${next.name}${totalChunks > 1 ? ` (${totalChunks} parts)` : ''}...`);
 
-      transferChannelRef.current?.send({
-        type: 'broadcast',
-        event: 'transfer-started',
-        payload: {
-          targetUserId: payload.targetUserId,
-          fromUserId: userId,
-          fromName: userName,
-          transferId: next.id,
-          name: next.name,
-          size: next.size,
-          type: next.type,
-          estimatedTotalChunks: totalChunks
-        }
-      });
-
       // Helper: upload one chunk via signed URL + XHR with progress
       const uploadChunk = (chunkBlob: Blob, path: string, chunkIndex: number): Promise<void> => {
         return new Promise(async (resolve, reject) => {
@@ -850,11 +642,6 @@ export default function Room() {
             // Single file — upload directly
             const filePath = `${roomId}/${next.id}/${next.name}`;
             await uploadChunk(blob, filePath, 0);
-            transferChannelRef.current?.send({
-              type: 'broadcast', event: 'chunk-uploaded', payload: {
-                targetUserId: payload.targetUserId, transferId: next.id, chunkIndex: 0, chunkPath: filePath
-              }
-            });
           } else {
             // Multi-chunk upload
             for (let i = 0; i < totalChunks; i++) {
@@ -863,11 +650,6 @@ export default function Room() {
               const chunkBlob = blob.slice(start, end);
               const chunkPath = `${roomId}/${next.id}/chunk_${i}`;
               await uploadChunk(chunkBlob, chunkPath, i);
-              transferChannelRef.current?.send({
-                type: 'broadcast', event: 'chunk-uploaded', payload: {
-                  targetUserId: payload.targetUserId, transferId: next.id, chunkIndex: i, chunkPath
-                }
-              });
             }
           }
         } else {
@@ -899,11 +681,6 @@ export default function Room() {
                     totalChunks = globalChunkIndex + 1; // dynamically update estimate
                 }
                 await uploadChunk(chunkBlob, chunkPath, globalChunkIndex);
-                transferChannelRef.current?.send({
-                  type: 'broadcast', event: 'chunk-uploaded', payload: {
-                    targetUserId: payload.targetUserId, transferId: next.id, chunkIndex: globalChunkIndex, chunkPath
-                  }
-                });
                 globalChunkIndex++;
              }
           }
