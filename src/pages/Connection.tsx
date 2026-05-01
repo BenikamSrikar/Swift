@@ -121,31 +121,30 @@ export default function Connection() {
         }
       }
       const uniqueRooms = Array.from(latestRoomsMap.values());
-      const roomIds = uniqueRooms.map(r => r.room_id);
+      const hostIds = uniqueRooms.map(r => r.host_id);
       
-      // Verify hosts are actively INSIDE their rooms
-      const { data: participants } = await supabase
-        .from('room_participants')
-        .select('room_id, user_id')
-        .in('room_id', roomIds)
-        .eq('status', 'accepted');
+      // Verify hosts are actually online in the app
+      const { data: activeSessions } = await supabase
+        .from('sessions')
+        .select('user_id')
+        .in('user_id', hostIds);
         
-      // Filter out stale rooms where the host has left the room (tab closed or navigated away)
-      const validRooms = uniqueRooms.filter(r => 
-        participants?.some(p => p.room_id === r.room_id && p.user_id === r.host_id)
-      );
+      const activeHostIds = new Set(activeSessions?.map(s => s.user_id) || []);
+      
+      // Filter rooms where the host has an active session
+      const validRooms = uniqueRooms.filter(r => activeHostIds.has(r.host_id));
       
       if (validRooms.length === 0) {
         setActiveRooms([]);
         return;
       }
       
-      const finalHostIds = [...new Set(validRooms.map(r => r.host_id))];
+      const validHostIds = [...new Set(validRooms.map(r => r.host_id))];
 
       const { data: profiles } = await supabase
         .from('profiles')
         .select('auth_user_id, name, email, avatar_url')
-        .in('auth_user_id', finalHostIds);
+        .in('auth_user_id', validHostIds);
         
       const profileMap = new Map((profiles || []).map(p => [p.auth_user_id, p]));
       
@@ -159,17 +158,24 @@ export default function Connection() {
     
     fetchRooms();
     
-    const channel = supabase.channel('public:rooms-and-participants')
+    const channel = supabase.channel('public:rooms-and-presence')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
         fetchRooms();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, () => {
         fetchRooms();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => {
+        fetchRooms();
+      })
       .subscribe();
+
+    // Fallback polling every 10s for extra reliability
+    const interval = setInterval(fetchRooms, 10000);
       
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(interval);
     };
   }, [user, profile]);
 
