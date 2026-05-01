@@ -101,12 +101,14 @@ export default function Connection() {
     ensureSession();
   }, [user, profile]);
 
-  const fetchRooms = useCallback(async () => {
-    const { data: rooms } = await supabase
-      .from('rooms')
-      .select('room_id, host_id, created_at')
-      .eq('status', 'active')
-      .order('created_at', { ascending: false });
+    const fetchRooms = useCallback(async () => {
+      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+      
+      const { data: rooms } = await supabase
+        .from('rooms')
+        .select('room_id, host_id, created_at')
+        .gt('created_at', twelveHoursAgo)
+        .order('created_at', { ascending: false });
     
     if (!rooms) return;
 
