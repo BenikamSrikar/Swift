@@ -142,14 +142,30 @@ export default function Connection() {
       
       const validHostIds = [...new Set(validRooms.map(r => r.host_id))];
 
+      // TRIPLE LOCK: Finally, ensure the host actually has an active app session
+      const { data: activeSessions } = await supabase
+        .from('sessions')
+        .select('user_id')
+        .in('user_id', validHostIds);
+      
+      const onlineHostIds = new Set(activeSessions?.map(s => s.user_id) || []);
+      const finalRooms = validRooms.filter(r => onlineHostIds.has(r.host_id));
+
+      if (finalRooms.length === 0) {
+        setActiveRooms([]);
+        return;
+      }
+
+      const finalHostIds = [...new Set(finalRooms.map(r => r.host_id))];
+
       const { data: profiles } = await supabase
         .from('profiles')
         .select('auth_user_id, name, email, avatar_url')
-        .in('auth_user_id', validHostIds);
+        .in('auth_user_id', finalHostIds);
         
       const profileMap = new Map((profiles || []).map(p => [p.auth_user_id, p]));
       
-      const enriched = validRooms.map(r => ({
+      const enriched = finalRooms.map(r => ({
         room_id: r.room_id,
         host: profileMap.get(r.host_id) || { name: 'Unknown', email: 'Unknown', avatar_url: null, auth_user_id: r.host_id }
       }));
