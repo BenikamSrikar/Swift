@@ -361,7 +361,7 @@ export default function Connection() {
                     <div className="flex items-center gap-3">
                       <h2 className="text-2xl font-bold flex items-center gap-2">
                         <Users className="w-6 h-6 text-primary" />
-                        Live Rooms
+                        Hosted Live Rooms
                       </h2>
                       <Button 
                         variant="ghost" 
@@ -373,7 +373,7 @@ export default function Connection() {
                         <RefreshCw className="w-4 h-4" />
                       </Button>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">Join an available session below.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Connect with these active hosts in real-time.</p>
                   </div>
                   
                   <div className="relative w-full sm:w-72">
@@ -392,67 +392,64 @@ export default function Connection() {
                     <div className="h-full w-full flex items-center justify-center">
                       <Clock className="w-8 h-8 text-primary animate-spin" />
                     </div>
-                  ) : groupedProfiles.length === 0 ? (
+                  ) : filteredProfiles.filter(p => !!activeRoomsMap[p.auth_user_id]).length === 0 ? (
                     <div className="py-16 flex flex-col items-center justify-center text-center opacity-50">
-                      <Search className="w-12 h-12 mb-4 text-muted-foreground" />
-                      <h3 className="text-lg font-bold">No contacts found</h3>
-                      <p className="text-sm">We couldn't find anyone matching your search.</p>
+                      <div className="w-20 h-20 mb-6 rounded-full bg-muted/50 flex items-center justify-center border border-dashed border-border">
+                        <Users className="w-10 h-10 text-muted-foreground" />
+                      </div>
+                      <h3 className="text-xl font-bold">No Hosted Rooms</h3>
+                      <p className="text-sm max-w-xs mt-2">Active rooms will appear here automatically as soon as hosts start their sessions.</p>
                     </div>
                   ) : (
-                    groupedProfiles.map(([letter, profiles]) => (
-                      <div key={letter} className="mb-10 animate-fade-up">
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-                            <span className="text-xl font-black text-primary">{letter}</span>
-                          </div>
-                          <div className="h-[1px] flex-1 bg-gradient-to-r from-border/50 to-transparent" />
-                        </div>
-                        
-                        <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide snap-x snap-mandatory">
-                          {profiles.map((p) => {
-                            const roomId = activeRoomsMap[p.auth_user_id];
-                            const isLive = !!roomId;
-                            const isMe = p.auth_user_id === user.id;
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-up">
+                      {filteredProfiles
+                        .filter(p => !!activeRoomsMap[p.auth_user_id])
+                        .map((p) => {
+                          const roomId = activeRoomsMap[p.auth_user_id];
+                          const isMe = p.auth_user_id === user.id;
 
-                            return (
-                              <div 
-                                key={p.auth_user_id} 
-                                className="w-48 h-64 shrink-0 bg-card/40 backdrop-blur-md border border-border/40 rounded-3xl p-5 flex flex-col items-center justify-between snap-start hover:border-primary/40 hover:bg-card/60 transition-all duration-300 group shadow-lg"
-                              >
-                                <div className="flex flex-col items-center text-center">
-                                  <div className="relative w-20 h-20 mb-4">
-                                    <div className={`absolute inset-0 rounded-full border-2 transition-colors ${isLive ? 'border-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'border-border/50'}`} />
-                                    <div className="absolute inset-1 rounded-full overflow-hidden bg-muted">
-                                      {p.avatar_url ? (
-                                        <img src={p.avatar_url} alt={p.name} className="w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-2xl font-bold bg-primary/10 text-primary uppercase">
-                                          {p.name.charAt(0)}
-                                        </div>
-                                      )}
-                                    </div>
-                                    {isLive && (
-                                      <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-background animate-bounce" />
+                          return (
+                            <motion.div 
+                              layout
+                              key={p.auth_user_id} 
+                              className="bg-card/40 backdrop-blur-md border border-red-500/20 rounded-3xl p-6 flex flex-col items-center justify-between hover:border-red-500/40 hover:bg-card/60 transition-all duration-300 group shadow-xl relative overflow-hidden"
+                            >
+                              <div className="absolute top-0 right-0 p-3">
+                                <div className="flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded-full border border-red-500/20">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                  <span className="text-[10px] font-bold text-red-500 uppercase tracking-tighter">Live</span>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col items-center text-center w-full">
+                                <div className="relative w-24 h-24 mb-5">
+                                  <div className="absolute inset-0 rounded-full border-2 border-red-500 animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.3)]" />
+                                  <div className="absolute inset-1.5 rounded-full overflow-hidden bg-muted shadow-inner">
+                                    {p.avatar_url ? (
+                                      <img src={p.avatar_url} alt={p.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-3xl font-bold bg-primary/10 text-primary uppercase">
+                                        {p.name.charAt(0)}
+                                      </div>
                                     )}
                                   </div>
-                                  <h3 className="font-bold text-sm truncate w-full mb-0.5">{p.name}</h3>
-                                  <p className="text-[10px] text-muted-foreground truncate w-full opacity-60 px-2">{p.email}</p>
                                 </div>
-
-                                <Button 
-                                  onClick={() => roomId && handleJoinRoom(roomId)}
-                                  disabled={joining || !isLive || isMe}
-                                  variant={isLive ? "destructive" : "secondary"}
-                                  className={`w-full rounded-xl font-black text-[10px] uppercase tracking-widest h-9 transition-all ${isLive ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20' : 'opacity-30'}`}
-                                >
-                                  {joining ? '...' : isMe ? 'YOU' : isLive ? 'Join Room' : 'Offline'}
-                                </Button>
+                                <h3 className="font-bold text-lg truncate w-full mb-1">{p.name}</h3>
+                                <p className="text-xs text-muted-foreground truncate w-full opacity-60 mb-6">{p.email}</p>
                               </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))
+
+                              <Button 
+                                onClick={() => handleJoinRoom(roomId)}
+                                disabled={joining || isMe}
+                                variant="destructive"
+                                className="w-full rounded-2xl font-black text-xs uppercase tracking-widest h-12 bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all active:scale-95"
+                              >
+                                {joining ? 'Connecting...' : isMe ? 'YOU ARE HOST' : 'Join Room'}
+                              </Button>
+                            </motion.div>
+                          );
+                        })}
+                    </div>
                   )}
                 </div>
               </motion.div>
