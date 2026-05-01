@@ -107,18 +107,19 @@ export default function Connection() {
         return;
       }
       
-      const hostIds = [...new Set(rooms.map(r => r.host_id))];
+      const roomIds = rooms.map(r => r.room_id);
       
-      // Verify hosts are actually online by checking sessions
-      const { data: activeSessions } = await supabase
-        .from('sessions')
-        .select('user_id')
-        .in('user_id', hostIds);
+      // Verify hosts are actively INSIDE their rooms
+      const { data: participants } = await supabase
+        .from('room_participants')
+        .select('room_id, user_id')
+        .in('room_id', roomIds)
+        .eq('status', 'accepted');
         
-      const activeHostIds = new Set(activeSessions?.map(s => s.user_id) || []);
-      
-      // Filter out stale rooms where the host has disconnected/closed tab
-      const validRooms = rooms.filter(r => activeHostIds.has(r.host_id));
+      // Filter out stale rooms where the host has left the room (tab closed or navigated away)
+      const validRooms = rooms.filter(r => 
+        participants?.some(p => p.room_id === r.room_id && p.user_id === r.host_id)
+      );
       
       if (validRooms.length === 0) {
         setActiveRooms([]);
@@ -144,11 +145,11 @@ export default function Connection() {
     
     fetchRooms();
     
-    const channel = supabase.channel('public:rooms-and-sessions')
+    const channel = supabase.channel('public:rooms-and-participants')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
         fetchRooms();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, () => {
         fetchRooms();
       })
       .subscribe();
