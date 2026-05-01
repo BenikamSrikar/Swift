@@ -64,7 +64,7 @@ function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
 export default function Connection() {
   const navigate = useNavigate();
   const { user, profile, loading: authLoading, signOut } = useAuth();
-  const [activeRoomsMap, setActiveRoomsMap] = useState<Map<string, string>>(new Map());
+  const [activeRoomsMap, setActiveRoomsMap] = useState<Record<string, string>>({});
   const [allProfiles, setAllProfiles] = useState<any[]>([]);
   const [profilesLoading, setProfilesLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -113,11 +113,21 @@ export default function Connection() {
       
       if (!rooms) return;
 
-      // Deduplicate: A host can only have ONE live room at a time. Pick the newest.
-      const roomMap = new Map<string, string>();
+      const { data: participants } = await supabase
+        .from('room_participants')
+        .select('room_id, user_id')
+        .eq('status', 'accepted')
+        .in('room_id', rooms.map(r => r.room_id));
+
+      const roomMap: Record<string, string> = {};
+      const activeParticipantRoomIds = new Set(participants?.map(p => `${p.room_id}-${p.user_id}`) || []);
+
       for (const r of rooms) {
-        if (!roomMap.has(r.host_id)) {
-          roomMap.set(r.host_id, r.room_id);
+        // Verify host is actually in the room to avoid ghost rooms
+        if (activeParticipantRoomIds.has(`${r.room_id}-${r.host_id}`)) {
+          if (!roomMap[r.host_id]) {
+            roomMap[r.host_id] = r.room_id;
+          }
         }
       }
       setActiveRoomsMap(roomMap);
@@ -393,7 +403,7 @@ export default function Connection() {
                         
                         <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide snap-x snap-mandatory">
                           {profiles.map((p) => {
-                            const roomId = activeRoomsMap.get(p.auth_user_id);
+                            const roomId = activeRoomsMap[p.auth_user_id];
                             const isLive = !!roomId;
                             const isMe = p.auth_user_id === user.id;
 
