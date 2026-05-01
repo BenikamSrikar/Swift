@@ -101,9 +101,6 @@ export default function Connection() {
     ensureSession();
   }, [user, profile]);
 
-  useEffect(() => {
-    if (!user || !profile) return;
-
   const fetchRooms = useCallback(async () => {
     const { data: rooms } = await supabase
       .from('rooms')
