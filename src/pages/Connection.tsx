@@ -6,9 +6,8 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Plus, LogIn, Clock, Search } from 'lucide-react';
+import { Plus, Clock, Search, Users } from 'lucide-react';
 import HistoryModal from '@/components/HistoryModal';
-import ConnectionFeatures from '@/components/ConnectionFeatures';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
@@ -52,7 +51,6 @@ function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
           }}
         />
       ))}
-      {/* Outer glow ring */}
       <motion.div 
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/10"
         style={{ width: 110, height: 110 }}
@@ -70,8 +68,9 @@ export default function Connection() {
   const [joining, setJoining] = useState(false);
   const [waitingApproval, setWaitingApproval] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [roomCode, setRoomCode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const [activeRooms, setActiveRooms] = useState<any[]>([]);
 
   useEffect(() => {
     if (!authLoading && (!user || !profile)) {
@@ -94,6 +93,48 @@ export default function Connection() {
     ensureSession();
   }, [user, profile]);
 
+  useEffect(() => {
+    if (!user || !profile) return;
+
+    const fetchRooms = async () => {
+      const { data: rooms } = await supabase
+        .from('rooms')
+        .select('room_id, host_id')
+        .eq('status', 'active');
+      
+      if (!rooms || rooms.length === 0) {
+        setActiveRooms([]);
+        return;
+      }
+      
+      const hostIds = [...new Set(rooms.map(r => r.host_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('auth_user_id, name, email, avatar_url')
+        .in('auth_user_id', hostIds);
+        
+      const profileMap = new Map((profiles || []).map(p => [p.auth_user_id, p]));
+      
+      const enriched = rooms.map(r => ({
+        room_id: r.room_id,
+        host: profileMap.get(r.host_id) || { name: 'Unknown', email: 'Unknown', avatar_url: null, auth_user_id: r.host_id }
+      }));
+      
+      setActiveRooms(enriched);
+    };
+    
+    fetchRooms();
+    
+    const channel = supabase.channel('public:rooms')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
+        fetchRooms();
+      }).subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, profile]);
+
   if (authLoading || !user || !profile) return null;
 
   const handleCreateRoom = async () => {
@@ -103,7 +144,7 @@ export default function Connection() {
     
     while (!isUnique) {
       roomId = Array.from({ length: 6 }, () => '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 36)]).join('');
-      const { data: existingRoom } = await supabase.from('rooms').select('id').eq('room_id', roomId).single();
+      const { data: existingRoom } = await supabase.from('rooms').select('id').eq('room_id', roomId).maybeSingle();
       if (!existingRoom) {
         isUnique = true;
       }
@@ -112,24 +153,16 @@ export default function Connection() {
     const { error } = await supabase.from('rooms').insert({ room_id: roomId, host_id: user.id, status: 'active' });
     if (error) { toast.error('Failed to create room'); setCreating(false); return; }
 
-    // Remove any stale participant row before inserting a fresh one
     await supabase.from('room_participants').delete().eq('room_id', roomId).eq('user_id', user.id);
     await supabase.from('room_participants').insert({ room_id: roomId, user_id: user.id, status: 'accepted' });
     navigate(`/room/${roomId}`);
-  };
-
-  const handleRoomCodeChange = async (val: string) => {
-    setRoomCode(val);
-    if (val.length === 6) {
-      handleJoinRoom(val);
-    }
   };
 
   const handleJoinRoom = async (rid: string) => {
     if (!rid.trim()) return;
     setJoining(true);
     
-    const { data: room, error: roomError } = await supabase
+    const { data: room } = await supabase
       .from('rooms')
       .select('*')
       .eq('room_id', rid)
@@ -137,7 +170,6 @@ export default function Connection() {
 
     if (!room) { 
       toast.error('Invalid Room ID'); 
-      setRoomCode(''); 
       setJoining(false); 
       return; 
     }
@@ -148,7 +180,6 @@ export default function Connection() {
       return; 
     }
 
-    // Get host info separately for robustness
     const { data: hostProfile } = await supabase
       .from('profiles')
       .select('name')
@@ -168,7 +199,6 @@ export default function Connection() {
       return; 
     }
 
-    // Remove any previous stale row before re-joining
     if (existing) {
       await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
     }
@@ -208,16 +238,21 @@ export default function Connection() {
     navigate('/');
   };
 
+  const filteredRooms = activeRooms.filter(r => 
+    r.host.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    r.host.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary selection:text-primary-foreground overflow-hidden">
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
-      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 relative">
-        <div className="w-full max-w-4xl flex flex-col items-center z-10">
-          
-          {/* Profile Section */}
-          <div className="relative mb-6 flex flex-col items-center animate-fade-up">
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-3">
+      <main className="flex-1 flex flex-col lg:flex-row p-4 sm:p-6 lg:p-8 gap-8 relative z-10 w-full max-w-7xl mx-auto">
+        
+        {/* LEFT BAR: Profile & Create */}
+        <div className="w-full lg:w-[320px] flex flex-col items-center justify-start pt-8 pb-10 px-6 bg-card/20 backdrop-blur-md border border-border/40 rounded-3xl shrink-0 h-fit">
+          <div className="relative mb-6 flex flex-col items-center animate-fade-up w-full">
+            <div className="relative w-28 h-28 mb-5">
               <AvatarParticles />
               <div className="absolute inset-0 rounded-full border-4 border-background shadow-2xl overflow-hidden z-20 bg-muted">
                 {profile.avatar_url ? (
@@ -229,26 +264,34 @@ export default function Connection() {
                 )}
               </div>
               <motion.div 
-                className="absolute -bottom-1 -right-1 bg-green-500 w-4 h-4 rounded-full border-2 border-background z-30"
+                className="absolute bottom-1 right-1 bg-green-500 w-4 h-4 rounded-full border-[3px] border-background z-30"
                 animate={{ scale: [1, 1.2, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               />
             </div>
             
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              className="text-center"
-            >
-              <h1 className="text-2xl font-bold tracking-tight mb-0.5">{profile.name}</h1>
-              <p className="text-xs text-muted-foreground font-medium opacity-70 mb-1.5">{profile.email}</p>
-              <div className="flex items-center gap-2 justify-center">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center w-full">
+              <h1 className="text-2xl font-bold tracking-tight mb-1 truncate">{profile.name}</h1>
+              <p className="text-sm text-muted-foreground font-medium opacity-70 mb-2 truncate">{profile.email}</p>
+              <div className="flex items-center gap-2 justify-center mb-8">
                 <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
                 <span className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Session Active</span>
               </div>
+              
+              <Button 
+                onClick={handleCreateRoom} 
+                disabled={creating}
+                className="w-full h-14 rounded-2xl text-base font-bold volts-gradient shadow-xl shadow-primary/20 hover:shadow-primary/30 active:translate-y-0.5 transition-all"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                {creating ? 'Starting Session...' : 'Create Live Room'}
+              </Button>
             </motion.div>
           </div>
+        </div>
 
+        {/* RIGHT BAR: Active Rooms */}
+        <div className="flex-1 flex flex-col min-w-0 bg-card/10 border border-border/20 rounded-3xl p-6 backdrop-blur-sm h-[calc(100vh-140px)] lg:h-auto overflow-hidden">
           <AnimatePresence mode="wait">
             {waitingApproval ? (
               <motion.div 
@@ -256,73 +299,85 @@ export default function Connection() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-md bg-card/50 backdrop-blur-xl border border-border/50 rounded-3xl p-10 flex flex-col items-center text-center shadow-2xl"
+                className="w-full h-full flex items-center justify-center"
               >
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 relative">
-                  <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-                  <Clock className="w-8 h-8 text-primary animate-spin" style={{ animationDuration: '4s' }} />
-                </div>
-                <h2 className="text-xl font-bold mb-2">Awaiting Host</h2>
-                <p className="text-sm text-muted-foreground mb-8">The host needs to approve your connection request before you can start transferring.</p>
-                <Button variant="outline" className="rounded-full px-8" onClick={() => { setWaitingApproval(false); setJoining(false); }}>
-                  Cancel Request
-                </Button>
-              </motion.div>
-            ) : (
-              <motion.div 
-                key="actions"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-6"
-              >
-                {/* Create Card */}
-                <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-4 group hover:border-primary/30 transition-all duration-500 active:scale-[0.98]">
-                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                    <Plus className="h-6 w-6 text-primary" />
+                <div className="bg-card/50 backdrop-blur-xl border border-border/50 rounded-3xl p-10 flex flex-col items-center text-center shadow-2xl max-w-md w-full">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 relative">
+                    <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
+                    <Clock className="w-8 h-8 text-primary animate-spin" style={{ animationDuration: '4s' }} />
                   </div>
-                  <div className="text-center">
-                    <h3 className="font-bold text-base mb-0.5">Host a Room</h3>
-                    <p className="text-[10px] text-muted-foreground">Start your own room and invite others using your code.</p>
-                  </div>
-                  <Button 
-                    onClick={handleCreateRoom} 
-                    disabled={creating}
-                    className="w-full h-12 rounded-xl text-sm font-bold volts-gradient shadow-xl shadow-primary/20 hover:shadow-primary/30 active:translate-y-0.5 transition-all"
-                  >
-                    {creating ? 'Starting Session...' : 'Create Room'}
+                  <h2 className="text-xl font-bold mb-2">Awaiting Host</h2>
+                  <p className="text-sm text-muted-foreground mb-8">The host needs to approve your connection request before you can start transferring.</p>
+                  <Button variant="outline" className="rounded-full px-8" onClick={() => { setWaitingApproval(false); setJoining(false); }}>
+                    Cancel Request
                   </Button>
                 </div>
-
-                {/* Join Card */}
-                <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-6 group hover:border-primary/30 transition-all duration-500">
-                  <div className="w-12 h-12 bg-secondary/20 rounded-xl flex items-center justify-center group-hover:bg-secondary/30 transition-colors">
-                    <LogIn className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="text-center">
-                    <h3 className="font-bold text-base mb-1">Join a Room</h3>
-                    <p className="text-xs text-muted-foreground max-w-[200px]">Enter the 6-character room code shared by the host.</p>
+              </motion.div>
+            ) : (
+              <motion.div key="rooms-list" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex-1 flex flex-col h-full overflow-hidden">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4 shrink-0">
+                  <div>
+                    <h2 className="text-2xl font-bold flex items-center gap-2">
+                      <Users className="w-6 h-6 text-primary" />
+                      Live Rooms
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-1">Join an available session below.</p>
                   </div>
                   
-                  <div className="w-full space-y-4">
-                    <div className="relative">
-                      <Input 
-                        placeholder="ROOM ID" 
-                        value={roomCode}
-                        onChange={(e) => handleRoomCodeChange(e.target.value.toUpperCase())}
-                        disabled={joining}
-                        className="h-14 rounded-xl text-center font-mono text-xl tracking-[0.2em] bg-muted/30 border-border/50 focus-visible:ring-primary/50 placeholder:tracking-normal placeholder:text-sm placeholder:font-sans"
-                        maxLength={6}
-                      />
-                      {joining && !waitingApproval && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-center text-muted-foreground opacity-60">
-                      Auto-connects once valid code is entered.
-                    </p>
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input 
+                      placeholder="Search by name or email..." 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 bg-card/40 border-border/40 rounded-xl h-11 focus-visible:ring-primary/50"
+                    />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-max overflow-y-auto pb-4 pr-1 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+                  {filteredRooms.length === 0 ? (
+                    <div className="col-span-full py-16 flex flex-col items-center justify-center text-center opacity-50">
+                      <div className="w-16 h-16 mb-4 rounded-full bg-muted flex items-center justify-center border border-border/50">
+                        <Search className="w-6 h-6 text-muted-foreground" />
+                      </div>
+                      <h3 className="text-lg font-bold">No rooms found</h3>
+                      <p className="text-sm max-w-xs mt-1">There are no active sessions matching your search or no rooms are currently live.</p>
+                    </div>
+                  ) : (
+                    filteredRooms.map((room) => (
+                      <div key={room.room_id} className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-5 flex flex-col gap-5 hover:border-primary/40 hover:bg-card/60 transition-all duration-300 group shadow-sm hover:shadow-md">
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 border-2 border-border/50 group-hover:border-primary/30 transition-colors">
+                            {room.host.avatar_url ? (
+                              <img src={room.host.avatar_url} alt={room.host.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-xl font-bold bg-primary/10 text-primary">
+                                {room.host.name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold truncate text-base mb-0.5">{room.host.name}</h3>
+                            <p className="text-xs text-muted-foreground truncate">{room.host.email}</p>
+                            {room.host.auth_user_id === user.id && (
+                              <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
+                                Your Room
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <Button 
+                          onClick={() => handleJoinRoom(room.room_id)}
+                          disabled={joining || room.host.auth_user_id === user.id}
+                          variant={room.host.auth_user_id === user.id ? "secondary" : "default"}
+                          className="w-full rounded-xl font-bold h-10 shadow-sm"
+                        >
+                          {joining ? 'Connecting...' : room.host.auth_user_id === user.id ? 'Already Hosted' : 'Join Room'}
+                        </Button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </motion.div>
             )}
