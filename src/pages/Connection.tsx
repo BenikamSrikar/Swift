@@ -81,7 +81,7 @@ export default function Connection() {
   useEffect(() => {
     if (!user || !profile) return;
     const ensureSession = async () => {
-      const { data: existing } = await supabase.from('sessions').select('id').eq('user_id', user.id).single();
+      const { data: existing } = await supabase.from('sessions').select('id').eq('user_id', user.id).maybeSingle();
       if (!existing) {
         await supabase.from('sessions').insert({
           user_id: user.id,
@@ -89,6 +89,11 @@ export default function Connection() {
           status: 'active',
         });
       }
+
+      // ACTIVE CLEANUP: If a user is on the Connection page, they cannot be in a room.
+      // This kills all "zombie" rooms left over from browser crashes or forced unloads.
+      await supabase.from('room_participants').delete().eq('user_id', user.id);
+      await supabase.from('rooms').update({ status: 'closed' }).eq('host_id', user.id).eq('status', 'active');
     };
     ensureSession();
   }, [user, profile]);
@@ -99,15 +104,24 @@ export default function Connection() {
     const fetchRooms = async () => {
       const { data: rooms } = await supabase
         .from('rooms')
-        .select('room_id, host_id')
-        .eq('status', 'active');
+        .select('room_id, host_id, created_at')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
       
       if (!rooms || rooms.length === 0) {
         setActiveRooms([]);
         return;
       }
-      
-      const roomIds = rooms.map(r => r.room_id);
+
+      // Deduplicate: A host can only have ONE live room at a time. Pick the newest.
+      const latestRoomsMap = new Map();
+      for (const r of rooms) {
+        if (!latestRoomsMap.has(r.host_id)) {
+          latestRoomsMap.set(r.host_id, r);
+        }
+      }
+      const uniqueRooms = Array.from(latestRoomsMap.values());
+      const roomIds = uniqueRooms.map(r => r.room_id);
       
       // Verify hosts are actively INSIDE their rooms
       const { data: participants } = await supabase
@@ -117,7 +131,7 @@ export default function Connection() {
         .eq('status', 'accepted');
         
       // Filter out stale rooms where the host has left the room (tab closed or navigated away)
-      const validRooms = rooms.filter(r => 
+      const validRooms = uniqueRooms.filter(r => 
         participants?.some(p => p.room_id === r.room_id && p.user_id === r.host_id)
       );
       
