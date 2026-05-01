@@ -64,6 +64,9 @@ function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
 export default function Connection() {
   const navigate = useNavigate();
   const { user, profile, loading: authLoading, signOut } = useAuth();
+  const [activeRoomsMap, setActiveRoomsMap] = useState<Map<string, string>>(new Map());
+  const [allProfiles, setAllProfiles] = useState<any[]>([]);
+  const [profilesLoading, setProfilesLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [waitingApproval, setWaitingApproval] = useState(false);
@@ -108,37 +111,31 @@ export default function Connection() {
         .eq('status', 'active')
         .order('created_at', { ascending: false });
       
-      if (!rooms || rooms.length === 0) {
-        setActiveRooms([]);
-        return;
-      }
+      if (!rooms) return;
 
       // Deduplicate: A host can only have ONE live room at a time. Pick the newest.
-      const latestRoomsMap = new Map();
+      const roomMap = new Map<string, string>();
       for (const r of rooms) {
-        if (!latestRoomsMap.has(r.host_id)) {
-          latestRoomsMap.set(r.host_id, r);
+        if (!roomMap.has(r.host_id)) {
+          roomMap.set(r.host_id, r.room_id);
         }
       }
-      const uniqueRooms = Array.from(latestRoomsMap.values());
-      const hostIds = uniqueRooms.map(r => r.host_id);
-      
+      setActiveRoomsMap(roomMap);
+    };
+
+    const fetchProfiles = async () => {
+      setProfilesLoading(true);
       const { data: profiles } = await supabase
         .from('profiles')
         .select('auth_user_id, name, email, avatar_url')
-        .in('auth_user_id', hostIds);
+        .order('name', { ascending: true });
         
-      const profileMap = new Map((profiles || []).map(p => [p.auth_user_id, p]));
-      
-      const enriched = uniqueRooms.map(r => ({
-        room_id: r.room_id,
-        host: profileMap.get(r.host_id) || { name: 'Unknown', email: 'Unknown', avatar_url: null, auth_user_id: r.host_id }
-      }));
-      
-      setActiveRooms(enriched);
+      if (profiles) setAllProfiles(profiles);
+      setProfilesLoading(false);
     };
     
     fetchRooms();
+    fetchProfiles();
     
     const channel = supabase.channel('public:rooms-and-presence')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
@@ -264,10 +261,22 @@ export default function Connection() {
     navigate('/');
   };
 
-  const filteredRooms = activeRooms.filter(r => 
-    (r.host?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (r.host?.email || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProfiles = useMemo(() => {
+    return allProfiles.filter(p => 
+      (p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (p.email || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [allProfiles, searchQuery]);
+
+  const groupedProfiles = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    filteredProfiles.forEach(p => {
+      const char = (p.name?.[0] || '#').toUpperCase();
+      if (!groups[char]) groups[char] = [];
+      groups[char].push(p);
+    });
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredProfiles]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary selection:text-primary-foreground overflow-hidden">
@@ -361,46 +370,70 @@ export default function Connection() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-max overflow-y-auto pb-4 pr-1 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
-                  {filteredRooms.length === 0 ? (
-                    <div className="col-span-full py-16 flex flex-col items-center justify-center text-center opacity-50">
-                      <div className="w-16 h-16 mb-4 rounded-full bg-muted flex items-center justify-center border border-border/50">
-                        <Search className="w-6 h-6 text-muted-foreground" />
-                      </div>
-                      <h3 className="text-lg font-bold">No rooms found</h3>
-                      <p className="text-sm max-w-xs mt-1">There are no active sessions matching your search or no rooms are currently live.</p>
+                <div className="flex-1 overflow-y-auto pb-4 pr-1 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+                  {profilesLoading ? (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <Clock className="w-8 h-8 text-primary animate-spin" />
+                    </div>
+                  ) : groupedProfiles.length === 0 ? (
+                    <div className="py-16 flex flex-col items-center justify-center text-center opacity-50">
+                      <Search className="w-12 h-12 mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-bold">No contacts found</h3>
+                      <p className="text-sm">We couldn't find anyone matching your search.</p>
                     </div>
                   ) : (
-                    filteredRooms.map((room) => (
-                      <div key={room.room_id} className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-5 flex flex-col gap-5 hover:border-primary/40 hover:bg-card/60 transition-all duration-300 group shadow-sm hover:shadow-md">
-                        <div className="flex items-center gap-4">
-                          <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 border-2 border-border/50 group-hover:border-primary/30 transition-colors">
-                            {room.host.avatar_url ? (
-                              <img src={room.host.avatar_url} alt={room.host.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-xl font-bold bg-primary/10 text-primary">
-                                {room.host.name.charAt(0).toUpperCase()}
-                              </div>
-                            )}
+                    groupedProfiles.map(([letter, profiles]) => (
+                      <div key={letter} className="mb-10 animate-fade-up">
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                            <span className="text-xl font-black text-primary">{letter}</span>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-bold truncate text-base mb-0.5">{room.host.name}</h3>
-                            <p className="text-xs text-muted-foreground truncate">{room.host.email}</p>
-                            {room.host.auth_user_id === user.id && (
-                              <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
-                                Your Room
-                              </span>
-                            )}
-                          </div>
+                          <div className="h-[1px] flex-1 bg-gradient-to-r from-border/50 to-transparent" />
                         </div>
-                        <Button 
-                          onClick={() => handleJoinRoom(room.room_id)}
-                          disabled={joining || room.host.auth_user_id === user.id}
-                          variant={room.host.auth_user_id === user.id ? "secondary" : "default"}
-                          className="w-full rounded-xl font-bold h-10 shadow-sm"
-                        >
-                          {joining ? 'Connecting...' : room.host.auth_user_id === user.id ? 'Already Hosted' : 'Join Room'}
-                        </Button>
+                        
+                        <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide snap-x snap-mandatory">
+                          {profiles.map((p) => {
+                            const roomId = activeRoomsMap.get(p.auth_user_id);
+                            const isLive = !!roomId;
+                            const isMe = p.auth_user_id === user.id;
+
+                            return (
+                              <div 
+                                key={p.auth_user_id} 
+                                className="w-48 h-64 shrink-0 bg-card/40 backdrop-blur-md border border-border/40 rounded-3xl p-5 flex flex-col items-center justify-between snap-start hover:border-primary/40 hover:bg-card/60 transition-all duration-300 group shadow-lg"
+                              >
+                                <div className="flex flex-col items-center text-center">
+                                  <div className="relative w-20 h-20 mb-4">
+                                    <div className={`absolute inset-0 rounded-full border-2 transition-colors ${isLive ? 'border-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'border-border/50'}`} />
+                                    <div className="absolute inset-1 rounded-full overflow-hidden bg-muted">
+                                      {p.avatar_url ? (
+                                        <img src={p.avatar_url} alt={p.name} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-2xl font-bold bg-primary/10 text-primary uppercase">
+                                          {p.name.charAt(0)}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {isLive && (
+                                      <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-background animate-bounce" />
+                                    )}
+                                  </div>
+                                  <h3 className="font-bold text-sm truncate w-full mb-0.5">{p.name}</h3>
+                                  <p className="text-[10px] text-muted-foreground truncate w-full opacity-60 px-2">{p.email}</p>
+                                </div>
+
+                                <Button 
+                                  onClick={() => roomId && handleJoinRoom(roomId)}
+                                  disabled={joining || !isLive || isMe}
+                                  variant={isLive ? "destructive" : "secondary"}
+                                  className={`w-full rounded-xl font-black text-[10px] uppercase tracking-widest h-9 transition-all ${isLive ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20' : 'opacity-30'}`}
+                                >
+                                  {joining ? '...' : isMe ? 'YOU' : isLive ? 'Join Room' : 'Offline'}
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     ))
                   )}
