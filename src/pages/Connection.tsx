@@ -117,9 +117,10 @@ export default function Connection() {
       const roomMap: Record<string, string> = {};
       for (const r of rooms) {
         // Smart Detection: Find the host ID regardless of column name
-        const hostId = r.host_id || r.user_id || r.created_by || r.auth_user_id;
+        const room = r as any;
+        const hostId = room.host_id || room.user_id || room.created_by || room.auth_user_id;
         if (hostId && !roomMap[hostId]) {
-          roomMap[hostId] = r.room_id;
+          roomMap[hostId] = room.room_id;
         }
       }
       setActiveRoomsMap(roomMap);
