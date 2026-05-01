@@ -369,7 +369,7 @@ export default function Room() {
     });
 
     channel.on('broadcast', { event: 'transfer-ready' }, async (payload) => {
-      const { targetUserId, fromUserId, fromName, transferId, name, size, type, totalChunks } = payload.payload;
+      const { targetUserId, fromUserId, fromName, transferId, name, size, type, totalChunks, batchStructure } = payload.payload;
       if (targetUserId !== userId) return;
 
       // Add to queue
@@ -421,15 +421,35 @@ export default function Room() {
         if (type === 'folder' && numChunks > 1) {
           setStatusText(`Merging ${numChunks} parts...`);
           const mergedZip = new JSZip();
-          for (let i = 0; i < chunks.length; i++) {
-            setStatusText(`Merging part ${i + 1} of ${numChunks}...`);
-            const tempZip = await JSZip.loadAsync(chunks[i]);
-            tempZip.forEach((relativePath, zipEntry) => {
-              if (!zipEntry.dir) {
-                mergedZip.file(relativePath, zipEntry.async('blob'));
-              }
-            });
+          
+          if (batchStructure) {
+            let chunkIndex = 0;
+            for (let i = 0; i < batchStructure.length; i++) {
+              setStatusText(`Merging part ${i + 1} of ${batchStructure.length}...`);
+              const numSlices = batchStructure[i];
+              const batchChunks = chunks.slice(chunkIndex, chunkIndex + numSlices);
+              chunkIndex += numSlices;
+              
+              const batchBlob = new Blob(batchChunks);
+              const tempZip = await JSZip.loadAsync(batchBlob);
+              tempZip.forEach((relativePath, zipEntry) => {
+                if (!zipEntry.dir) {
+                  mergedZip.file(relativePath, zipEntry.async('blob'));
+                }
+              });
+            }
+          } else {
+            for (let i = 0; i < chunks.length; i++) {
+              setStatusText(`Merging part ${i + 1} of ${numChunks}...`);
+              const tempZip = await JSZip.loadAsync(chunks[i]);
+              tempZip.forEach((relativePath, zipEntry) => {
+                if (!zipEntry.dir) {
+                  mergedZip.file(relativePath, zipEntry.async('blob'));
+                }
+              });
+            }
           }
+          
           setStatusText(`Finalizing folder...`);
           finalBlob = await mergedZip.generateAsync({ type: 'blob', compression: 'STORE' });
         } else if (type === 'folder' && numChunks === 1) {
@@ -542,21 +562,24 @@ export default function Room() {
       
       let totalChunks = 1;
       let batches: File[][] = [];
+      let batchStructure: number[] = [];
 
       if (isFolder) {
         let currentBatch: File[] = [];
         let currentSize = 0;
         for (const f of files) {
-          currentBatch.push(f);
-          currentSize += f.size;
-          if (currentSize >= CHUNK_SIZE) {
+          if (currentBatch.length > 0 && currentSize + f.size > CHUNK_SIZE) {
              batches.push(currentBatch);
              currentBatch = [];
              currentSize = 0;
           }
+          currentBatch.push(f);
+          currentSize += f.size;
         }
         if (currentBatch.length > 0) batches.push(currentBatch);
-        totalChunks = batches.length;
+        
+        const totalSize = files.reduce((acc, f) => acc + f.size, 0);
+        totalChunks = Math.max(1, Math.ceil(totalSize / CHUNK_SIZE));
       } else {
         const totalSize = files[0].size;
         totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
@@ -630,20 +653,38 @@ export default function Room() {
             }
           }
         } else {
-          // Folder upload: zip and upload in chunks
-          for (let i = 0; i < totalChunks; i++) {
-             setStatusText(`Zipping part ${i + 1} of ${totalChunks}...`);
+          // Folder upload: zip in batches, slice if needed, and upload
+          let globalChunkIndex = 0;
+          for (let i = 0; i < batches.length; i++) {
+             setStatusText(`Zipping part ${i + 1} of ${batches.length}...`);
              const zip = new JSZip();
              batches[i].forEach(f => {
                const path = (f as any).webkitRelativePath || f.name;
                zip.file(path, f);
              });
-             const chunkBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
-             const chunkPath = totalChunks === 1 
-                ? `${roomId}/${next.id}/${next.name}` 
-                : `${roomId}/${next.id}/chunk_${i}`;
-             await uploadChunk(chunkBlob, chunkPath, i);
+             const batchZipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+             
+             const slices = Math.ceil(batchZipBlob.size / CHUNK_SIZE) || 1;
+             batchStructure.push(slices);
+             
+             for (let j = 0; j < slices; j++) {
+                const start = j * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, batchZipBlob.size);
+                const chunkBlob = batchZipBlob.slice(start, end);
+                
+                const isOnlyChunk = batches.length === 1 && slices === 1;
+                const chunkPath = isOnlyChunk 
+                  ? `${roomId}/${next.id}/${next.name}` 
+                  : `${roomId}/${next.id}/chunk_${globalChunkIndex}`;
+                
+                if (globalChunkIndex >= totalChunks) {
+                    totalChunks = globalChunkIndex + 1; // dynamically update estimate
+                }
+                await uploadChunk(chunkBlob, chunkPath, globalChunkIndex);
+                globalChunkIndex++;
+             }
           }
+          totalChunks = globalChunkIndex; // Update actual total chunks
         }
 
         console.log('[Swift] All chunks uploaded successfully');
@@ -660,7 +701,8 @@ export default function Room() {
             name: next.name,
             size: next.size,
             type: next.type,
-            totalChunks
+            totalChunks,
+            batchStructure
           },
         });
 
