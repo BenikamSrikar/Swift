@@ -102,24 +102,22 @@ export default function Connection() {
   }, [user, profile]);
 
     const fetchRooms = useCallback(async () => {
-      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
-      
       const { data: rooms } = await supabase
         .from('rooms')
         .select('room_id, host_id, created_at')
-        .gt('created_at', twelveHoursAgo)
         .order('created_at', { ascending: false });
-    
-    if (!rooms) return;
+      
+      if (!rooms) return 0;
 
-    const roomMap: Record<string, string> = {};
-    for (const r of rooms) {
-      if (!roomMap[r.host_id]) {
-        roomMap[r.host_id] = r.room_id;
+      const roomMap: Record<string, string> = {};
+      for (const r of rooms) {
+        if (!roomMap[r.host_id]) {
+          roomMap[r.host_id] = r.room_id;
+        }
       }
-    }
-    setActiveRoomsMap(roomMap);
-  }, []);
+      setActiveRoomsMap(roomMap);
+      return rooms.length;
+    }, []);
 
   const fetchProfiles = useCallback(async () => {
     setProfilesLoading(true);
@@ -161,9 +159,9 @@ export default function Connection() {
   const [refreshing, setRefreshing] = useState(false);
   const handleManualRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchRooms(), fetchProfiles()]);
+    const [count] = await Promise.all([fetchRooms(), fetchProfiles()]);
     setRefreshing(false);
-    toast.success('Live rooms updated', { duration: 2000 });
+    toast.success(`Network updated (${count} live rooms)`, { duration: 3000 });
   };
 
   if (authLoading || !user || !profile) return null;
