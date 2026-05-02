@@ -70,7 +70,7 @@ export default function Connection() {
   const [joining, setJoining] = useState(false);
   const [waitingApproval, setWaitingApproval] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [hostName, setHostName] = useState('');
+  const [roomCode, setRoomCode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -118,40 +118,11 @@ export default function Connection() {
     navigate(`/room/${roomId}`);
   };
 
-  const handleJoinByHostName = async () => {
-    if (!hostName.trim()) return;
-    setJoining(true);
-    
-    // Search for profiles matching the name (case-insensitive)
-    const { data: matchedProfiles } = await supabase
-      .from('profiles')
-      .select('auth_user_id, name')
-      .ilike('name', hostName);
-
-    if (!matchedProfiles || matchedProfiles.length === 0) {
-      toast.error('Host not found');
-      setJoining(false);
-      return;
+  const handleRoomCodeChange = async (val: string) => {
+    setRoomCode(val);
+    if (val.length === 6) {
+      handleJoinRoom(val);
     }
-
-    const hostIds = matchedProfiles.map(p => p.auth_user_id);
-
-    // Find active rooms for these hosts
-    const { data: activeRooms } = await supabase
-      .from('rooms')
-      .select('room_id, host_id')
-      .in('host_id', hostIds)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false });
-
-    if (!activeRooms || activeRooms.length === 0) {
-      toast.error('No hosted rooms for this host');
-      setJoining(false);
-      return;
-    }
-
-    // Join the most recent room found
-    handleJoinRoom(activeRooms[0].room_id);
   };
 
   const handleJoinRoom = async (rid: string) => {
@@ -165,7 +136,8 @@ export default function Connection() {
       .maybeSingle();
 
     if (!room) { 
-      toast.error('Invalid Room'); 
+      toast.error('Invalid Room ID'); 
+      setRoomCode(''); 
       setJoining(false); 
       return; 
     }
@@ -328,18 +300,18 @@ export default function Connection() {
                   </div>
                   <div className="text-center">
                     <h3 className="font-bold text-base mb-1">Join a Room</h3>
-                    <p className="text-xs text-muted-foreground max-w-[200px]">Enter the name of the host you want to join.</p>
+                    <p className="text-xs text-muted-foreground max-w-[200px]">Enter the 6-character room code shared by the host.</p>
                   </div>
                   
                   <div className="w-full space-y-4">
                     <div className="relative">
                       <Input 
-                        placeholder="HOST NAME" 
-                        value={hostName}
-                        onChange={(e) => setHostName(e.target.value.toUpperCase())}
-                        onKeyDown={(e) => e.key === 'Enter' && handleJoinByHostName()}
+                        placeholder="ROOM ID" 
+                        value={roomCode}
+                        onChange={(e) => handleRoomCodeChange(e.target.value.toUpperCase())}
                         disabled={joining}
-                        className="h-14 rounded-xl text-center font-bold text-lg bg-muted/30 border-border/50 focus-visible:ring-primary/50 placeholder:text-sm placeholder:font-normal"
+                        className="h-14 rounded-xl text-center font-mono text-xl tracking-[0.2em] bg-muted/30 border-border/50 focus-visible:ring-primary/50 placeholder:tracking-normal placeholder:text-sm placeholder:font-sans"
+                        maxLength={6}
                       />
                       {joining && !waitingApproval && (
                         <div className="absolute right-4 top-1/2 -translate-y-1/2">
@@ -347,14 +319,9 @@ export default function Connection() {
                         </div>
                       )}
                     </div>
-                    <Button 
-                      onClick={handleJoinByHostName}
-                      disabled={joining || !hostName.trim()}
-                      variant="secondary"
-                      className="w-full h-12 rounded-xl font-bold"
-                    >
-                      {joining ? 'Searching...' : 'Join Host'}
-                    </Button>
+                    <p className="text-[10px] text-center text-muted-foreground opacity-60">
+                      Auto-connects once valid code is entered.
+                    </p>
                   </div>
                 </div>
               </motion.div>
