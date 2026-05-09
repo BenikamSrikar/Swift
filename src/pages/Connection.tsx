@@ -95,21 +95,25 @@ export default function Connection() {
 
     const fetchHostedRooms = async () => {
       setLoadingRooms(true);
-      const { data, error } = await supabase
-        .from('rooms')
-        .select(`
-          id, 
-          room_id, 
-          host_id, 
-          status,
-          profiles:host_id (name, avatar_url)
-        `)
-        .eq('status', 'active');
-      
-      if (!error && data) {
-        setHostedRooms(data);
+      try {
+        const { data, error } = await supabase
+          .from('rooms')
+          .select('*, profiles:host_id(name, avatar_url)')
+          .eq('status', 'active');
+        
+        if (error) {
+          console.error('Fetch rooms error:', error);
+          // Fallback if join fails
+          const { data: simpleData } = await supabase.from('rooms').select('*').eq('status', 'active');
+          if (simpleData) setHostedRooms(simpleData);
+        } else if (data) {
+          setHostedRooms(data);
+        }
+      } catch (err) {
+        console.error('Discovery error:', err);
+      } finally {
+        setLoadingRooms(false);
       }
-      setLoadingRooms(false);
     };
 
     ensureSession();
