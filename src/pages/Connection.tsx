@@ -309,6 +309,24 @@ export default function Connection() {
 
           <AnimatePresence mode="wait">
             {waitingApproval ? (
+              <motion.div 
+                key="waiting"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-md mx-auto bg-card/50 backdrop-blur-xl border border-border/50 rounded-3xl p-10 flex flex-col items-center text-center shadow-2xl"
+              >
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 relative">
+                  <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
+                  <Clock className="w-8 h-8 text-primary animate-spin" style={{ animationDuration: '4s' }} />
+                </div>
+                <h2 className="text-xl font-bold mb-2">Awaiting Host</h2>
+                <p className="text-sm text-muted-foreground mb-8">The host needs to approve your connection request before you can start transferring.</p>
+                <Button variant="outline" className="rounded-full px-8" onClick={() => { setWaitingApproval(false); setJoining(false); }}>
+                  Cancel Request
+                </Button>
+              </motion.div>
+            ) : (
               <div className="w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
                 {/* Main Actions - Left Side */}
                 <motion.div 
