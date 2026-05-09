@@ -275,11 +275,9 @@ export default function Connection() {
       animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl p-4 flex flex-col gap-4 relative overflow-hidden transition-all duration-300 group"
       style={{
-        background: 'rgba(255,255,255,0.04)',
-        backdropFilter: 'saturate(180%) blur(20px)',
-        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
-        border: '0.5px solid rgba(255,255,255,0.08)',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(255,255,255,0.04) inset',
+        background: 'rgba(0,0,0,0.03)',
+        border: '0.5px solid rgba(0,0,0,0.06)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
       }}
     >
       <div className="flex items-center gap-3">
@@ -291,8 +289,8 @@ export default function Connection() {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-semibold truncate tracking-tight">{p.name}</p>
-          <p className="text-[11px] font-normal text-muted-foreground truncate">{p.email}</p>
+          <p className="text-[13px] font-semibold truncate tracking-tight text-gray-900">{p.name}</p>
+          <p className="text-[11px] font-normal text-gray-500 truncate">{p.email}</p>
         </div>
       </div>
 
@@ -475,31 +473,31 @@ export default function Connection() {
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               transition={{ type: 'spring', damping: 28, stiffness: 350 }}
               className="relative w-full max-w-3xl rounded-[20px] overflow-hidden flex flex-col max-h-[85vh]"
-              style={{ background: 'rgba(30,30,30,0.85)', backdropFilter: 'saturate(180%) blur(40px)', WebkitBackdropFilter: 'saturate(180%) blur(40px)', border: '0.5px solid rgba(255,255,255,0.1)', boxShadow: '0 25px 50px rgba(0,0,0,0.4), 0 0 0 0.5px rgba(255,255,255,0.05) inset' }}
+              style={{ background: 'rgba(255,255,255,0.88)', backdropFilter: 'saturate(180%) blur(40px)', WebkitBackdropFilter: 'saturate(180%) blur(40px)', border: '0.5px solid rgba(0,0,0,0.08)', boxShadow: '0 25px 50px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(255,255,255,0.5) inset' }}
             >
-              <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: '0.5px solid rgba(255,255,255,0.06)' }}>
+              <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: '0.5px solid rgba(0,0,0,0.08)' }}>
                 <div>
-                  <h2 className="text-[17px] font-semibold tracking-tight">Discover Hosts</h2>
-                  <p className="text-[13px] text-muted-foreground font-normal mt-0.5">Join an active session from the list below</p>
+                  <h2 className="text-[17px] font-semibold tracking-tight text-gray-900">Discover Hosts</h2>
+                  <p className="text-[13px] text-gray-500 font-normal mt-0.5">Join an active session from the list below</p>
                 </div>
                 <button 
                   onClick={() => setIsJoinModalOpen(false)}
-                  className="h-8 w-8 rounded-full flex items-center justify-center transition-all hover:bg-white/10 active:opacity-60"
-                  style={{ background: 'rgba(255,255,255,0.06)' }}
+                  className="h-8 w-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:opacity-60"
+                  style={{ background: 'rgba(0,0,0,0.04)' }}
                 >
-                  <X className="w-4 h-4 text-muted-foreground" />
+                  <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
 
               <div className="px-6 py-4">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input 
                     placeholder="Search by name or email..." 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full h-[36px] pl-10 pr-4 rounded-[10px] text-[13px] font-normal placeholder:text-muted-foreground/40 focus:outline-none transition-all"
-                    style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.08)', boxShadow: '0 0.5px 1px rgba(0,0,0,0.2) inset' }}
+                    className="w-full h-[36px] pl-10 pr-4 rounded-[10px] text-[13px] font-normal text-gray-900 placeholder:text-gray-400 focus:outline-none transition-all"
+                    style={{ background: 'rgba(0,0,0,0.04)', border: '0.5px solid rgba(0,0,0,0.08)', boxShadow: '0 0.5px 1px rgba(0,0,0,0.06) inset' }}
                   />
                 </div>
               </div>
@@ -508,14 +506,14 @@ export default function Connection() {
                 <div className="grid grid-cols-2 gap-3">
                   {loadingData ? (
                     Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="h-32 rounded-[14px] animate-pulse" style={{ background: 'rgba(255,255,255,0.03)' }} />
+                      <div key={i} className="h-32 rounded-[14px] animate-pulse" style={{ background: 'rgba(0,0,0,0.04)' }} />
                     ))
                   ) : filteredProfiles.length === 0 ? (
                     <div className="col-span-full py-16 flex flex-col items-center justify-center text-center gap-3">
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                        <User className="w-6 h-6 text-muted-foreground/30" />
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.04)' }}>
+                        <User className="w-6 h-6 text-gray-300" />
                       </div>
-                      <p className="text-[13px] font-normal text-muted-foreground">No users found</p>
+                      <p className="text-[13px] font-normal text-gray-400">No users found</p>
                     </div>
                   ) : (
                     filteredProfiles.map(p => (
@@ -528,9 +526,9 @@ export default function Connection() {
                 </div>
               </div>
               
-              <div className="px-6 py-3 text-center" style={{ borderTop: '0.5px solid rgba(255,255,255,0.06)' }}>
-                <p className="text-[11px] font-normal text-muted-foreground/50">
-                  Live sessions are marked with a pulsing indicator
+              <div className="px-6 py-3 text-center" style={{ borderTop: '0.5px solid rgba(0,0,0,0.06)' }}>
+                <p className="text-[11px] font-normal text-gray-400">
+                  Click "Join Session" on any contact to connect
                 </p>
               </div>
             </motion.div>
