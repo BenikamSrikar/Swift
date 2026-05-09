@@ -26,7 +26,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import ChunkQueue from '@/components/ChunkQueue';
 
 const DATA_CHANNEL_CHUNK_SIZE = 262144; // 256KB
 const DATA_CHANNEL_BUFFER_LIMIT = DATA_CHANNEL_CHUNK_SIZE * 8;
@@ -109,14 +108,14 @@ export default function Room() {
     downloadedCount: number,
     totalChunks: number, 
     metadata: any,
-    isFinalizing: boolean
+    isFinalizing: boolean,
+    senderFinished: boolean
   }>>(new Map());
 
   const isHost = room?.host_id === userId;
   const [removedByHost, setRemovedByHost] = useState(false);
   const [remoteUploadProgress, setRemoteUploadProgress] = useState<Record<string, number>>({});
   const [remoteSenderIndices, setRemoteSenderIndices] = useState<Record<string, number>>({});
-  const [receivingState, setReceivingState] = useState<Record<string, any>>({}); // To trigger UI updates for ChunkQueue
 
   const finalizeTransfer = useCallback(async (transferId: string) => {
     const rec = receivingChunksRef.current.get(transferId);
@@ -226,14 +225,6 @@ export default function Room() {
     const rec = receivingChunksRef.current.get(transferId);
     if (!rec || rec.chunks[chunkIndex]) return;
 
-    // PACING: receiver should download chunk should be less than 1 then the current chunk sender is uploading
-    const senderIdx = remoteSenderIndices[transferId] ?? 0;
-    const isLastChunk = chunkIndex === rec.totalChunks - 1;
-    
-    if (!isLastChunk && chunkIndex >= senderIdx) {
-      return; 
-    }
-
     try {
       const { data: chunkBlob, error: chunkErr } = await supabase.storage
         .from('swift-transfers')
@@ -252,38 +243,30 @@ export default function Room() {
       ));
       setStatusText(`Downloading ${rec.metadata.name}: ${pct}%`);
       
-      setReceivingState(prev => ({
-        ...prev,
-        [transferId]: { 
-          chunks: [...rec.chunks], 
-          downloadedCount: rec.downloadedCount, 
-          totalChunks: rec.totalChunks 
-        }
-      }));
-
-      if (rec.downloadedCount === rec.totalChunks && !rec.isFinalizing) {
+      if (rec.downloadedCount === rec.totalChunks && rec.senderFinished && !rec.isFinalizing) {
         rec.isFinalizing = true;
         finalizeTransfer(transferId);
       }
     } catch (err) {
       console.error(`Error downloading chunk ${chunkIndex}:`, err);
     }
-  }, [remoteSenderIndices, finalizeTransfer]);
+  }, [finalizeTransfer]);
 
   // Effect to process held chunks when sender index moves
   useEffect(() => {
     receivingChunksRef.current.forEach((rec, transferId) => {
       if (rec.downloadedCount < rec.totalChunks) {
-        const firstMissing = rec.chunks.indexOf(null);
-        if (firstMissing !== -1) {
-          const chunkPath = rec.totalChunks === 1 
-            ? `${roomId}/${transferId}/${rec.metadata.name}`
-            : `${roomId}/${transferId}/chunk_${firstMissing}`;
-          downloadSpecificChunk(transferId, firstMissing, chunkPath);
+        for (let i = 0; i < rec.totalChunks; i++) {
+          if (rec.chunks[i] === null) {
+            const chunkPath = rec.totalChunks === 1 
+              ? `${roomId}/${transferId}/${rec.metadata.name}`
+              : `${roomId}/${transferId}/chunk_${i}`;
+            downloadSpecificChunk(transferId, i, chunkPath);
+          }
         }
       }
     });
-  }, [remoteSenderIndices, downloadSpecificChunk, roomId]);
+  }, [downloadSpecificChunk, roomId]);
 
   const generateTransferId = () => {
     try {
@@ -578,9 +561,19 @@ export default function Room() {
           downloadedCount: 0,
           totalChunks,
           metadata: { name, size, type, fromUserId, fromName, batchStructure },
-          isFinalizing: false
+          isFinalizing: false,
+          senderFinished: false
         });
         setStatusText(`Downloading: ${name}`);
+      } else {
+        // Handle dynamic totalChunks resizing (e.g. for folder uploads)
+        const rec = receivingChunksRef.current.get(transferId)!;
+        if (totalChunks > rec.totalChunks) {
+          const newChunks = new Array(totalChunks).fill(null);
+          rec.chunks.forEach((c, idx) => { newChunks[idx] = c; });
+          rec.chunks = newChunks;
+          rec.totalChunks = totalChunks;
+        }
       }
 
       // Download the chunk mentioned in broadcast
@@ -608,6 +601,29 @@ export default function Room() {
               }
             }
           }
+        }
+      }
+    });
+
+    channel.on('broadcast', { event: 'update-total-chunks' }, (payload) => {
+      const { transferId, totalChunks } = payload.payload;
+      const rec = receivingChunksRef.current.get(transferId);
+      if (rec && totalChunks > rec.totalChunks) {
+        const newChunks = new Array(totalChunks).fill(null);
+        rec.chunks.forEach((c, idx) => { newChunks[idx] = c; });
+        rec.chunks = newChunks;
+        rec.totalChunks = totalChunks;
+      }
+    });
+
+    channel.on('broadcast', { event: 'transfer-complete' }, (payload) => {
+      const { transferId } = payload.payload;
+      const rec = receivingChunksRef.current.get(transferId);
+      if (rec) {
+        rec.senderFinished = true;
+        if (rec.downloadedCount === rec.totalChunks && !rec.isFinalizing) {
+          rec.isFinalizing = true;
+          finalizeTransfer(transferId);
         }
       }
     });
@@ -804,6 +820,14 @@ export default function Room() {
                 if (globalChunkIndex >= totalChunks) {
                     totalChunks = globalChunkIndex + 1; // dynamically update estimate
                 }
+                
+                // Update receiver on new totalChunks count if it increased
+                transferChannelRef.current?.send({
+                  type: 'broadcast',
+                  event: 'update-total-chunks',
+                  payload: { targetUserId: payload.targetUserId, transferId: next.id, totalChunks }
+                });
+
                 await uploadChunk(chunkBlob, chunkPath, globalChunkIndex);
                 globalChunkIndex++;
              }
@@ -812,6 +836,13 @@ export default function Room() {
         }
 
         console.log('[Swift] All chunks uploaded successfully');
+        
+        // Final definitive signal that sender is done
+        transferChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'transfer-complete',
+          payload: { targetUserId: payload.targetUserId, transferId: next.id }
+        });
 
         // Notify receiver with totalChunks info
         transferChannelRef.current?.send({
@@ -1160,7 +1191,6 @@ export default function Room() {
                 )}
                 
                 <TransferQueue transfers={queuedTransfers} />
-                <ChunkQueue transfers={queuedTransfers} receivingChunks={receivingChunksRef.current} />
 
                 <div className={`
                   grid gap-6 w-full transition-all duration-500 ease-in-out
