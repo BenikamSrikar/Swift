@@ -560,9 +560,11 @@ export default function Room() {
         }];
       });
 
-      // Initialize receiving buffer if not already there
-      if (!receivingChunksRef.current.has(transferId)) {
-        receivingChunksRef.current.set(transferId, {
+      // Initialize or get receiving buffer
+      let rec = receivingChunksRef.current.get(transferId);
+      
+      if (!rec) {
+        rec = {
           chunks: new Array(totalChunks).fill(null),
           downloadedCount: 0,
           totalChunks,
@@ -570,11 +572,11 @@ export default function Room() {
           isFinalizing: false,
           senderFinished: false,
           thresholdMet: false
-        });
+        };
+        receivingChunksRef.current.set(transferId, rec);
         setStatusText(`Waiting for chunks: ${name}`);
       } else {
         // Handle dynamic totalChunks resizing (e.g. for folder uploads)
-        const rec = receivingChunksRef.current.get(transferId)!;
         if (totalChunks > rec.totalChunks) {
           const newChunks = new Array(totalChunks).fill(null);
           rec.chunks.forEach((c, idx) => { newChunks[idx] = c; });
@@ -583,8 +585,6 @@ export default function Room() {
         }
       }
 
-      const rec = receivingChunksRef.current.get(transferId)!;
-      
       // Update threshold if half-way point reached
       if (chunkIndex >= Math.floor(rec.totalChunks / 2)) {
         rec.thresholdMet = true;
@@ -604,8 +604,7 @@ export default function Room() {
       }
 
       // Resilience: Periodically check for missed chunks
-      const rec = receivingChunksRef.current.get(transferId);
-      if (rec && rec.downloadedCount < totalChunks) {
+      if (rec.downloadedCount < totalChunks && (rec.thresholdMet || rec.senderFinished)) {
         const { data: files } = await supabase.storage
           .from('swift-transfers')
           .list(`${roomId}/${transferId}`);
