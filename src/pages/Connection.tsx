@@ -72,6 +72,8 @@ export default function Connection() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [roomCode, setRoomCode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [hostedRooms, setHostedRooms] = useState<any[]>([]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
 
   useEffect(() => {
     if (!authLoading && (!user || !profile)) {
@@ -80,7 +82,6 @@ export default function Connection() {
   }, [authLoading, user, profile, navigate]);
 
   useEffect(() => {
-    if (!user || !profile) return;
     const ensureSession = async () => {
       const { data: existing } = await supabase.from('sessions').select('id').eq('user_id', user.id).single();
       if (!existing) {
@@ -91,8 +92,44 @@ export default function Connection() {
         });
       }
     };
+
+    const fetchHostedRooms = async () => {
+      setLoadingRooms(true);
+      const { data, error } = await supabase
+        .from('rooms')
+        .select(`
+          id, 
+          room_id, 
+          host_id, 
+          status,
+          profiles:host_id (name, avatar_url)
+        `)
+        .eq('status', 'active');
+      
+      if (!error && data) {
+        setHostedRooms(data);
+      }
+      setLoadingRooms(false);
+    };
+
     ensureSession();
+    fetchHostedRooms();
+
+    const channel = supabase.channel('public:rooms')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
+        fetchHostedRooms();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [user, profile]);
+
+  const filteredRooms = useMemo(() => {
+    return hostedRooms.filter(room => 
+      room.profiles?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      room.room_id.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [hostedRooms, searchQuery]);
 
   if (authLoading || !user || !profile) return null;
 
@@ -269,62 +306,126 @@ export default function Connection() {
                 </Button>
               </motion.div>
             ) : (
-              <motion.div 
-                key="actions"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-6"
-              >
-                {/* Create Card */}
-                <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-4 group hover:border-primary/30 transition-all duration-500 active:scale-[0.98]">
-                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                    <Plus className="h-6 w-6 text-primary" />
+              <div className="w-full flex flex-col lg:flex-row gap-8 items-start">
+                {/* Hosted Rooms Discovery - Left Side */}
+                <motion.div 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="w-full lg:w-80 flex flex-col gap-4 order-2 lg:order-1"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                      <Users className="h-4 w-4" /> Live Rooms
+                    </h2>
+                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      {hostedRooms.length} Active
+                    </span>
                   </div>
-                  <div className="text-center">
-                    <h3 className="font-bold text-base mb-0.5">Host a Room</h3>
-                    <p className="text-[10px] text-muted-foreground">Start your own room and invite others using your code.</p>
-                  </div>
-                  <Button 
-                    onClick={handleCreateRoom} 
-                    disabled={creating}
-                    className="w-full h-12 rounded-xl text-sm font-bold volts-gradient shadow-xl shadow-primary/20 hover:shadow-primary/30 active:translate-y-0.5 transition-all"
-                  >
-                    {creating ? 'Starting Session...' : 'Create Room'}
-                  </Button>
-                </div>
 
-                {/* Join Card */}
-                <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-6 group hover:border-primary/30 transition-all duration-500">
-                  <div className="w-12 h-12 bg-secondary/20 rounded-xl flex items-center justify-center group-hover:bg-secondary/30 transition-colors">
-                    <LogIn className="h-6 w-6 text-primary" />
+                  <div className="relative mb-2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input 
+                      placeholder="Search host..." 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="h-9 pl-9 pr-4 rounded-xl bg-muted/30 border-border/40 text-xs"
+                    />
                   </div>
-                  <div className="text-center">
-                    <h3 className="font-bold text-base mb-1">Join a Room</h3>
-                    <p className="text-xs text-muted-foreground max-w-[200px]">Enter the 6-character room code shared by the host.</p>
+
+                  <div className="flex flex-col gap-3 max-h-[400px] lg:max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
+                    {loadingRooms ? (
+                      <div className="flex flex-col gap-3">
+                        {[1, 2, 3].map(i => <div key={i} className="h-20 rounded-2xl bg-muted/30 animate-pulse" />)}
+                      </div>
+                    ) : filteredRooms.length === 0 ? (
+                      <div className="py-12 flex flex-col items-center text-center gap-2 border border-dashed border-border/60 rounded-2xl">
+                        <Search className="h-8 w-8 text-muted-foreground/30" />
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase">No rooms found</p>
+                      </div>
+                    ) : (
+                      filteredRooms.map((room) => (
+                        <motion.div 
+                          key={room.room_id}
+                          layout
+                          className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-4 flex flex-col gap-3 hover:border-primary/40 transition-all group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20">
+                              {room.profiles?.avatar_url ? (
+                                <img src={room.profiles.avatar_url} alt={room.profiles.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <span className="text-sm font-bold text-primary">{room.profiles?.name?.charAt(0)}</span>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold truncate group-hover:text-primary transition-colors">{room.profiles?.name}</p>
+                              <p className="text-[9px] font-mono font-bold text-muted-foreground uppercase tracking-tighter">ID: {room.room_id}</p>
+                            </div>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="secondary"
+                            className="h-8 w-full rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm hover:volts-gradient hover:text-white transition-all"
+                            onClick={() => handleJoinRoom(room.room_id)}
+                            disabled={joining}
+                          >
+                            Join Session
+                          </Button>
+                        </motion.div>
+                      ))
+                    )}
                   </div>
-                  
-                  <div className="w-full space-y-4">
-                    <div className="relative">
-                      <Input 
-                        placeholder="ROOM ID" 
-                        value={roomCode}
-                        onChange={(e) => handleRoomCodeChange(e.target.value.toUpperCase())}
-                        disabled={joining}
-                        className="h-14 rounded-xl text-center font-mono text-xl tracking-[0.2em] bg-muted/30 border-border/50 focus-visible:ring-primary/50 placeholder:tracking-normal placeholder:text-sm placeholder:font-sans"
-                        maxLength={6}
-                      />
-                      {joining && !waitingApproval && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        </div>
-                      )}
+                </motion.div>
+
+                {/* Main Actions - Right Side */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 order-1 lg:order-2"
+                >
+                  {/* Create Card */}
+                  <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-4 group hover:border-primary/30 transition-all duration-500 active:scale-[0.98]">
+                    <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                      <Plus className="h-6 w-6 text-primary" />
                     </div>
-                    <p className="text-[10px] text-center text-muted-foreground opacity-60">
-                      Auto-connects once valid code is entered.
-                    </p>
+                    <div className="text-center">
+                      <h3 className="font-bold text-base mb-0.5">Host a Room</h3>
+                      <p className="text-[10px] text-muted-foreground">Start your own room and invite others using your code.</p>
+                    </div>
+                    <Button 
+                      onClick={handleCreateRoom} 
+                      disabled={creating}
+                      className="w-full h-12 rounded-xl text-sm font-bold volts-gradient shadow-xl shadow-primary/20 hover:shadow-primary/30 active:translate-y-0.5 transition-all"
+                    >
+                      {creating ? 'Starting Session...' : 'Create Room'}
+                    </Button>
                   </div>
-                </div>
-              </motion.div>
+
+                  {/* Join Card */}
+                  <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-6 group hover:border-primary/30 transition-all duration-500">
+                    <div className="w-12 h-12 bg-secondary/20 rounded-xl flex items-center justify-center group-hover:bg-secondary/30 transition-colors">
+                      <LogIn className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="text-center">
+                      <h3 className="font-bold text-base mb-1">Join a Room</h3>
+                      <p className="text-xs text-muted-foreground max-w-[200px]">Browse the live rooms on the left to join an ongoing session.</p>
+                    </div>
+                    
+                    <div className="w-full py-4 flex flex-col items-center gap-2">
+                      <div className="flex -space-x-2">
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="h-8 w-8 rounded-full border-2 border-background bg-muted flex items-center justify-center overflow-hidden">
+                            <span className="text-[10px] font-bold">U{i}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-center text-muted-foreground opacity-60">
+                        Join your team instantly.
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
             )}
           </AnimatePresence>
         </div>

@@ -355,8 +355,8 @@ export default function Room() {
     if (!isHost && room?.host_id) {
       const hostStillHere = parts.find((p) => p.user_id === room.host_id);
       if (!hostStillHere) {
-        toast.error('Host has left the meeting. Returning to landing page...', { duration: 5000 });
-        navigate('/connection');
+        toast.error('Host has left the meeting. Returning to home page...', { duration: 5000 });
+        navigate('/');
         return;
       }
     }
@@ -1126,13 +1126,30 @@ export default function Room() {
   };
 
   const handleLeaveMeeting = async () => {
-    if (isHost && roomId) {
-      await supabase.from('rooms').update({ status: 'locked' }).eq('room_id', roomId);
+    try {
+      // 1. Clear active transfers from S3 for this user
+      for (const t of queuedTransfers) {
+        if (t.status === 'processing' || t.status === 'pending') {
+          const { data: files } = await supabase.storage.from('swift-transfers').list(`${roomId}/${t.id}`);
+          if (files && files.length > 0) {
+            await supabase.storage.from('swift-transfers').remove(files.map(f => `${roomId}/${t.id}/${f.name}`));
+          }
+        }
+      }
+
+      // 2. Perform table cleanup
+      if (userId) {
+        await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
+        if (isHost) {
+          await supabase.from('rooms').update({ status: 'locked' }).eq('room_id', roomId!);
+        }
+      }
+    } catch (e) {
+      console.error('Cleanup error:', e);
+    } finally {
+      // 3. Navigate to landing page
+      navigate('/');
     }
-    if (userId) {
-      await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
-    }
-    navigate('/connection');
   };
 
   const copyRoomId = () => {
@@ -1149,7 +1166,12 @@ export default function Room() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background relative overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-background selection:bg-primary selection:text-primary-foreground overflow-hidden">
+      <VoltsNavbar 
+        onHistoryClick={() => setHistoryOpen(true)} 
+        onLogout={handleLeaveMeeting} 
+        logoutLabel="Leave Meeting"
+      />
       {/* Particle Effect */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         {[...Array(25)].map((_, i) => (
@@ -1165,10 +1187,6 @@ export default function Room() {
             }} 
           />
         ))}
-      </div>
-
-      <div className="relative z-10 w-full flex-none">
-        <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
       </div>
 
       <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative z-10">
@@ -1226,9 +1244,10 @@ export default function Room() {
 
                 <div className={`
                   grid gap-6 w-full transition-all duration-500 ease-in-out
-                  ${participants.filter(p => p.user_id !== userId).length === 1 ? 'flex justify-center' : 
-                    participants.filter(p => p.user_id !== userId).length === 2 ? 'grid-cols-1 md:grid-cols-2' : 
-                    'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}
+                  ${chatOpen 
+                    ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' 
+                    : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+                  }
                 `}>
                   {/* Other Participants */}
                   {participants
