@@ -98,23 +98,38 @@ export default function Connection() {
     const fetchHostedRooms = async () => {
       setLoadingRooms(true);
       try {
-        // Fetch all rooms and filter 'active' ones in JS for easier debugging
-        const { data, error } = await supabase
+        // 1. Fetch active rooms
+        const { data: rooms, error: roomsError } = await supabase
           .from('rooms')
-          .select('*, profiles:host_id(*)');
+          .select('*')
+          .eq('status', 'active');
         
-        if (error) {
-          console.error('Fetch rooms error:', error);
+        if (roomsError) throw roomsError;
+        if (!rooms || rooms.length === 0) {
           setHostedRooms([]);
-        } else if (data) {
-          // Filter active rooms case-insensitively
-          const liveRooms = data.filter((r: any) => 
-            r.status?.toLowerCase() === 'active'
-          );
-          setHostedRooms(liveRooms);
+          return;
         }
+
+        // 2. Fetch host profiles for those rooms
+        const hostIds = rooms.map(r => r.host_id);
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('auth_user_id', hostIds);
+
+        if (profilesError) console.error('Profiles fetch error:', profilesError);
+
+        // 3. Merge data
+        const profileMap = new Map(profiles?.map(p => [p.auth_user_id, p]) || []);
+        const liveRooms = rooms.map(r => ({
+          ...r,
+          profiles: profileMap.get(r.host_id)
+        }));
+
+        setHostedRooms(liveRooms);
       } catch (err) {
         console.error('Discovery error:', err);
+        setHostedRooms([]);
       } finally {
         setLoadingRooms(false);
       }
