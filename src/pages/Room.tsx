@@ -418,7 +418,7 @@ export default function Room() {
     } else {
       setCurrentRequest(null);
     }
-  }, [roomId, userId, room?.host_id, isHost, navigate]);
+  }, [roomId, userId, room?.id, room?.host_id, isHost, navigate]);
 
   useEffect(() => {
     if (roomId && room?.id) {
