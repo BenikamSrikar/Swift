@@ -98,31 +98,18 @@ export default function Connection() {
     const fetchHostedRooms = async () => {
       setLoadingRooms(true);
       try {
+        // Fetch all rooms with 'active' status
+        // We'll join profiles by host_id
         const { data, error } = await supabase
           .from('rooms')
-          .select(`
-            id, 
-            room_id, 
-            host_id, 
-            status,
-            host:host_id (
-              name,
-              email,
-              avatar_url
-            )
-          `)
+          .select('*, profiles:host_id(*)')
           .eq('status', 'active');
         
         if (error) {
           console.error('Fetch rooms error:', error);
           setHostedRooms([]);
         } else if (data) {
-          // Map 'host' to 'profiles' to maintain compatibility with the UI
-          const liveRooms = data.map((r: any) => ({
-            ...r,
-            profiles: r.host
-          }));
-          setHostedRooms(liveRooms);
+          setHostedRooms(data);
         }
       } catch (err) {
         console.error('Discovery error:', err);
@@ -144,11 +131,14 @@ export default function Connection() {
   }, [user, profile]);
 
   const filteredRooms = useMemo(() => {
-    return hostedRooms.filter(room => 
-      room.profiles?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      room.profiles?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      room.room_id.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    return hostedRooms.filter(room => {
+      const search = searchQuery.toLowerCase();
+      const name = room.profiles?.name?.toLowerCase() || '';
+      const email = room.profiles?.email?.toLowerCase() || '';
+      const rid = room.room_id?.toLowerCase() || '';
+      
+      return name.includes(search) || email.includes(search) || rid.includes(search);
+    });
   }, [hostedRooms, searchQuery]);
 
   if (authLoading || !user || !profile) return null;
