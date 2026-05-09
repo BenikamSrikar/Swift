@@ -6,12 +6,11 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Plus, LogIn, Clock, Search, Users } from 'lucide-react';
+import { Plus, LogIn, Clock, Search, Users, X, User } from 'lucide-react';
 import HistoryModal from '@/components/HistoryModal';
-import ConnectionFeatures from '@/components/ConnectionFeatures';
 import { motion, AnimatePresence } from 'framer-motion';
 
-function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
+function AvatarParticles() {
   const particles = useMemo(() => {
     return Array.from({ length: 12 }).map((_, i) => ({
       id: i,
@@ -52,7 +51,6 @@ function AvatarParticles({ color = "var(--primary)" }: { color?: string }) {
           }}
         />
       ))}
-      {/* Outer glow ring */}
       <motion.div 
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/10"
         style={{ width: 110, height: 110 }}
@@ -70,10 +68,19 @@ export default function Connection() {
   const [joining, setJoining] = useState(false);
   const [waitingApproval, setWaitingApproval] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [roomCode, setRoomCode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [hostedRooms, setHostedRooms] = useState<any[]>([]);
-  const [loadingRooms, setLoadingRooms] = useState(true);
+  const [allProfiles, setAllProfiles] = useState<any[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && (!user || !profile)) {
@@ -81,102 +88,71 @@ export default function Connection() {
     }
   }, [authLoading, user, profile, navigate]);
 
-  useEffect(() => {
-    if (!user || !profile) return;
+  const fetchData = async () => {
+    if (!user) return;
+    setLoadingData(true);
+    try {
+      // 1. Fetch all profiles
+      const { data: profiles, error: pError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (pError) throw pError;
+      setAllProfiles(profiles || []);
 
-    const ensureSession = async () => {
-      const { data: existing } = await supabase.from('sessions').select('id').eq('user_id', user.id).single();
-      if (!existing) {
-        await supabase.from('sessions').insert({
-          user_id: user.id,
-          name: profile.name,
-          status: 'active',
-        });
-      }
-    };
+      // 2. Fetch active rooms to know who is hosting
+      const { data: rooms, error: rError } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('status', 'active');
+      
+      if (rError) throw rError;
 
-    const fetchHostedRooms = async () => {
-      setLoadingRooms(true);
-      try {
-        // 1. Fetch active rooms
-        const { data: rooms, error: roomsError } = await supabase
-          .from('rooms')
-          .select('*')
-          .eq('status', 'active');
-        
-        if (roomsError) throw roomsError;
-        if (!rooms || rooms.length === 0) {
-          setHostedRooms([]);
-          return;
-        }
-
-        // 2. Fetch ALL participants for these rooms to verify host presence
+      if (rooms && rooms.length > 0) {
         const roomIds = rooms.map(r => r.id);
-        const { data: participants, error: partsError } = await supabase
+        const { data: participants } = await supabase
           .from('room_participants')
           .select('room_id, user_id')
           .in('room_id', roomIds);
 
-        if (partsError) console.error('Participants fetch error:', partsError);
-
-        // 3. Filter rooms where the host is actually present
-        const activeHostRooms = rooms.filter(room => {
+        // Only count rooms where the host is actually present
+        const liveRooms = rooms.filter(room => {
           const roomParts = participants?.filter(p => p.room_id === room.id) || [];
           return roomParts.some(p => p.user_id === room.host_id);
         });
-
-        if (activeHostRooms.length === 0) {
-          setHostedRooms([]);
-          return;
-        }
-
-        // 4. Fetch host profiles for the remaining verified rooms
-        const hostIds = activeHostRooms.map(r => r.host_id);
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('auth_user_id', hostIds);
-
-        // 5. Merge data
-        const profileMap = new Map(profiles?.map(p => [p.auth_user_id, p]) || []);
-        const liveRooms = activeHostRooms.map(r => ({
-          ...r,
-          profiles: profileMap.get(r.host_id)
-        }));
-
         setHostedRooms(liveRooms);
-      } catch (err) {
-        console.error('Discovery error:', err);
+      } else {
         setHostedRooms([]);
-      } finally {
-        setLoadingRooms(false);
       }
-    };
+    } catch (err) {
+      console.error('Error fetching data:', err);
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
-    ensureSession();
-    fetchHostedRooms();
+  useEffect(() => {
+    if (!user || !profile) return;
+    fetchData();
 
-    const channel = supabase.channel('public:rooms')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
-        fetchHostedRooms();
-      })
+    const channel = supabase.channel('public:sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [user, profile]);
 
-  const filteredRooms = useMemo(() => {
-    return hostedRooms.filter(room => {
+  const filteredProfiles = useMemo(() => {
+    return allProfiles.filter(p => {
       const search = searchQuery.toLowerCase();
-      const name = room.profiles?.name?.toLowerCase() || '';
-      const email = room.profiles?.email?.toLowerCase() || '';
-      const rid = room.room_id?.toLowerCase() || '';
-      
-      return name.includes(search) || email.includes(search) || rid.includes(search);
+      const name = p.name?.toLowerCase() || '';
+      const email = p.email?.toLowerCase() || '';
+      return (name.includes(search) || email.includes(search)) && p.auth_user_id !== user?.id;
     });
-  }, [hostedRooms, searchQuery]);
-
-  if (authLoading || !user || !profile) return null;
+  }, [allProfiles, searchQuery, user]);
 
   const handleCreateRoom = async () => {
     setCreating(true);
@@ -186,9 +162,7 @@ export default function Connection() {
     while (!isUnique) {
       roomId = Array.from({ length: 6 }, () => '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 36)]).join('');
       const { data: existingRoom } = await supabase.from('rooms').select('id').eq('room_id', roomId).single();
-      if (!existingRoom) {
-        isUnique = true;
-      }
+      if (!existingRoom) isUnique = true;
     }
 
     const { data: newRoom, error: createError } = await supabase
@@ -208,39 +182,17 @@ export default function Connection() {
     navigate(`/room/${roomId}`);
   };
 
-  const handleJoinRoom = async (rid: string) => {
-    if (!rid.trim()) return;
+  const handleJoinHost = async (hostId: string) => {
+    const activeRoom = hostedRooms.find(r => r.host_id === hostId);
+    if (!activeRoom) return;
+
     setJoining(true);
-    
-    const { data: room, error: roomError } = await supabase
-      .from('rooms')
-      .select('*')
-      .eq('room_id', rid)
-      .maybeSingle();
-
-    if (!room) { 
-      toast.error('Invalid Room ID'); 
-      setRoomCode(''); 
-      setJoining(false); 
-      return; 
-    }
-
-    if (room.status === 'locked') { 
-      toast.error('Room is locked'); 
-      setJoining(false); 
-      return; 
-    }
-
-    const { data: hostProfile } = await supabase
-      .from('profiles')
-      .select('name')
-      .eq('auth_user_id', room.host_id)
-      .maybeSingle();
+    const rid = activeRoom.room_id;
 
     const { data: existing } = await supabase
       .from('room_participants')
       .select('status')
-      .eq('room_id', room.id)
+      .eq('room_id', activeRoom.id)
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -250,16 +202,15 @@ export default function Connection() {
       return; 
     }
 
-    await supabase.from('room_participants').delete().eq('room_id', room.id).eq('user_id', user.id);
+    await supabase.from('room_participants').delete().eq('room_id', activeRoom.id).eq('user_id', user.id);
     await supabase.from('room_participants').insert({ 
-      room_id: room.id, 
+      room_id: activeRoom.id, 
       user_id: user.id, 
       status: 'pending' 
     });
 
     setWaitingApproval(true);
-    const hostName = hostProfile?.name || 'The host';
-
+    
     const channel = supabase.channel(`join-${user.id}`)
       .on('postgres_changes', { 
         event: 'UPDATE', 
@@ -273,7 +224,7 @@ export default function Connection() {
         }
         else if (payload.new.status === 'blocked') { 
           channel.unsubscribe(); 
-          toast.error(`${hostName} declined your request.`); 
+          toast.error(`The host declined your request.`); 
           setWaitingApproval(false); 
           setJoining(false); 
         }
@@ -286,15 +237,60 @@ export default function Connection() {
     navigate('/');
   };
 
+  const ProfileCard = ({ p, isLive }: { p: any, isLive: boolean }) => (
+    <motion.div 
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-4 flex flex-col gap-4 hover:border-primary/50 transition-all group hover:bg-card/60 shadow-lg relative overflow-hidden"
+    >
+      {isLive && (
+        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-[8px] font-black uppercase tracking-widest text-red-500">Live</span>
+        </div>
+      )}
+      
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20 shrink-0">
+          {p.avatar_url ? (
+            <img src={p.avatar_url} alt={p.name} className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-base font-black text-primary">{p.name?.charAt(0).toUpperCase()}</span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-black truncate tracking-tight">{p.name}</p>
+          <p className="text-[10px] font-medium text-muted-foreground truncate opacity-70">{p.email}</p>
+        </div>
+      </div>
+
+      <Button 
+        size="sm" 
+        onClick={() => handleJoinHost(p.auth_user_id)}
+        disabled={!isLive || joining}
+        className={`h-9 w-full rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+          isLive 
+            ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20 active:scale-[0.98]' 
+            : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+        }`}
+      >
+        {isLive ? 'Join Session' : 'Offline'}
+      </Button>
+    </motion.div>
+  );
+
+  if (authLoading || !user || !profile) return null;
+
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary selection:text-primary-foreground overflow-hidden">
       <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
 
-      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 relative">
-        <div className="w-full max-w-4xl flex flex-col items-center z-10">
+      <main className="flex-1 flex flex-col items-center justify-start lg:justify-center p-4 sm:p-6 lg:p-8 relative overflow-y-auto custom-scrollbar">
+        <div className="w-full max-w-5xl flex flex-col items-center z-10 pt-8 lg:pt-0">
           
-          {/* Profile Section */}
-          <div className="relative mb-6 flex flex-col items-center animate-fade-up">
+          {/* Hero Profile Section (Hidden on mobile to save space if needed, but keeping for identity) */}
+          <div className="relative mb-8 flex flex-col items-center animate-fade-up">
             <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-3">
               <AvatarParticles />
               <div className="absolute inset-0 rounded-full border-4 border-background shadow-2xl overflow-hidden z-20 bg-muted">
@@ -312,19 +308,8 @@ export default function Connection() {
                 transition={{ duration: 2, repeat: Infinity }}
               />
             </div>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              className="text-center"
-            >
-              <h1 className="text-2xl font-bold tracking-tight mb-0.5">{profile.name}</h1>
-              <p className="text-xs text-muted-foreground font-medium opacity-70 mb-1.5">{profile.email}</p>
-              <div className="flex items-center gap-2 justify-center">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Session Active</span>
-              </div>
-            </motion.div>
+            <h1 className="text-2xl font-bold tracking-tight">{profile.name}</h1>
+            <p className="text-xs text-muted-foreground font-medium opacity-70">{profile.email}</p>
           </div>
 
           <AnimatePresence mode="wait">
@@ -346,124 +331,185 @@ export default function Connection() {
                   Cancel Request
                 </Button>
               </motion.div>
-            ) : (
-              <div className="w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
-                {/* Main Actions - Left Side */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="w-full lg:max-w-md flex flex-col gap-6"
-                >
-                  <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-8 flex flex-col items-center gap-6 group hover:border-primary/30 transition-all duration-500 active:scale-[0.98] shadow-2xl relative overflow-hidden">
-                    {/* Background glow */}
-                    <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 blur-[100px] rounded-full" />
-                    
-                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center group-hover:bg-primary/20 transition-colors relative z-10">
-                      <Plus className="h-8 w-8 text-primary" />
-                    </div>
-                    <div className="text-center relative z-10">
-                      <h3 className="font-black text-2xl mb-2 tracking-tight">Host a Session</h3>
-                      <p className="text-xs text-muted-foreground font-medium max-w-[240px] mx-auto leading-relaxed">
-                        Create a secure workspace and start sharing files with your team in real-time.
-                      </p>
-                    </div>
-                    <Button 
-                      onClick={handleCreateRoom} 
-                      disabled={creating}
-                      className="w-full h-14 rounded-2xl text-base font-black uppercase tracking-widest volts-gradient shadow-xl shadow-primary/20 hover:shadow-primary/30 active:translate-y-0.5 transition-all"
-                    >
-                      {creating ? 'Starting Session...' : 'Create Room'}
-                    </Button>
-                  </div>
-                </motion.div>
-
-                {/* Hosted Rooms Discovery - Right Side */}
-                <motion.div 
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="w-full lg:w-96 flex flex-col gap-4"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                      <Users className="h-4 w-4" /> Live Discovery
-                    </h2>
-                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-3 py-1 rounded-full animate-pulse">
-                      {hostedRooms.length} Active
-                    </span>
-                  </div>
-
-                  <div className="relative mb-2 group">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            ) : isMobile ? (
+              /* Mobile View: Profiles List + Floating Action */
+              <motion.div 
+                key="mobile-view"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="w-full flex flex-col gap-6"
+              >
+                <div className="flex flex-col gap-4">
+                  <div className="relative group">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                     <Input 
-                      placeholder="Find a host or room ID..." 
+                      placeholder="Search host by name or email..." 
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-10 pl-10 pr-4 rounded-xl bg-muted/30 border-border/40 text-xs focus:bg-background/50 focus:border-primary/50 transition-all"
+                      className="h-12 pl-10 pr-4 rounded-2xl bg-muted/30 border-border/40 focus:bg-background/50 focus:border-primary/50 transition-all text-sm"
                     />
                   </div>
-
-                  <div className="flex flex-col gap-3 max-h-[400px] lg:max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
-                    {loadingRooms ? (
-                      <div className="flex flex-col gap-3">
-                        {[1, 2, 3].map(i => <div key={i} className="h-24 rounded-2xl bg-muted/20 animate-pulse" />)}
-                      </div>
-                    ) : filteredRooms.length === 0 ? (
-                      <div className="py-20 flex flex-col items-center text-center gap-4 border border-dashed border-border/40 rounded-3xl bg-muted/5">
-                        <div className="w-12 h-12 rounded-full bg-muted/20 flex items-center justify-center">
-                          <Search className="h-6 w-6 text-muted-foreground/30" />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">Quiet in here...</p>
-                          <p className="text-[10px] text-muted-foreground/60 max-w-[160px]">No active sessions found. Why not host one?</p>
-                        </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {filteredProfiles.length === 0 ? (
+                      <div className="col-span-full py-12 text-center text-muted-foreground text-sm font-medium">
+                        No profiles found matching "{searchQuery}"
                       </div>
                     ) : (
-                      filteredRooms.map((room) => (
-                        <motion.div 
-                          key={room.room_id}
-                          layout
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-5 flex flex-col gap-4 hover:border-primary/50 transition-all group hover:bg-card/60 shadow-lg hover:shadow-primary/5"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20 shadow-inner group-hover:scale-105 transition-transform">
-                              {room.profiles?.avatar_url ? (
-                                <img src={room.profiles.avatar_url} alt={room.profiles.name} className="h-full w-full object-cover" />
-                              ) : (
-                                <span className="text-lg font-black text-primary">{room.profiles?.name?.charAt(0).toUpperCase()}</span>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-black truncate group-hover:text-primary transition-colors tracking-tight">{room.profiles?.name || 'Unknown Host'}</p>
-                              <p className="text-[10px] font-medium text-muted-foreground truncate opacity-70">{room.profiles?.email}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                                <span className="text-[9px] font-mono font-bold text-muted-foreground/40 uppercase">Live Session</span>
-                              </div>
-                            </div>
-                          </div>
-                          <Button 
-                            size="sm" 
-                            className="h-10 w-full rounded-xl text-[10px] font-black uppercase tracking-[0.2em] volts-gradient text-white shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                            onClick={() => handleJoinRoom(room.room_id)}
-                            disabled={joining}
-                          >
-                            Join Session
-                          </Button>
-                        </motion.div>
+                      filteredProfiles.map(p => (
+                        <ProfileCard 
+                          key={p.auth_user_id} 
+                          p={p} 
+                          isLive={hostedRooms.some(r => r.host_id === p.auth_user_id)} 
+                        />
                       ))
                     )}
                   </div>
-                </motion.div>
-              </div>
+                </div>
+
+                {/* Floating Action Button for Mobile */}
+                <Button
+                  onClick={handleCreateRoom}
+                  disabled={creating}
+                  className="fixed bottom-8 right-8 w-14 h-14 rounded-full shadow-2xl shadow-primary/40 volts-gradient flex items-center justify-center active:scale-90 transition-all z-50"
+                >
+                  {creating ? <Clock className="animate-spin" /> : <Plus className="w-7 h-7" />}
+                </Button>
+              </motion.div>
+            ) : (
+              /* Desktop View: Two Main Action Cards */
+              <motion.div 
+                key="desktop-view"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full flex flex-row gap-8 items-stretch justify-center"
+              >
+                {/* Host Card */}
+                <div className="flex-1 max-w-sm bg-card/40 backdrop-blur-md border border-border/40 rounded-3xl p-8 flex flex-col items-center gap-6 group hover:border-primary/30 transition-all duration-500 shadow-2xl relative overflow-hidden">
+                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 blur-[100px] rounded-full" />
+                  <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center group-hover:bg-primary/20 transition-colors relative z-10">
+                    <Plus className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="text-center relative z-10">
+                    <h3 className="font-black text-2xl mb-2 tracking-tight">Host a Session</h3>
+                    <p className="text-xs text-muted-foreground font-medium max-w-[240px] mx-auto leading-relaxed">
+                      Create a secure workspace and start sharing files in real-time.
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={handleCreateRoom} 
+                    disabled={creating}
+                    className="w-full h-14 rounded-2xl text-sm font-black uppercase tracking-widest volts-gradient shadow-xl shadow-primary/20 hover:shadow-primary/30 active:translate-y-0.5 transition-all mt-auto"
+                  >
+                    {creating ? 'Initializing...' : 'Create Room'}
+                  </Button>
+                </div>
+
+                {/* Join Card */}
+                <div className="flex-1 max-w-sm bg-card/40 backdrop-blur-md border border-border/40 rounded-3xl p-8 flex flex-col items-center gap-6 group hover:border-red-500/30 transition-all duration-500 shadow-2xl relative overflow-hidden">
+                  <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-red-500/10 blur-[100px] rounded-full" />
+                  <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center group-hover:bg-red-500/20 transition-colors relative z-10">
+                    <LogIn className="h-8 w-8 text-red-500" />
+                  </div>
+                  <div className="text-center relative z-10">
+                    <h3 className="font-black text-2xl mb-2 tracking-tight">Join a Room</h3>
+                    <p className="text-xs text-muted-foreground font-medium max-w-[240px] mx-auto leading-relaxed">
+                      Discover active hosts and connect to their ongoing sessions.
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={() => setIsJoinModalOpen(true)}
+                    className="w-full h-14 rounded-2xl text-sm font-black uppercase tracking-widest bg-red-500 hover:bg-red-600 text-white shadow-xl shadow-red-500/20 hover:shadow-red-500/30 active:translate-y-0.5 transition-all mt-auto"
+                  >
+                    Find Hosts
+                  </Button>
+                </div>
+              </motion.div>
             )}
           </AnimatePresence>
         </div>
       </main>
 
+      {/* Desktop Join Modal */}
+      <AnimatePresence>
+        {isJoinModalOpen && !isMobile && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsJoinModalOpen(false)}
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-3xl bg-card border border-border/50 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="p-8 border-b border-border/40 flex items-center justify-between bg-muted/10">
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight">Discover Hosts</h2>
+                  <p className="text-xs text-muted-foreground font-medium">Join an active session from the list below</p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setIsJoinModalOpen(false)}
+                  className="rounded-full hover:bg-muted"
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+
+              <div className="p-8 pb-4">
+                <div className="relative group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                  <Input 
+                    placeholder="Search by name or email address..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-12 pl-12 pr-4 rounded-2xl bg-muted/30 border-border/40 focus:bg-background/50 focus:border-primary/50 transition-all font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
+                <div className="grid grid-cols-2 gap-4">
+                  {loadingData ? (
+                    Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="h-32 rounded-2xl bg-muted/20 animate-pulse" />
+                    ))
+                  ) : filteredProfiles.length === 0 ? (
+                    <div className="col-span-full py-20 flex flex-col items-center justify-center text-center gap-4">
+                      <div className="w-16 h-16 rounded-full bg-muted/20 flex items-center justify-center">
+                        <User className="w-8 h-8 text-muted-foreground/30" />
+                      </div>
+                      <p className="text-sm font-bold text-muted-foreground">No users found matching your search</p>
+                    </div>
+                  ) : (
+                    filteredProfiles.map(p => (
+                      <ProfileCard 
+                        key={p.auth_user_id} 
+                        p={p} 
+                        isLive={hostedRooms.some(r => r.host_id === p.auth_user_id)} 
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-6 bg-muted/10 border-t border-border/40 text-center">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Live sessions are marked with a pulsing indicator
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <HistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} senderEmail={profile.email} senderName={profile.name} />
     </div>
   );
 }
-
