@@ -110,15 +110,15 @@ export default function Connection() {
       if (rError) throw rError;
 
       if (rooms && rooms.length > 0) {
-        const roomIds = rooms.map(r => r.id);
+        const roomCodes = rooms.map(r => r.room_id);
         const { data: participants } = await supabase
           .from('room_participants')
           .select('room_id, user_id')
-          .in('room_id', roomIds);
+          .in('room_id', roomCodes);
 
         // Only count rooms where the host is actually present
         const liveRooms = rooms.filter(room => {
-          const roomParts = participants?.filter(p => p.room_id === room.id) || [];
+          const roomParts = participants?.filter(p => p.room_id === room.room_id) || [];
           return roomParts.some(p => p.user_id === room.host_id);
         });
         setHostedRooms(liveRooms);
@@ -186,6 +186,7 @@ export default function Connection() {
     const activeRoom = hostedRooms.find(r => r.host_id === hostId);
     if (!activeRoom) return;
 
+    setIsJoinModalOpen(false);
     setJoining(true);
     const rid = activeRoom.room_id;
 
@@ -249,41 +250,53 @@ export default function Connection() {
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-4 flex flex-col gap-4 hover:border-primary/50 transition-all group hover:bg-card/60 shadow-lg relative overflow-hidden"
+      className="rounded-2xl p-4 flex flex-col gap-4 relative overflow-hidden transition-all duration-300 group"
+      style={{
+        background: 'rgba(255,255,255,0.04)',
+        backdropFilter: 'saturate(180%) blur(20px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+        border: '0.5px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(255,255,255,0.04) inset',
+      }}
     >
       {isLive && (
-        <div className="absolute top-3 right-3 flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-          <span className="text-[8px] font-black uppercase tracking-widest text-red-500">Live</span>
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,59,48,0.12)' }}>
+          <span className="h-1.5 w-1.5 rounded-full bg-[#FF3B30] animate-pulse" />
+          <span className="text-[8px] font-semibold tracking-wide text-[#FF3B30]">Live</span>
         </div>
       )}
       
       <div className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20 shrink-0">
+        <div className="h-11 w-11 rounded-[13px] bg-[#FF3B30]/10 flex items-center justify-center overflow-hidden shrink-0" style={{ boxShadow: '0 0 0 0.5px rgba(255,59,48,0.15) inset' }}>
           {p.avatar_url ? (
             <img src={p.avatar_url} alt={p.name} className="h-full w-full object-cover" />
           ) : (
-            <span className="text-base font-black text-primary">{p.name?.charAt(0).toUpperCase()}</span>
+            <span className="text-base font-semibold text-[#FF3B30]">{p.name?.charAt(0).toUpperCase()}</span>
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-black truncate tracking-tight">{p.name}</p>
-          <p className="text-[10px] font-medium text-muted-foreground truncate opacity-70">{p.email}</p>
+          <p className="text-[13px] font-semibold truncate tracking-tight">{p.name}</p>
+          <p className="text-[11px] font-normal text-muted-foreground truncate">{p.email}</p>
         </div>
       </div>
 
-      <Button 
-        size="sm" 
-        onClick={() => handleJoinHost(p.auth_user_id)}
+      <button 
+        onClick={() => isLive && handleJoinHost(p.auth_user_id)}
         disabled={!isLive || joining}
-        className={`h-9 w-full rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+        className={`h-9 w-full rounded-[10px] text-[13px] font-semibold tracking-normal transition-all duration-200 ${
           isLive 
-            ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20 active:scale-[0.98]' 
-            : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+            ? 'bg-[#FF3B30] hover:bg-[#E0342B] text-white active:opacity-70 active:scale-[0.97]' 
+            : 'text-muted-foreground/40 cursor-default'
         }`}
+        style={isLive ? {
+          boxShadow: '0 1px 3px rgba(255,59,48,0.3), 0 0.5px 0 rgba(255,255,255,0.15) inset',
+        } : {
+          background: 'rgba(255,255,255,0.04)',
+          boxShadow: '0 0 0 0.5px rgba(255,255,255,0.06) inset',
+        }}
       >
         {isLive ? 'Join Session' : 'Offline'}
-      </Button>
+      </button>
     </motion.div>
   );
 
@@ -392,44 +405,46 @@ export default function Connection() {
                 className="w-full flex flex-row gap-8 items-stretch justify-center"
               >
                 {/* Host Card */}
-                <div className="flex-1 max-w-sm bg-card/40 backdrop-blur-md border border-border/40 rounded-3xl p-8 flex flex-col items-center gap-6 group hover:border-primary/30 transition-all duration-500 shadow-2xl relative overflow-hidden">
-                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 blur-[100px] rounded-full" />
-                  <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center group-hover:bg-primary/20 transition-colors relative z-10">
-                    <Plus className="h-8 w-8 text-primary" />
+                <div className="flex-1 max-w-sm rounded-[22px] p-8 flex flex-col items-center gap-6 group transition-all duration-300 relative overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', backdropFilter: 'saturate(180%) blur(20px)', WebkitBackdropFilter: 'saturate(180%) blur(20px)', border: '0.5px solid rgba(255,255,255,0.08)', boxShadow: '0 2px 12px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(255,255,255,0.04) inset' }}>
+                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-[#FF3B30]/8 blur-[100px] rounded-full" />
+                  <div className="w-14 h-14 bg-[#FF3B30]/10 rounded-[16px] flex items-center justify-center transition-colors relative z-10" style={{ boxShadow: '0 0 0 0.5px rgba(255,59,48,0.15) inset' }}>
+                    <Plus className="h-7 w-7 text-[#FF3B30]" />
                   </div>
                   <div className="text-center relative z-10">
-                    <h3 className="font-black text-2xl mb-2 tracking-tight">Host a Session</h3>
-                    <p className="text-xs text-muted-foreground font-medium max-w-[240px] mx-auto leading-relaxed">
+                    <h3 className="font-semibold text-xl mb-1.5 tracking-tight">Host a Session</h3>
+                    <p className="text-[13px] text-muted-foreground font-normal max-w-[240px] mx-auto leading-relaxed">
                       Create a secure workspace and start sharing files in real-time.
                     </p>
                   </div>
-                  <Button 
+                  <button 
                     onClick={handleCreateRoom} 
                     disabled={creating}
-                    className="w-full h-14 rounded-2xl text-sm font-black uppercase tracking-widest volts-gradient shadow-xl shadow-primary/20 hover:shadow-primary/30 active:translate-y-0.5 transition-all mt-auto"
+                    className="w-full h-[50px] rounded-[12px] text-[15px] font-semibold text-white bg-[#FF3B30] hover:bg-[#E0342B] active:opacity-70 active:scale-[0.97] transition-all duration-200 mt-auto disabled:opacity-40"
+                    style={{ boxShadow: '0 1px 4px rgba(255,59,48,0.3), 0 0.5px 0 rgba(255,255,255,0.15) inset' }}
                   >
                     {creating ? 'Initializing...' : 'Create Room'}
-                  </Button>
+                  </button>
                 </div>
 
                 {/* Join Card */}
-                <div className="flex-1 max-w-sm bg-card/40 backdrop-blur-md border border-border/40 rounded-3xl p-8 flex flex-col items-center gap-6 group hover:border-red-500/30 transition-all duration-500 shadow-2xl relative overflow-hidden">
-                  <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-red-500/10 blur-[100px] rounded-full" />
-                  <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center group-hover:bg-red-500/20 transition-colors relative z-10">
-                    <LogIn className="h-8 w-8 text-red-500" />
+                <div className="flex-1 max-w-sm rounded-[22px] p-8 flex flex-col items-center gap-6 group transition-all duration-300 relative overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', backdropFilter: 'saturate(180%) blur(20px)', WebkitBackdropFilter: 'saturate(180%) blur(20px)', border: '0.5px solid rgba(255,255,255,0.08)', boxShadow: '0 2px 12px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(255,255,255,0.04) inset' }}>
+                  <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-[#FF3B30]/8 blur-[100px] rounded-full" />
+                  <div className="w-14 h-14 bg-[#FF3B30]/10 rounded-[16px] flex items-center justify-center transition-colors relative z-10" style={{ boxShadow: '0 0 0 0.5px rgba(255,59,48,0.15) inset' }}>
+                    <LogIn className="h-7 w-7 text-[#FF3B30]" />
                   </div>
                   <div className="text-center relative z-10">
-                    <h3 className="font-black text-2xl mb-2 tracking-tight">Join a Room</h3>
-                    <p className="text-xs text-muted-foreground font-medium max-w-[240px] mx-auto leading-relaxed">
+                    <h3 className="font-semibold text-xl mb-1.5 tracking-tight">Join a Room</h3>
+                    <p className="text-[13px] text-muted-foreground font-normal max-w-[240px] mx-auto leading-relaxed">
                       Discover active hosts and connect to their ongoing sessions.
                     </p>
                   </div>
-                  <Button 
+                  <button 
                     onClick={() => setIsJoinModalOpen(true)}
-                    className="w-full h-14 rounded-2xl text-sm font-black uppercase tracking-widest bg-red-500 hover:bg-red-600 text-white shadow-xl shadow-red-500/20 hover:shadow-red-500/30 active:translate-y-0.5 transition-all mt-auto"
+                    className="w-full h-[50px] rounded-[12px] text-[15px] font-semibold text-white bg-[#FF3B30] hover:bg-[#E0342B] active:opacity-70 active:scale-[0.97] transition-all duration-200 mt-auto"
+                    style={{ boxShadow: '0 1px 4px rgba(255,59,48,0.3), 0 0.5px 0 rgba(255,255,255,0.15) inset' }}
                   >
                     Find Hosts
-                  </Button>
+                  </button>
                 </div>
               </motion.div>
             )}
@@ -449,50 +464,52 @@ export default function Connection() {
               className="absolute inset-0 bg-background/80 backdrop-blur-sm"
             />
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-3xl bg-card border border-border/50 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 350 }}
+              className="relative w-full max-w-3xl rounded-[20px] overflow-hidden flex flex-col max-h-[85vh]"
+              style={{ background: 'rgba(30,30,30,0.85)', backdropFilter: 'saturate(180%) blur(40px)', WebkitBackdropFilter: 'saturate(180%) blur(40px)', border: '0.5px solid rgba(255,255,255,0.1)', boxShadow: '0 25px 50px rgba(0,0,0,0.4), 0 0 0 0.5px rgba(255,255,255,0.05) inset' }}
             >
-              <div className="p-8 border-b border-border/40 flex items-center justify-between bg-muted/10">
+              <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: '0.5px solid rgba(255,255,255,0.06)' }}>
                 <div>
-                  <h2 className="text-2xl font-black tracking-tight">Discover Hosts</h2>
-                  <p className="text-xs text-muted-foreground font-medium">Join an active session from the list below</p>
+                  <h2 className="text-[17px] font-semibold tracking-tight">Discover Hosts</h2>
+                  <p className="text-[13px] text-muted-foreground font-normal mt-0.5">Join an active session from the list below</p>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <button 
                   onClick={() => setIsJoinModalOpen(false)}
-                  className="rounded-full hover:bg-muted"
+                  className="h-8 w-8 rounded-full flex items-center justify-center transition-all hover:bg-white/10 active:opacity-60"
+                  style={{ background: 'rgba(255,255,255,0.06)' }}
                 >
-                  <X className="w-5 h-5" />
-                </Button>
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
               </div>
 
-              <div className="p-8 pb-4">
-                <div className="relative group">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                  <Input 
-                    placeholder="Search by name or email address..." 
+              <div className="px-6 py-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+                  <input 
+                    placeholder="Search by name or email..." 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-12 pl-12 pr-4 rounded-2xl bg-muted/30 border-border/40 focus:bg-background/50 focus:border-primary/50 transition-all font-medium"
+                    className="w-full h-[36px] pl-10 pr-4 rounded-[10px] text-[13px] font-normal placeholder:text-muted-foreground/40 focus:outline-none transition-all"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.08)', boxShadow: '0 0.5px 1px rgba(0,0,0,0.2) inset' }}
                   />
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="flex-1 overflow-y-auto px-6 pb-4 custom-scrollbar">
+                <div className="grid grid-cols-2 gap-3">
                   {loadingData ? (
                     Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="h-32 rounded-2xl bg-muted/20 animate-pulse" />
+                      <div key={i} className="h-32 rounded-[14px] animate-pulse" style={{ background: 'rgba(255,255,255,0.03)' }} />
                     ))
                   ) : filteredProfiles.length === 0 ? (
-                    <div className="col-span-full py-20 flex flex-col items-center justify-center text-center gap-4">
-                      <div className="w-16 h-16 rounded-full bg-muted/20 flex items-center justify-center">
-                        <User className="w-8 h-8 text-muted-foreground/30" />
+                    <div className="col-span-full py-16 flex flex-col items-center justify-center text-center gap-3">
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                        <User className="w-6 h-6 text-muted-foreground/30" />
                       </div>
-                      <p className="text-sm font-bold text-muted-foreground">No users found matching your search</p>
+                      <p className="text-[13px] font-normal text-muted-foreground">No users found</p>
                     </div>
                   ) : (
                     filteredProfiles.map(p => (
@@ -506,8 +523,8 @@ export default function Connection() {
                 </div>
               </div>
               
-              <div className="p-6 bg-muted/10 border-t border-border/40 text-center">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+              <div className="px-6 py-3 text-center" style={{ borderTop: '0.5px solid rgba(255,255,255,0.06)' }}>
+                <p className="text-[11px] font-normal text-muted-foreground/50">
                   Live sessions are marked with a pulsing indicator
                 </p>
               </div>
