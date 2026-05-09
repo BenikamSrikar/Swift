@@ -82,6 +82,8 @@ export default function Connection() {
   }, [authLoading, user, profile, navigate]);
 
   useEffect(() => {
+    if (!user || !profile) return;
+
     const ensureSession = async () => {
       const { data: existing } = await supabase.from('sessions').select('id').eq('user_id', user.id).single();
       if (!existing) {
