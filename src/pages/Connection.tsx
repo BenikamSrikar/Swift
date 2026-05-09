@@ -98,18 +98,32 @@ export default function Connection() {
     const fetchHostedRooms = async () => {
       setLoadingRooms(true);
       try {
+        // Fetch participants for active rooms to ensure host is actually present
         const { data, error } = await supabase
-          .from('rooms')
-          .select('*, profiles:host_id(name, avatar_url)')
-          .eq('status', 'active');
+          .from('room_participants')
+          .select(`
+            room_id,
+            rooms:room_id!inner(id, room_id, host_id, status),
+            profiles:user_id(name, email, avatar_url)
+          `)
+          .eq('rooms.status', 'active');
         
         if (error) {
           console.error('Fetch rooms error:', error);
-          // Fallback if join fails
-          const { data: simpleData } = await supabase.from('rooms').select('*').eq('status', 'active');
-          if (simpleData) setHostedRooms(simpleData);
+          setHostedRooms([]);
         } else if (data) {
-          setHostedRooms(data);
+          // Filter to only include the HOST'S entry in the participants list
+          // This guarantees the room is "ongoing" and the host hasn't left.
+          const liveRooms = data
+            .filter((p: any) => p.user_id === p.rooms.host_id || p.rooms.host_id === p.user_id)
+            .map((p: any) => ({
+              ...p.rooms,
+              profiles: p.profiles
+            }));
+            
+          // Remove duplicates (just in case)
+          const uniqueRooms = Array.from(new Map(liveRooms.map(r => [r.room_id, r])).values());
+          setHostedRooms(uniqueRooms);
         }
       } catch (err) {
         console.error('Discovery error:', err);
@@ -133,6 +147,7 @@ export default function Connection() {
   const filteredRooms = useMemo(() => {
     return hostedRooms.filter(room => 
       room.profiles?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      room.profiles?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       room.room_id.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [hostedRooms, searchQuery]);
@@ -383,9 +398,10 @@ export default function Connection() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-black truncate group-hover:text-primary transition-colors tracking-tight">{room.profiles?.name || 'Unknown Host'}</p>
-                              <div className="flex items-center gap-2 mt-0.5">
+                              <p className="text-[10px] font-medium text-muted-foreground truncate opacity-70">{room.profiles?.email}</p>
+                              <div className="flex items-center gap-2 mt-1">
                                 <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                                <p className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider">ID: {room.room_id}</p>
+                                <span className="text-[9px] font-mono font-bold text-muted-foreground/40 uppercase">Live Session</span>
                               </div>
                             </div>
                           </div>
