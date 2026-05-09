@@ -183,17 +183,29 @@ export default function Connection() {
   };
 
   const handleJoinHost = async (hostId: string) => {
-    const activeRoom = hostedRooms.find(r => r.host_id === hostId);
-    if (!activeRoom) return;
-
     setIsJoinModalOpen(false);
     setJoining(true);
+
+    // Check if this user has an active room
+    const activeRoom = hostedRooms.find(r => r.host_id === hostId);
+
+    if (!activeRoom) {
+      // No active room — show waiting, timeout after 10s
+      setWaitingApproval(true);
+      setTimeout(() => {
+        toast.error('This user has not created a room yet. Please try again later.', { duration: 4000 });
+        setWaitingApproval(false);
+        setJoining(false);
+      }, 10000);
+      return;
+    }
+
     const rid = activeRoom.room_id;
 
     const { data: existing } = await supabase
       .from('room_participants')
       .select('status')
-      .eq('room_id', activeRoom.id)
+      .eq('room_id', rid)
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -218,6 +230,15 @@ export default function Connection() {
     }
 
     setWaitingApproval(true);
+
+    // 10-second timeout — if host doesn't respond, redirect back
+    const timeout = setTimeout(() => {
+      channel.unsubscribe();
+      toast.error('Host did not respond. Redirecting...', { duration: 3000 });
+      supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id).then(() => {});
+      setWaitingApproval(false);
+      setJoining(false);
+    }, 10000);
     
     const channel = supabase.channel(`join-${user.id}`)
       .on('postgres_changes', { 
@@ -227,10 +248,12 @@ export default function Connection() {
         filter: `user_id=eq.${user.id}` 
       }, (payload) => {
         if (payload.new.status === 'accepted') { 
+          clearTimeout(timeout);
           channel.unsubscribe(); 
           navigate(`/room/${rid}`); 
         }
         else if (payload.new.status === 'blocked') { 
+          clearTimeout(timeout);
           channel.unsubscribe(); 
           toast.error(`The host declined your request.`); 
           setWaitingApproval(false); 
@@ -245,7 +268,7 @@ export default function Connection() {
     navigate('/');
   };
 
-  const ProfileCard = ({ p, isLive }: { p: any, isLive: boolean }) => (
+  const ProfileCard = ({ p }: { p: any }) => (
     <motion.div 
       layout
       initial={{ opacity: 0, y: 10 }}
@@ -259,13 +282,6 @@ export default function Connection() {
         boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(255,255,255,0.04) inset',
       }}
     >
-      {isLive && (
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,59,48,0.12)' }}>
-          <span className="h-1.5 w-1.5 rounded-full bg-[#FF3B30] animate-pulse" />
-          <span className="text-[8px] font-semibold tracking-wide text-[#FF3B30]">Live</span>
-        </div>
-      )}
-      
       <div className="flex items-center gap-3">
         <div className="h-11 w-11 rounded-[13px] bg-[#FF3B30]/10 flex items-center justify-center overflow-hidden shrink-0" style={{ boxShadow: '0 0 0 0.5px rgba(255,59,48,0.15) inset' }}>
           {p.avatar_url ? (
@@ -281,21 +297,12 @@ export default function Connection() {
       </div>
 
       <button 
-        onClick={() => isLive && handleJoinHost(p.auth_user_id)}
-        disabled={!isLive || joining}
-        className={`h-9 w-full rounded-[10px] text-[13px] font-semibold tracking-normal transition-all duration-200 ${
-          isLive 
-            ? 'bg-[#FF3B30] hover:bg-[#E0342B] text-white active:opacity-70 active:scale-[0.97]' 
-            : 'text-muted-foreground/40 cursor-default'
-        }`}
-        style={isLive ? {
-          boxShadow: '0 1px 3px rgba(255,59,48,0.3), 0 0.5px 0 rgba(255,255,255,0.15) inset',
-        } : {
-          background: 'rgba(255,255,255,0.04)',
-          boxShadow: '0 0 0 0.5px rgba(255,255,255,0.06) inset',
-        }}
+        onClick={() => handleJoinHost(p.auth_user_id)}
+        disabled={joining}
+        className="h-9 w-full rounded-[10px] text-[13px] font-semibold tracking-normal transition-all duration-200 bg-[#FF3B30] hover:bg-[#E0342B] text-white active:opacity-70 active:scale-[0.97] disabled:opacity-40"
+        style={{ boxShadow: '0 1px 3px rgba(255,59,48,0.3), 0 0.5px 0 rgba(255,255,255,0.15) inset' }}
       >
-        {isLive ? 'Join Session' : 'Offline'}
+        Join Session
       </button>
     </motion.div>
   );
@@ -380,7 +387,6 @@ export default function Connection() {
                         <ProfileCard 
                           key={p.auth_user_id} 
                           p={p} 
-                          isLive={hostedRooms.some(r => r.host_id === p.auth_user_id)} 
                         />
                       ))
                     )}
@@ -516,7 +522,6 @@ export default function Connection() {
                       <ProfileCard 
                         key={p.auth_user_id} 
                         p={p} 
-                        isLive={hostedRooms.some(r => r.host_id === p.auth_user_id)} 
                       />
                     ))
                   )}
