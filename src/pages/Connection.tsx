@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Plus, LogIn, Clock, Search } from 'lucide-react';
+import { Plus, LogIn, Clock, Search, Users } from 'lucide-react';
 import HistoryModal from '@/components/HistoryModal';
 import ConnectionFeatures from '@/components/ConnectionFeatures';
 import { motion, AnimatePresence } from 'framer-motion';
