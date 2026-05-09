@@ -339,6 +339,8 @@ export default function Room() {
       .select('user_id, status')
       .eq('room_id', roomId);
 
+    console.log('loadParticipants - parts:', parts);
+
     if (!parts) return;
 
     const myEntry = parts.find((p) => p.user_id === userId);
@@ -408,6 +410,8 @@ export default function Room() {
         avatar_url: prof?.avatar_url,
       };
     });
+
+    console.log('loadParticipants - newPending:', newPending);
 
     setPendingRequests(newPending);
     if (newPending.length > 0) {
@@ -1509,6 +1513,15 @@ export default function Room() {
           </div>
         )}
       </main>
+
+      {/* DEBUG OVERLAY */}
+      {isHost && (
+        <div className="fixed bottom-4 left-4 bg-black/80 text-white text-xs p-4 rounded-xl z-[9999] max-w-xs font-mono break-all">
+          <p>isHost: {String(isHost)}</p>
+          <p>Pending Count: {pendingRequests.length}</p>
+          <p>Current Req: {currentRequest ? currentRequest.name : 'None'}</p>
+        </div>
+      )}
 
       <JoinRequestDialog
         open={!!currentRequest && isHost}

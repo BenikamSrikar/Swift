@@ -56,7 +56,7 @@ export default function JoinRequestDialog({
             onClick={onAccept}
             className="bg-primary hover:bg-primary/90"
           >
-            Accept
+            Accept Join
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
