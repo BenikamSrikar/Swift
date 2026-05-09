@@ -98,32 +98,31 @@ export default function Connection() {
     const fetchHostedRooms = async () => {
       setLoadingRooms(true);
       try {
-        // Fetch participants for active rooms to ensure host is actually present
         const { data, error } = await supabase
-          .from('room_participants')
+          .from('rooms')
           .select(`
-            room_id,
-            rooms:room_id!inner(id, room_id, host_id, status),
-            profiles:user_id(name, email, avatar_url)
+            id, 
+            room_id, 
+            host_id, 
+            status,
+            host:host_id (
+              name,
+              email,
+              avatar_url
+            )
           `)
-          .eq('rooms.status', 'active');
+          .eq('status', 'active');
         
         if (error) {
           console.error('Fetch rooms error:', error);
           setHostedRooms([]);
         } else if (data) {
-          // Filter to only include the HOST'S entry in the participants list
-          // This guarantees the room is "ongoing" and the host hasn't left.
-          const liveRooms = data
-            .filter((p: any) => p.user_id === p.rooms.host_id || p.rooms.host_id === p.user_id)
-            .map((p: any) => ({
-              ...p.rooms,
-              profiles: p.profiles
-            }));
-            
-          // Remove duplicates (just in case)
-          const uniqueRooms = Array.from(new Map(liveRooms.map(r => [r.room_id, r])).values());
-          setHostedRooms(uniqueRooms);
+          // Map 'host' to 'profiles' to maintain compatibility with the UI
+          const liveRooms = data.map((r: any) => ({
+            ...r,
+            profiles: r.host
+          }));
+          setHostedRooms(liveRooms);
         }
       } catch (err) {
         console.error('Discovery error:', err);

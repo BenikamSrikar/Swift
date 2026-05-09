@@ -444,6 +444,10 @@ export default function Room() {
         .eq('room_id', room?.id)
         .then(() => {}, () => {});
 
+      if (room?.host_id === userId) {
+        supabase.from('rooms').update({ status: 'locked' }).eq('id', room.id).then(() => {}, () => {});
+      }
+
       supabase
         .from('sessions')
         .delete()
