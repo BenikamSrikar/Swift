@@ -421,7 +421,12 @@ export default function Room() {
   }, [roomId, userId, room?.host_id, isHost, navigate]);
 
   useEffect(() => {
-    if (roomId && room?.id) loadParticipants();
+    if (roomId && room?.id) {
+      loadParticipants();
+      // Periodic fallback in case real-time fails
+      const interval = setInterval(loadParticipants, 5000);
+      return () => clearInterval(interval);
+    }
   }, [roomId, room?.id, loadParticipants]);
 
   // ── Cleanup on tab close / navigation away ──
@@ -480,7 +485,7 @@ export default function Room() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [roomId, loadParticipants]);
+  }, [roomId, room?.id, loadParticipants]);
 
   // Signaling channel
   useEffect(() => {

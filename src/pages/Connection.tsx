@@ -203,11 +203,18 @@ export default function Connection() {
     }
 
     await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
-    await supabase.from('room_participants').insert({ 
+    const { error: insError } = await supabase.from('room_participants').insert({ 
       room_id: rid, 
       user_id: user.id, 
       status: 'pending' 
     });
+
+    if (insError) {
+      console.error('Join insert error:', insError);
+      toast.error('Failed to send join request. Please try again.');
+      setJoining(false);
+      return;
+    }
 
     setWaitingApproval(true);
     
