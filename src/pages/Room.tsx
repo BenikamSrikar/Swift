@@ -337,7 +337,7 @@ export default function Room() {
     const { data: parts } = await supabase
       .from('room_participants')
       .select('user_id, status')
-      .eq('room_id', room?.id);
+      .eq('room_id', roomId);
 
     if (!parts) return;
 
@@ -441,7 +441,7 @@ export default function Room() {
         .from('room_participants')
         .delete()
         .eq('user_id', userId)
-        .eq('room_id', room?.id)
+        .eq('room_id', roomId)
         .then(() => {}, () => {});
 
       if (room?.host_id === userId) {
@@ -473,8 +473,8 @@ export default function Room() {
     if (!room?.id) return;
 
     const channel = supabase
-      .channel(`room-participants-${room.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants', filter: `room_id=eq.${room.id}` }, () => {
+      .channel(`room-participants-${roomId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants', filter: `room_id=eq.${roomId}` }, () => {
         loadParticipants();
       })
       .subscribe();

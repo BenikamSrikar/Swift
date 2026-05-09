@@ -177,8 +177,8 @@ export default function Connection() {
       return; 
     }
 
-    await supabase.from('room_participants').delete().eq('room_id', newRoom.id).eq('user_id', user.id);
-    await supabase.from('room_participants').insert({ room_id: newRoom.id, user_id: user.id, status: 'accepted' });
+    await supabase.from('room_participants').delete().eq('room_id', roomId).eq('user_id', user.id);
+    await supabase.from('room_participants').insert({ room_id: roomId, user_id: user.id, status: 'accepted' });
     navigate(`/room/${roomId}`);
   };
 
@@ -202,9 +202,9 @@ export default function Connection() {
       return; 
     }
 
-    await supabase.from('room_participants').delete().eq('room_id', activeRoom.id).eq('user_id', user.id);
+    await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
     await supabase.from('room_participants').insert({ 
-      room_id: activeRoom.id, 
+      room_id: rid, 
       user_id: user.id, 
       status: 'pending' 
     });
