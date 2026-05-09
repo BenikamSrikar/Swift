@@ -332,7 +332,7 @@ export default function Room() {
 
   // Load participants — filter out ghosts (accepted but no active session)
   const loadParticipants = useCallback(async () => {
-    if (!roomId) return;
+    if (!roomId || !room?.id) return;
 
     const { data: parts } = await supabase
       .from('room_participants')
@@ -421,8 +421,8 @@ export default function Room() {
   }, [roomId, userId, room?.host_id, isHost, navigate]);
 
   useEffect(() => {
-    if (roomId) loadParticipants();
-  }, [roomId, loadParticipants]);
+    if (roomId && room?.id) loadParticipants();
+  }, [roomId, room?.id, loadParticipants]);
 
   // ── Cleanup on tab close / navigation away ──
   useEffect(() => {
