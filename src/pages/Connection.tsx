@@ -110,18 +110,36 @@ export default function Connection() {
           return;
         }
 
-        // 2. Fetch host profiles for those rooms
-        const hostIds = rooms.map(r => r.host_id);
+        // 2. Fetch ALL participants for these rooms to verify host presence
+        const roomIds = rooms.map(r => r.id);
+        const { data: participants, error: partsError } = await supabase
+          .from('room_participants')
+          .select('room_id, user_id')
+          .in('room_id', roomIds);
+
+        if (partsError) console.error('Participants fetch error:', partsError);
+
+        // 3. Filter rooms where the host is actually present
+        const activeHostRooms = rooms.filter(room => {
+          const roomParts = participants?.filter(p => p.room_id === room.id) || [];
+          return roomParts.some(p => p.user_id === room.host_id);
+        });
+
+        if (activeHostRooms.length === 0) {
+          setHostedRooms([]);
+          return;
+        }
+
+        // 4. Fetch host profiles for the remaining verified rooms
+        const hostIds = activeHostRooms.map(r => r.host_id);
         const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
           .select('*')
           .in('auth_user_id', hostIds);
 
-        if (profilesError) console.error('Profiles fetch error:', profilesError);
-
-        // 3. Merge data
+        // 5. Merge data
         const profileMap = new Map(profiles?.map(p => [p.auth_user_id, p]) || []);
-        const liveRooms = rooms.map(r => ({
+        const liveRooms = activeHostRooms.map(r => ({
           ...r,
           profiles: profileMap.get(r.host_id)
         }));
