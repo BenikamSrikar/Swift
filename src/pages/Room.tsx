@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import ChunkQueue from '@/components/ChunkQueue';
 
 const DATA_CHANNEL_CHUNK_SIZE = 262144; // 256KB
 const DATA_CHANNEL_BUFFER_LIMIT = DATA_CHANNEL_CHUNK_SIZE * 8;
@@ -114,6 +115,8 @@ export default function Room() {
   const isHost = room?.host_id === userId;
   const [removedByHost, setRemovedByHost] = useState(false);
   const [remoteUploadProgress, setRemoteUploadProgress] = useState<Record<string, number>>({});
+  const [remoteSenderIndices, setRemoteSenderIndices] = useState<Record<string, number>>({});
+  const [receivingState, setReceivingState] = useState<Record<string, any>>({}); // To trigger UI updates for ChunkQueue
 
   const generateTransferId = () => {
     try {
@@ -369,15 +372,28 @@ export default function Room() {
     });
 
     channel.on('broadcast', { event: 'upload-progress' }, (payload) => {
-      const { targetUserId, fromUserId, progress } = payload.payload;
+      const { targetUserId, fromUserId, progress, currentChunkIndex, transferId } = payload.payload;
       if (targetUserId === userId) {
         setRemoteUploadProgress(prev => ({ ...prev, [fromUserId]: progress }));
+        if (transferId) {
+          setRemoteSenderIndices(prev => ({ ...prev, [transferId]: currentChunkIndex }));
+        }
       }
     });
 
     const downloadSpecificChunk = async (transferId: string, chunkIndex: number, chunkPath: string) => {
       const rec = receivingChunksRef.current.get(transferId);
       if (!rec || rec.chunks[chunkIndex]) return;
+
+      // PACING: receiver should download chunk should be less than 1 then the current chunk sender is uploading
+      // Except for the very last chunk when upload is complete
+      const senderIdx = remoteSenderIndices[transferId] ?? 0;
+      const isLastChunk = chunkIndex === rec.totalChunks - 1;
+      
+      if (!isLastChunk && chunkIndex >= senderIdx) {
+        // console.log(`[Swift] Holding chunk ${chunkIndex} (sender is at ${senderIdx})`);
+        return; 
+      }
 
       try {
         const { data: chunkBlob, error: chunkErr } = await supabase.storage
@@ -398,6 +414,16 @@ export default function Room() {
           t.id === transferId ? { ...t, progress: pct } : t
         ));
         setStatusText(`Downloading ${rec.metadata.name}: ${pct}%`);
+        
+        // Trigger UI update for ChunkQueue
+        setReceivingState(prev => ({
+          ...prev,
+          [transferId]: { 
+            chunks: [...rec.chunks], 
+            downloadedCount: rec.downloadedCount, 
+            totalChunks: rec.totalChunks 
+          }
+        }));
 
         // Check if all chunks are received
         if (rec.downloadedCount === rec.totalChunks && !rec.isFinalizing) {
@@ -408,6 +434,22 @@ export default function Room() {
         console.error(`Error downloading chunk ${chunkIndex}:`, err);
       }
     };
+
+    // Effect to process held chunks when sender index moves
+    useEffect(() => {
+      receivingChunksRef.current.forEach((rec, transferId) => {
+        if (rec.downloadedCount < rec.totalChunks) {
+          // Find the first null chunk and try to download if sender has moved past it
+          const firstMissing = rec.chunks.indexOf(null);
+          if (firstMissing !== -1) {
+            const chunkPath = rec.totalChunks === 1 
+              ? `${roomId}/${transferId}/${rec.metadata.name}`
+              : `${roomId}/${transferId}/chunk_${firstMissing}`;
+            downloadSpecificChunk(transferId, firstMissing, chunkPath);
+          }
+        }
+      });
+    }, [remoteSenderIndices]);
 
     channel.on('broadcast', { event: 'chunk-ready' }, async (payload) => {
       const { 
@@ -693,7 +735,9 @@ export default function Room() {
                 payload: {
                   targetUserId: payload.targetUserId,
                   fromUserId: userId,
-                  progress: pct
+                  progress: pct,
+                  currentChunkIndex: chunkIndex,
+                  transferId: next.id
                 }
               });
             }
@@ -1129,6 +1173,7 @@ export default function Room() {
                 )}
                 
                 <TransferQueue transfers={queuedTransfers} />
+                <ChunkQueue transfers={queuedTransfers} receivingChunks={receivingChunksRef.current} />
 
                 <div className={`
                   grid gap-6 w-full transition-all duration-500 ease-in-out
