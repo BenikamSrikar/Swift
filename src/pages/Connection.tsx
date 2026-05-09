@@ -294,84 +294,104 @@ export default function Connection() {
 
           <AnimatePresence mode="wait">
             {waitingApproval ? (
-              <motion.div 
-                key="waiting"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-md bg-card/50 backdrop-blur-xl border border-border/50 rounded-3xl p-10 flex flex-col items-center text-center shadow-2xl"
-              >
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 relative">
-                  <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-                  <Clock className="w-8 h-8 text-primary animate-spin" style={{ animationDuration: '4s' }} />
-                </div>
-                <h2 className="text-xl font-bold mb-2">Awaiting Host</h2>
-                <p className="text-sm text-muted-foreground mb-8">The host needs to approve your connection request before you can start transferring.</p>
-                <Button variant="outline" className="rounded-full px-8" onClick={() => { setWaitingApproval(false); setJoining(false); }}>
-                  Cancel Request
-                </Button>
-              </motion.div>
-            ) : (
-              <div className="w-full flex flex-col lg:flex-row gap-8 items-start">
-                {/* Hosted Rooms Discovery - Left Side */}
+              <div className="w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
+                {/* Main Actions - Left Side */}
                 <motion.div 
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="w-full lg:max-w-md flex flex-col gap-6"
+                >
+                  <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-8 flex flex-col items-center gap-6 group hover:border-primary/30 transition-all duration-500 active:scale-[0.98] shadow-2xl relative overflow-hidden">
+                    {/* Background glow */}
+                    <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 blur-[100px] rounded-full" />
+                    
+                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center group-hover:bg-primary/20 transition-colors relative z-10">
+                      <Plus className="h-8 w-8 text-primary" />
+                    </div>
+                    <div className="text-center relative z-10">
+                      <h3 className="font-black text-2xl mb-2 tracking-tight">Host a Session</h3>
+                      <p className="text-xs text-muted-foreground font-medium max-w-[240px] mx-auto leading-relaxed">
+                        Create a secure workspace and start sharing files with your team in real-time.
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={handleCreateRoom} 
+                      disabled={creating}
+                      className="w-full h-14 rounded-2xl text-base font-black uppercase tracking-widest volts-gradient shadow-xl shadow-primary/20 hover:shadow-primary/30 active:translate-y-0.5 transition-all"
+                    >
+                      {creating ? 'Starting Session...' : 'Create Room'}
+                    </Button>
+                  </div>
+                </motion.div>
+
+                {/* Hosted Rooms Discovery - Right Side */}
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="w-full lg:w-80 flex flex-col gap-4 order-2 lg:order-1"
+                  className="w-full lg:w-96 flex flex-col gap-4"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <h2 className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                      <Users className="h-4 w-4" /> Live Rooms
+                      <Users className="h-4 w-4" /> Live Discovery
                     </h2>
-                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-3 py-1 rounded-full animate-pulse">
                       {hostedRooms.length} Active
                     </span>
                   </div>
 
-                  <div className="relative mb-2">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <div className="relative mb-2 group">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                     <Input 
-                      placeholder="Search host..." 
+                      placeholder="Find a host or room ID..." 
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-9 pl-9 pr-4 rounded-xl bg-muted/30 border-border/40 text-xs"
+                      className="h-10 pl-10 pr-4 rounded-xl bg-muted/30 border-border/40 text-xs focus:bg-background/50 focus:border-primary/50 transition-all"
                     />
                   </div>
 
-                  <div className="flex flex-col gap-3 max-h-[400px] lg:max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
+                  <div className="flex flex-col gap-3 max-h-[400px] lg:max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
                     {loadingRooms ? (
                       <div className="flex flex-col gap-3">
-                        {[1, 2, 3].map(i => <div key={i} className="h-20 rounded-2xl bg-muted/30 animate-pulse" />)}
+                        {[1, 2, 3].map(i => <div key={i} className="h-24 rounded-2xl bg-muted/20 animate-pulse" />)}
                       </div>
                     ) : filteredRooms.length === 0 ? (
-                      <div className="py-12 flex flex-col items-center text-center gap-2 border border-dashed border-border/60 rounded-2xl">
-                        <Search className="h-8 w-8 text-muted-foreground/30" />
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase">No rooms found</p>
+                      <div className="py-20 flex flex-col items-center text-center gap-4 border border-dashed border-border/40 rounded-3xl bg-muted/5">
+                        <div className="w-12 h-12 rounded-full bg-muted/20 flex items-center justify-center">
+                          <Search className="h-6 w-6 text-muted-foreground/30" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">Quiet in here...</p>
+                          <p className="text-[10px] text-muted-foreground/60 max-w-[160px]">No active sessions found. Why not host one?</p>
+                        </div>
                       </div>
                     ) : (
                       filteredRooms.map((room) => (
                         <motion.div 
                           key={room.room_id}
                           layout
-                          className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-4 flex flex-col gap-3 hover:border-primary/40 transition-all group"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-5 flex flex-col gap-4 hover:border-primary/50 transition-all group hover:bg-card/60 shadow-lg hover:shadow-primary/5"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20">
+                          <div className="flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20 shadow-inner group-hover:scale-105 transition-transform">
                               {room.profiles?.avatar_url ? (
                                 <img src={room.profiles.avatar_url} alt={room.profiles.name} className="h-full w-full object-cover" />
                               ) : (
-                                <span className="text-sm font-bold text-primary">{room.profiles?.name?.charAt(0)}</span>
+                                <span className="text-lg font-black text-primary">{room.profiles?.name?.charAt(0).toUpperCase()}</span>
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-bold truncate group-hover:text-primary transition-colors">{room.profiles?.name}</p>
-                              <p className="text-[9px] font-mono font-bold text-muted-foreground uppercase tracking-tighter">ID: {room.room_id}</p>
+                              <p className="text-sm font-black truncate group-hover:text-primary transition-colors tracking-tight">{room.profiles?.name || 'Unknown Host'}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                                <p className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider">ID: {room.room_id}</p>
+                              </div>
                             </div>
                           </div>
                           <Button 
                             size="sm" 
-                            variant="secondary"
-                            className="h-8 w-full rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm hover:volts-gradient hover:text-white transition-all"
+                            className="h-10 w-full rounded-xl text-[10px] font-black uppercase tracking-[0.2em] volts-gradient text-white shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
                             onClick={() => handleJoinRoom(room.room_id)}
                             disabled={joining}
                           >
@@ -380,55 +400,6 @@ export default function Connection() {
                         </motion.div>
                       ))
                     )}
-                  </div>
-                </motion.div>
-
-                {/* Main Actions - Right Side */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 order-1 lg:order-2"
-                >
-                  {/* Create Card */}
-                  <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-4 group hover:border-primary/30 transition-all duration-500 active:scale-[0.98]">
-                    <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                      <Plus className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="text-center">
-                      <h3 className="font-bold text-base mb-0.5">Host a Room</h3>
-                      <p className="text-[10px] text-muted-foreground">Start your own room and invite others using your code.</p>
-                    </div>
-                    <Button 
-                      onClick={handleCreateRoom} 
-                      disabled={creating}
-                      className="w-full h-12 rounded-xl text-sm font-bold volts-gradient shadow-xl shadow-primary/20 hover:shadow-primary/30 active:translate-y-0.5 transition-all"
-                    >
-                      {creating ? 'Starting Session...' : 'Create Room'}
-                    </Button>
-                  </div>
-
-                  {/* Join Card */}
-                  <div className="bg-card/40 backdrop-blur-md border border-border/40 rounded-2xl p-6 flex flex-col items-center gap-6 group hover:border-primary/30 transition-all duration-500">
-                    <div className="w-12 h-12 bg-secondary/20 rounded-xl flex items-center justify-center group-hover:bg-secondary/30 transition-colors">
-                      <LogIn className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="text-center">
-                      <h3 className="font-bold text-base mb-1">Join a Room</h3>
-                      <p className="text-xs text-muted-foreground max-w-[200px]">Browse the live rooms on the left to join an ongoing session.</p>
-                    </div>
-                    
-                    <div className="w-full py-4 flex flex-col items-center gap-2">
-                      <div className="flex -space-x-2">
-                        {[1, 2, 3].map(i => (
-                          <div key={i} className="h-8 w-8 rounded-full border-2 border-background bg-muted flex items-center justify-center overflow-hidden">
-                            <span className="text-[10px] font-bold">U{i}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-[10px] text-center text-muted-foreground opacity-60">
-                        Join your team instantly.
-                      </p>
-                    </div>
                   </div>
                 </motion.div>
               </div>
