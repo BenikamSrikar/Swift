@@ -98,18 +98,20 @@ export default function Connection() {
     const fetchHostedRooms = async () => {
       setLoadingRooms(true);
       try {
-        // Fetch all rooms with 'active' status
-        // We'll join profiles by host_id
+        // Fetch all rooms and filter 'active' ones in JS for easier debugging
         const { data, error } = await supabase
           .from('rooms')
-          .select('*, profiles:host_id(*)')
-          .eq('status', 'active');
+          .select('*, profiles:host_id(*)');
         
         if (error) {
           console.error('Fetch rooms error:', error);
           setHostedRooms([]);
         } else if (data) {
-          setHostedRooms(data);
+          // Filter active rooms case-insensitively
+          const liveRooms = data.filter((r: any) => 
+            r.status?.toLowerCase() === 'active'
+          );
+          setHostedRooms(liveRooms);
         }
       } catch (err) {
         console.error('Discovery error:', err);
