@@ -167,20 +167,21 @@ export default function Connection() {
       }
     }
 
-    const { error } = await supabase.from('rooms').insert({ room_id: roomId, host_id: user.id, status: 'active' });
-    if (error) { toast.error('Failed to create room'); setCreating(false); return; }
+    const { data: newRoom, error: createError } = await supabase
+      .from('rooms')
+      .insert({ room_id: roomId, host_id: user.id, status: 'active' })
+      .select('id')
+      .single();
 
-    // Remove any stale participant row before inserting a fresh one
-    await supabase.from('room_participants').delete().eq('room_id', roomId).eq('user_id', user.id);
-    await supabase.from('room_participants').insert({ room_id: roomId, user_id: user.id, status: 'accepted' });
-    navigate(`/room/${roomId}`);
-  };
-
-  const handleRoomCodeChange = async (val: string) => {
-    setRoomCode(val);
-    if (val.length === 6) {
-      handleJoinRoom(val);
+    if (createError || !newRoom) { 
+      toast.error('Failed to create room'); 
+      setCreating(false); 
+      return; 
     }
+
+    await supabase.from('room_participants').delete().eq('room_id', newRoom.id).eq('user_id', user.id);
+    await supabase.from('room_participants').insert({ room_id: newRoom.id, user_id: user.id, status: 'accepted' });
+    navigate(`/room/${roomId}`);
   };
 
   const handleJoinRoom = async (rid: string) => {
@@ -206,7 +207,6 @@ export default function Connection() {
       return; 
     }
 
-    // Get host info separately for robustness
     const { data: hostProfile } = await supabase
       .from('profiles')
       .select('name')
@@ -216,7 +216,7 @@ export default function Connection() {
     const { data: existing } = await supabase
       .from('room_participants')
       .select('status')
-      .eq('room_id', rid)
+      .eq('room_id', room.id)
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -226,13 +226,9 @@ export default function Connection() {
       return; 
     }
 
-    // Remove any previous stale row before re-joining
-    if (existing) {
-      await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
-    }
-
+    await supabase.from('room_participants').delete().eq('room_id', room.id).eq('user_id', user.id);
     await supabase.from('room_participants').insert({ 
-      room_id: rid, 
+      room_id: room.id, 
       user_id: user.id, 
       status: 'pending' 
     });
