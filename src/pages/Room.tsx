@@ -118,6 +118,173 @@ export default function Room() {
   const [remoteSenderIndices, setRemoteSenderIndices] = useState<Record<string, number>>({});
   const [receivingState, setReceivingState] = useState<Record<string, any>>({}); // To trigger UI updates for ChunkQueue
 
+  const finalizeTransfer = useCallback(async (transferId: string) => {
+    const rec = receivingChunksRef.current.get(transferId);
+    if (!rec) return;
+
+    const { chunks, metadata } = rec;
+    const { name, type, fromUserId, fromName, batchStructure } = metadata;
+    const isLink = type === 'link';
+
+    try {
+      setStatusText(`Finalizing ${name}...`);
+      
+      let finalBlob: Blob;
+      const validChunks = chunks.filter(c => c !== null) as Blob[];
+
+      if (type === 'folder' && validChunks.length > 0) {
+        const mergedZip = new JSZip();
+        if (batchStructure) {
+          let chunkIndex = 0;
+          for (let i = 0; i < batchStructure.length; i++) {
+            const numSlices = batchStructure[i];
+            const batchChunks = validChunks.slice(chunkIndex, chunkIndex + numSlices);
+            chunkIndex += numSlices;
+            if (batchChunks.length === 0) continue;
+            
+            const batchBlob = new Blob(batchChunks);
+            const tempZip = await JSZip.loadAsync(batchBlob);
+            tempZip.forEach((relativePath, zipEntry) => {
+              if (!zipEntry.dir) {
+                mergedZip.file(relativePath, zipEntry.async('blob'));
+              }
+            });
+          }
+        } else {
+          for (const chunk of validChunks) {
+            const tempZip = await JSZip.loadAsync(chunk);
+            tempZip.forEach((relativePath, zipEntry) => {
+              if (!zipEntry.dir) {
+                mergedZip.file(relativePath, zipEntry.async('blob'));
+              }
+            });
+          }
+        }
+        finalBlob = await mergedZip.generateAsync({ type: 'blob', compression: 'STORE' });
+      } else {
+        finalBlob = new Blob(validChunks);
+      }
+
+      const url = URL.createObjectURL(finalBlob);
+      setStatusText(null);
+      
+      setQueuedTransfers(prev => prev.map(t =>
+        t.id === transferId ? { ...t, status: 'completed', progress: 100 } : t
+      ));
+
+      setTimeout(() => {
+        setQueuedTransfers(prev => prev.filter(t => t.id !== transferId));
+        receivingChunksRef.current.delete(transferId);
+      }, 3000);
+
+      // Log history
+      let senderEmail = '';
+      const { data: prof } = await supabase.from('profiles').select('email').eq('auth_user_id', fromUserId).single();
+      if (prof) senderEmail = prof.email;
+
+      await supabase.from('transfer_history').insert({
+        sender_id: fromUserId,
+        sender_name: fromName || 'Unknown Peer',
+        recipient_name: userName!,
+        file_name: name,
+        file_type: isLink ? 'link' : name.endsWith('.zip') ? 'folder' : 'file',
+        sender_email: senderEmail || '',
+        direction: 'received',
+      } as any);
+
+      toast.success(`${isLink ? 'Link' : 'File'} received: ${name}`, {
+        action: {
+          label: isLink ? 'Copy Link' : 'Download',
+          onClick: async () => {
+            if (isLink) {
+              const text = await finalBlob.text();
+              navigator.clipboard.writeText(text);
+              toast.success('Link copied to clipboard');
+            } else {
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = name;
+              a.click();
+              URL.revokeObjectURL(url);
+            }
+          },
+        },
+        duration: 15000,
+      });
+
+    } catch (err) {
+      console.error('Finalization error:', err);
+      setStatusText(null);
+      toast.error('Failed to assemble received file');
+      setQueuedTransfers(prev => prev.map(t =>
+        t.id === transferId ? { ...t, status: 'failed' } : t
+      ));
+    }
+  }, [userName]);
+
+  const downloadSpecificChunk = useCallback(async (transferId: string, chunkIndex: number, chunkPath: string) => {
+    const rec = receivingChunksRef.current.get(transferId);
+    if (!rec || rec.chunks[chunkIndex]) return;
+
+    // PACING: receiver should download chunk should be less than 1 then the current chunk sender is uploading
+    const senderIdx = remoteSenderIndices[transferId] ?? 0;
+    const isLastChunk = chunkIndex === rec.totalChunks - 1;
+    
+    if (!isLastChunk && chunkIndex >= senderIdx) {
+      return; 
+    }
+
+    try {
+      const { data: chunkBlob, error: chunkErr } = await supabase.storage
+        .from('swift-transfers')
+        .download(chunkPath);
+
+      if (chunkErr || !chunkBlob) return;
+      
+      rec.chunks[chunkIndex] = chunkBlob;
+      rec.downloadedCount++;
+
+      await supabase.storage.from('swift-transfers').remove([chunkPath]);
+
+      const pct = Math.round((rec.downloadedCount / rec.totalChunks) * 100);
+      setQueuedTransfers(prev => prev.map(t =>
+        t.id === transferId ? { ...t, progress: pct } : t
+      ));
+      setStatusText(`Downloading ${rec.metadata.name}: ${pct}%`);
+      
+      setReceivingState(prev => ({
+        ...prev,
+        [transferId]: { 
+          chunks: [...rec.chunks], 
+          downloadedCount: rec.downloadedCount, 
+          totalChunks: rec.totalChunks 
+        }
+      }));
+
+      if (rec.downloadedCount === rec.totalChunks && !rec.isFinalizing) {
+        rec.isFinalizing = true;
+        finalizeTransfer(transferId);
+      }
+    } catch (err) {
+      console.error(`Error downloading chunk ${chunkIndex}:`, err);
+    }
+  }, [remoteSenderIndices, finalizeTransfer]);
+
+  // Effect to process held chunks when sender index moves
+  useEffect(() => {
+    receivingChunksRef.current.forEach((rec, transferId) => {
+      if (rec.downloadedCount < rec.totalChunks) {
+        const firstMissing = rec.chunks.indexOf(null);
+        if (firstMissing !== -1) {
+          const chunkPath = rec.totalChunks === 1 
+            ? `${roomId}/${transferId}/${rec.metadata.name}`
+            : `${roomId}/${transferId}/chunk_${firstMissing}`;
+          downloadSpecificChunk(transferId, firstMissing, chunkPath);
+        }
+      }
+    });
+  }, [remoteSenderIndices, downloadSpecificChunk, roomId]);
+
   const generateTransferId = () => {
     try {
       return (window.crypto as any).randomUUID();
@@ -381,76 +548,6 @@ export default function Room() {
       }
     });
 
-    const downloadSpecificChunk = async (transferId: string, chunkIndex: number, chunkPath: string) => {
-      const rec = receivingChunksRef.current.get(transferId);
-      if (!rec || rec.chunks[chunkIndex]) return;
-
-      // PACING: receiver should download chunk should be less than 1 then the current chunk sender is uploading
-      // Except for the very last chunk when upload is complete
-      const senderIdx = remoteSenderIndices[transferId] ?? 0;
-      const isLastChunk = chunkIndex === rec.totalChunks - 1;
-      
-      if (!isLastChunk && chunkIndex >= senderIdx) {
-        // console.log(`[Swift] Holding chunk ${chunkIndex} (sender is at ${senderIdx})`);
-        return; 
-      }
-
-      try {
-        const { data: chunkBlob, error: chunkErr } = await supabase.storage
-          .from('swift-transfers')
-          .download(chunkPath);
-
-        if (chunkErr || !chunkBlob) return; // Silent fail, let sync catch it later
-        
-        rec.chunks[chunkIndex] = chunkBlob;
-        rec.downloadedCount++;
-
-        // Delete chunk from bucket immediately after download
-        await supabase.storage.from('swift-transfers').remove([chunkPath]);
-
-        // Update progress
-        const pct = Math.round((rec.downloadedCount / rec.totalChunks) * 100);
-        setQueuedTransfers(prev => prev.map(t =>
-          t.id === transferId ? { ...t, progress: pct } : t
-        ));
-        setStatusText(`Downloading ${rec.metadata.name}: ${pct}%`);
-        
-        // Trigger UI update for ChunkQueue
-        setReceivingState(prev => ({
-          ...prev,
-          [transferId]: { 
-            chunks: [...rec.chunks], 
-            downloadedCount: rec.downloadedCount, 
-            totalChunks: rec.totalChunks 
-          }
-        }));
-
-        // Check if all chunks are received
-        if (rec.downloadedCount === rec.totalChunks && !rec.isFinalizing) {
-          rec.isFinalizing = true;
-          finalizeTransfer(transferId);
-        }
-      } catch (err) {
-        console.error(`Error downloading chunk ${chunkIndex}:`, err);
-      }
-    };
-
-    // Effect to process held chunks when sender index moves
-    useEffect(() => {
-      receivingChunksRef.current.forEach((rec, transferId) => {
-        if (rec.downloadedCount < rec.totalChunks) {
-          // Find the first null chunk and try to download if sender has moved past it
-          const firstMissing = rec.chunks.indexOf(null);
-          if (firstMissing !== -1) {
-            const chunkPath = rec.totalChunks === 1 
-              ? `${roomId}/${transferId}/${rec.metadata.name}`
-              : `${roomId}/${transferId}/chunk_${firstMissing}`;
-            downloadSpecificChunk(transferId, firstMissing, chunkPath);
-          }
-        }
-      });
-    }, [remoteSenderIndices]);
-
     channel.on('broadcast', { event: 'chunk-ready' }, async (payload) => {
       const { 
         targetUserId, fromUserId, fromName, transferId, 
@@ -489,7 +586,7 @@ export default function Room() {
       // Download the chunk mentioned in broadcast
       await downloadSpecificChunk(transferId, chunkIndex, chunkPath);
 
-      // Resilience: Periodically check for missed chunks if we are not done
+      // Resilience: Periodically check for missed chunks
       const rec = receivingChunksRef.current.get(transferId);
       if (rec && rec.downloadedCount < totalChunks) {
         const { data: files } = await supabase.storage
@@ -499,14 +596,10 @@ export default function Room() {
         if (files) {
           for (const f of files) {
             if (f.name === '.emptyFolderPlaceholder') continue;
-            
-            // If it's a direct file (single chunk)
             if (f.name === name && totalChunks === 1) {
               await downloadSpecificChunk(transferId, 0, `${roomId}/${transferId}/${name}`);
               continue;
             }
-
-            // Parse index from 'chunk_N'
             const match = f.name.match(/chunk_(\d+)/);
             if (match) {
               const idx = parseInt(match[1]);
@@ -519,113 +612,7 @@ export default function Room() {
       }
     });
 
-    const finalizeTransfer = async (transferId: string) => {
-      const rec = receivingChunksRef.current.get(transferId);
-      if (!rec) return;
-
-      const { chunks, metadata } = rec;
-      const { name, type, fromUserId, fromName, batchStructure } = metadata;
-      const isLink = type === 'link';
-
-      try {
-        setStatusText(`Finalizing ${name}...`);
-        
-        let finalBlob: Blob;
-        const validChunks = chunks.filter(c => c !== null) as Blob[];
-
-        if (type === 'folder' && validChunks.length > 0) {
-          const mergedZip = new JSZip();
-          if (batchStructure) {
-            let chunkIndex = 0;
-            for (let i = 0; i < batchStructure.length; i++) {
-              const numSlices = batchStructure[i];
-              const batchChunks = validChunks.slice(chunkIndex, chunkIndex + numSlices);
-              chunkIndex += numSlices;
-              if (batchChunks.length === 0) continue;
-              
-              const batchBlob = new Blob(batchChunks);
-              const tempZip = await JSZip.loadAsync(batchBlob);
-              tempZip.forEach((relativePath, zipEntry) => {
-                if (!zipEntry.dir) {
-                  mergedZip.file(relativePath, zipEntry.async('blob'));
-                }
-              });
-            }
-          } else {
-            for (const chunk of validChunks) {
-              const tempZip = await JSZip.loadAsync(chunk);
-              tempZip.forEach((relativePath, zipEntry) => {
-                if (!zipEntry.dir) {
-                  mergedZip.file(relativePath, zipEntry.async('blob'));
-                }
-              });
-            }
-          }
-          finalBlob = await mergedZip.generateAsync({ type: 'blob', compression: 'STORE' });
-        } else {
-          finalBlob = new Blob(validChunks);
-        }
-
-        const url = URL.createObjectURL(finalBlob);
-        setStatusText(null);
-        
-        setQueuedTransfers(prev => prev.map(t =>
-          t.id === transferId ? { ...t, status: 'completed', progress: 100 } : t
-        ));
-
-        setTimeout(() => {
-          setQueuedTransfers(prev => prev.filter(t => t.id !== transferId));
-          receivingChunksRef.current.delete(transferId);
-        }, 3000);
-
-        // Log history and show toast (same as before)
-        let senderEmail = '';
-        const { data: prof } = await supabase.from('profiles').select('email').eq('auth_user_id', fromUserId).single();
-        if (prof) senderEmail = prof.email;
-
-        await supabase.from('transfer_history').insert({
-          sender_id: fromUserId,
-          sender_name: fromName || 'Unknown Peer',
-          recipient_name: userName!,
-          file_name: name,
-          file_type: isLink ? 'link' : name.endsWith('.zip') ? 'folder' : 'file',
-          sender_email: senderEmail || '',
-          direction: 'received',
-        } as any);
-
-        toast.success(`${isLink ? 'Link' : 'File'} received: ${name}`, {
-          action: {
-            label: isLink ? 'Copy Link' : 'Download',
-            onClick: async () => {
-              if (isLink) {
-                const text = await finalBlob.text();
-                navigator.clipboard.writeText(text);
-                toast.success('Link copied to clipboard');
-              } else {
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = name;
-                a.click();
-                URL.revokeObjectURL(url);
-              }
-            },
-          },
-          duration: 15000,
-        });
-
-      } catch (err) {
-        console.error('Finalization error:', err);
-        setStatusText(null);
-        toast.error('Failed to assemble received file');
-        setQueuedTransfers(prev => prev.map(t =>
-          t.id === transferId ? { ...t, status: 'failed' } : t
-        ));
-      }
-    };
-
     channel.on('broadcast', { event: 'transfer-ready' }, async (payload) => {
-      // Legacy support or fallback. In new system, chunk-ready handles it.
-      // But we can keep it for small files or as a final signal.
       const { transferId } = payload.payload;
       const rec = receivingChunksRef.current.get(transferId);
       if (rec && rec.downloadedCount === rec.totalChunks && !rec.isFinalizing) {
