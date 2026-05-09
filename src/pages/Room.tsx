@@ -109,7 +109,8 @@ export default function Room() {
     totalChunks: number, 
     metadata: any,
     isFinalizing: boolean,
-    senderFinished: boolean
+    senderFinished: boolean,
+    thresholdMet: boolean
   }>>(new Map());
 
   const isHost = room?.host_id === userId;
@@ -224,6 +225,11 @@ export default function Room() {
   const downloadSpecificChunk = useCallback(async (transferId: string, chunkIndex: number, chunkPath: string) => {
     const rec = receivingChunksRef.current.get(transferId);
     if (!rec || rec.chunks[chunkIndex]) return;
+
+    // BATCH TRIGGER: Only download if threshold is met or sender is finished
+    if (!rec.thresholdMet && !rec.senderFinished) {
+      return; 
+    }
 
     try {
       const { data: chunkBlob, error: chunkErr } = await supabase.storage
@@ -562,9 +568,10 @@ export default function Room() {
           totalChunks,
           metadata: { name, size, type, fromUserId, fromName, batchStructure },
           isFinalizing: false,
-          senderFinished: false
+          senderFinished: false,
+          thresholdMet: false
         });
-        setStatusText(`Downloading: ${name}`);
+        setStatusText(`Waiting for chunks: ${name}`);
       } else {
         // Handle dynamic totalChunks resizing (e.g. for folder uploads)
         const rec = receivingChunksRef.current.get(transferId)!;
@@ -576,8 +583,25 @@ export default function Room() {
         }
       }
 
-      // Download the chunk mentioned in broadcast
-      await downloadSpecificChunk(transferId, chunkIndex, chunkPath);
+      const rec = receivingChunksRef.current.get(transferId)!;
+      
+      // Update threshold if half-way point reached
+      if (chunkIndex >= Math.floor(rec.totalChunks / 2)) {
+        rec.thresholdMet = true;
+      }
+
+      // Download the chunk mentioned in broadcast (will return if threshold not met)
+      if (rec.thresholdMet || rec.senderFinished) {
+        // Trigger backlog for all pending chunks
+        for (let i = 0; i <= chunkIndex; i++) {
+          if (!rec.chunks[i]) {
+            const path = rec.totalChunks === 1 
+              ? `${roomId}/${transferId}/${rec.metadata.name}`
+              : `${roomId}/${transferId}/chunk_${i}`;
+            downloadSpecificChunk(transferId, i, path);
+          }
+        }
+      }
 
       // Resilience: Periodically check for missed chunks
       const rec = receivingChunksRef.current.get(transferId);
@@ -621,6 +645,15 @@ export default function Room() {
       const rec = receivingChunksRef.current.get(transferId);
       if (rec) {
         rec.senderFinished = true;
+        // Trigger all pending downloads now that sender is done
+        for (let i = 0; i < rec.totalChunks; i++) {
+          if (!rec.chunks[i]) {
+            const path = rec.totalChunks === 1 
+              ? `${roomId}/${transferId}/${rec.metadata.name}`
+              : `${roomId}/${transferId}/chunk_${i}`;
+            downloadSpecificChunk(transferId, i, path);
+          }
+        }
         if (rec.downloadedCount === rec.totalChunks && !rec.isFinalizing) {
           rec.isFinalizing = true;
           finalizeTransfer(transferId);
