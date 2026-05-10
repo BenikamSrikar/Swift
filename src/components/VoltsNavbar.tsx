@@ -1,3 +1,6 @@
+import { useState, useEffect } from 'react';
+import { Plus } from 'lucide-react';
+
 interface VoltsNavbarProps {
   showActions?: boolean;
   onHistoryClick?: () => void;
@@ -7,35 +10,79 @@ interface VoltsNavbarProps {
 }
 
 export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogout, onDeleteAccount, logoutLabel = "Logout" }: VoltsNavbarProps) {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <nav className="w-full border-b bg-card/40 backdrop-blur-xl px-6 py-4 flex items-center justify-center relative z-50 border-white/5">
-      <div className="flex items-center gap-2 group cursor-pointer">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-110 transition-transform">
-          <span className="text-white font-black text-xs">S</span>
+    <nav 
+      className={`fixed top-0 left-0 w-full px-6 py-4 flex items-center justify-center z-[100] transition-all duration-500 ease-in-out border-b ${
+        scrolled 
+          ? 'bg-black border-white/10 shadow-2xl py-3' 
+          : 'bg-card/40 backdrop-blur-xl border-white/5'
+      }`}
+    >
+      <div className="flex items-center gap-3 group cursor-pointer transition-transform active:scale-95">
+        {/* SWIFT Keyboard Key Logo */}
+        <div 
+          className={`px-4 py-1.5 rounded-[10px] border-[2.5px] border-[#FF3B30] flex items-center gap-1.5 transition-all duration-500 ${
+            scrolled ? 'shadow-[0_0_20px_rgba(255,59,48,0.5)] scale-95' : ''
+          }`}
+          style={{ background: 'transparent' }}
+        >
+          <span className="text-[#FF3B30] font-black text-base tracking-tighter uppercase">SWIFT</span>
+          <Plus className="w-4 h-4 text-[#FF3B30] stroke-[4px]" />
         </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-black tracking-tighter text-foreground leading-none">SWIFT-Connect</span>
-          <span className="text-[10px] font-bold text-primary tracking-widest uppercase">Protocol v1.5</span>
+        
+        {/* Version Keyboard Key Logo */}
+        <div 
+          className={`px-2.5 py-1 rounded-[8px] border transition-all duration-500 ${
+            scrolled 
+              ? 'border-[#FF3B30]/40 shadow-[0_0_15px_rgba(255,59,48,0.3)]' 
+              : 'border-black/10'
+          }`}
+          style={{ background: 'transparent' }}
+        >
+          <span className={`text-[10px] font-black tracking-[0.2em] transition-colors duration-500 ${
+            scrolled ? 'text-white' : 'text-black'
+          }`}>V1.5</span>
         </div>
       </div>
+
       <div className="absolute right-6 flex items-center gap-4">
         {showActions && (
           <>
             <button
               onClick={onHistoryClick}
-              className="text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-primary transition-all active:scale-95"
+              className={`text-xs font-black uppercase tracking-widest transition-all active:scale-95 ${
+                scrolled ? 'text-white hover:text-[#FF3B30]' : 'text-muted-foreground hover:text-primary'
+              }`}
             >
               Logs
             </button>
             <button
               onClick={onLogout}
-              className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-all active:scale-95 border border-border/40"
+              className={`h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border ${
+                scrolled 
+                  ? 'bg-white/5 text-white border-white/10 hover:bg-white/10' 
+                  : 'bg-secondary text-secondary-foreground border-border/40 hover:bg-secondary/80'
+              }`}
             >
               Switch Account
             </button>
             <button
               onClick={onDeleteAccount || onLogout}
-              className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all active:scale-95 border border-destructive/20"
+              className={`h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border ${
+                scrolled
+                  ? 'bg-destructive/20 text-[#FF3B30] border-[#FF3B30]/30 hover:bg-destructive hover:text-white shadow-[0_0_15px_rgba(255,59,48,0.2)]'
+                  : 'bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive hover:text-white'
+              }`}
             >
               Delete Account
             </button>
