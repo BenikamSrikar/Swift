@@ -330,13 +330,13 @@ export default function Connection() {
                 <div className="flex flex-col gap-4">
                   <div className="relative group">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input 
-                      placeholder="Search host by name or email..." 
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full h-14 pl-12 pr-4 rounded-2xl text-base font-semibold text-white placeholder:text-white/40 focus:outline-none transition-all duration-200"
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.1)', boxShadow: '0 0.5px 1px rgba(0,0,0,0.2) inset' }}
-                    />
+                      <input 
+                        placeholder="Search host name or email..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full h-14 pl-12 pr-4 rounded-2xl text-base font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                        style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.1)' }}
+                      />
                   </div>
                 </div>
 
@@ -367,8 +367,8 @@ export default function Connection() {
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-base font-semibold text-white truncate">{p.name}</p>
-                              <p className="text-sm text-white/50 truncate">{p.email}</p>
+                              <p className="text-base font-semibold text-foreground truncate">{p.name}</p>
+                              <p className="text-sm text-muted-foreground truncate">{p.email}</p>
                             </div>
                             <div className="px-4 py-2 rounded-[10px] bg-[#FF3B30] text-white text-xs font-bold">
                               Join
@@ -433,13 +433,13 @@ export default function Connection() {
                   </div>
                   <div className="w-full mt-auto relative">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <input 
                         placeholder="Search host name or email..." 
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full h-[50px] pl-10 pr-4 rounded-[12px] text-[15px] font-semibold text-white placeholder:text-white/40 focus:outline-none transition-all duration-200"
-                        style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.1)', boxShadow: '0 0.5px 1px rgba(0,0,0,0.2) inset' }}
+                        className="w-full h-[50px] pl-10 pr-4 rounded-[12px] text-[15px] font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                        style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.1)', boxShadow: '0 1px 2px rgba(0,0,0,0.05) inset' }}
                       />
                     </div>
 
@@ -447,11 +447,11 @@ export default function Connection() {
                     <AnimatePresence>
                       {searchQuery && (
                         <motion.div 
-                          initial={{ opacity: 0, y: 5 }}
+                          initial={{ opacity: 0, y: -5 }}
                           animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 5 }}
-                          className="absolute bottom-full mb-3 left-0 w-full max-h-[260px] overflow-y-auto rounded-[16px] custom-scrollbar z-50 p-2 flex flex-col gap-1.5"
-                          style={{ background: 'rgba(30,30,30,0.85)', backdropFilter: 'saturate(180%) blur(40px)', WebkitBackdropFilter: 'saturate(180%) blur(40px)', border: '0.5px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.05) inset' }}
+                          exit={{ opacity: 0, y: -5 }}
+                          className="absolute top-full mt-3 left-0 w-full max-h-[260px] overflow-y-auto rounded-[16px] custom-scrollbar z-50 p-2 flex flex-col gap-1.5"
+                          style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'saturate(180%) blur(40px)', WebkitBackdropFilter: 'saturate(180%) blur(40px)', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 10px 40px rgba(0,0,0,0.15)' }}
                         >
                           {filteredProfiles.length === 0 ? (
                             <div className="py-8 text-center text-[13px] text-muted-foreground/60 font-medium">
@@ -476,8 +476,8 @@ export default function Connection() {
                                   )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-[14px] font-semibold text-white truncate">{p.name}</p>
-                                  <p className="text-[11px] text-white/50 truncate">{p.email}</p>
+                                  <p className="text-[14px] font-semibold text-gray-900 truncate">{p.name}</p>
+                                  <p className="text-[11px] text-gray-500 truncate">{p.email}</p>
                                 </div>
                                 <div className="px-3 py-1.5 rounded-[8px] bg-[#FF3B30] text-white text-[11px] font-bold opacity-0 group-hover:opacity-100 transition-opacity">
                                   Join
