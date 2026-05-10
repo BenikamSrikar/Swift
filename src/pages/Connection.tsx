@@ -72,6 +72,7 @@ export default function Connection() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmationInput, setConfirmationInput] = useState('');
   const [loadingData, setLoadingData] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -238,6 +239,12 @@ export default function Connection() {
   };
 
   const confirmDeleteAccount = async () => {
+    const requiredText = `DELETE ${profile?.name}`;
+    if (confirmationInput !== requiredText) {
+      toast.error(`Please type "${requiredText}" to confirm`);
+      return;
+    }
+    
     if (!feedback.trim()) {
       toast.error('Please share some feedback before leaving');
       return;
@@ -479,23 +486,38 @@ export default function Connection() {
                 placeholder="Your feedback..."
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
-                className="w-full h-32 p-4 rounded-xl bg-muted/50 border border-border/40 focus:outline-none focus:ring-2 focus:ring-destructive/20 transition-all text-sm resize-none mb-6 placeholder:text-muted-foreground/50"
+                className="w-full h-24 p-4 rounded-xl bg-muted/50 border border-border/40 focus:outline-none focus:ring-2 focus:ring-destructive/20 transition-all text-sm resize-none mb-4 placeholder:text-muted-foreground/50"
               />
+
+              <div className="space-y-2 mb-6">
+                <p className="text-[10px] font-black uppercase tracking-widest text-destructive/70">
+                  To confirm, type <span className="text-destructive">DELETE {profile?.name}</span> below:
+                </p>
+                <Input
+                  placeholder={`DELETE ${profile?.name}`}
+                  value={confirmationInput}
+                  onChange={(e) => setConfirmationInput(e.target.value)}
+                  className="h-12 rounded-xl bg-muted/30 border-border/40 font-mono text-xs"
+                />
+              </div>
 
               <div className="flex gap-3">
                 <Button 
                   variant="outline" 
                   className="flex-1 h-12 rounded-xl font-bold"
-                  onClick={() => setShowDeleteModal(false)}
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setConfirmationInput('');
+                  }}
                   disabled={isDeleting}
                 >
                   Cancel
                 </Button>
                 <Button 
                   variant="destructive" 
-                  className="flex-1 h-12 rounded-xl font-bold shadow-lg shadow-destructive/20"
+                  className="flex-1 h-12 rounded-xl font-bold shadow-lg shadow-destructive/20 disabled:opacity-30"
                   onClick={confirmDeleteAccount}
-                  disabled={isDeleting}
+                  disabled={isDeleting || confirmationInput !== `DELETE ${profile?.name}`}
                 >
                   {isDeleting ? 'Removing...' : 'Confirm Delete'}
                 </Button>

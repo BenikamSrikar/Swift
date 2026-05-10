@@ -9,6 +9,23 @@ interface VoltsNavbarProps {
   logoutLabel?: string;
 }
 
+function DualPlus({ scrolled }: { scrolled: boolean }) {
+  return (
+    <div className="relative w-4 h-4 flex shrink-0">
+      {/* Left Half (Always Red) */}
+      <div className="absolute inset-0 w-[50%] overflow-hidden pointer-events-none">
+        <Plus className="w-4 h-4 text-[#FF3B30] stroke-[4px]" />
+      </div>
+      {/* Right Half (Black or White) */}
+      <div className="absolute inset-y-0 right-0 w-[50%] overflow-hidden pointer-events-none">
+        <div className="relative left-[-8px]">
+          <Plus className={`w-4 h-4 stroke-[4px] transition-colors duration-500 ${scrolled ? 'text-white' : 'text-black'}`} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogout, onDeleteAccount, logoutLabel = "Logout" }: VoltsNavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -17,7 +34,7 @@ export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogo
     const handleScroll = () => {
       const currentScroll = window.scrollY;
       const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
-      const progress = (currentScroll / totalHeight) * 100;
+      const progress = totalHeight > 0 ? (currentScroll / totalHeight) * 100 : 0;
       
       setScrollProgress(progress);
       setScrolled(currentScroll > 10);
@@ -28,23 +45,25 @@ export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogo
 
   return (
     <nav 
-      className={`fixed top-0 left-0 w-full px-6 py-4 flex items-center justify-center z-[100] transition-all duration-500 ease-in-out border-b ${
+      className={`fixed top-0 left-0 w-full px-6 flex items-center justify-center z-[100] transition-all duration-500 ease-in-out border-b ${
         scrolled 
-          ? 'bg-black border-white/10 shadow-2xl py-3' 
-          : 'bg-card/40 backdrop-blur-xl border-white/5'
+          ? 'bg-black border-white/10 shadow-2xl py-2.5' 
+          : 'bg-card/40 backdrop-blur-xl border-white/5 py-3.5'
       }`}
     >
-      <div className="flex items-center gap-3 group cursor-pointer transition-transform active:scale-95">
+      <div className="flex items-center gap-4 group cursor-pointer transition-transform active:scale-95">
         {/* SWIFT Keyboard Key Logo */}
         <div 
-          className={`px-4 py-1.5 rounded-[10px] border-[2.5px] border-[#FF3B30] flex items-center gap-1.5 transition-all duration-500 ${
+          className={`px-4 py-1.5 rounded-[10px] border-[2.5px] border-[#FF3B30] flex items-center transition-all duration-500 ${
             scrolled ? 'shadow-[0_0_20px_rgba(255,59,48,0.5)] scale-95' : ''
           }`}
           style={{ background: 'transparent' }}
         >
           <span className="text-[#FF3B30] font-black text-base tracking-tighter uppercase">SWIFT</span>
-          <Plus className="w-4 h-4 text-[#FF3B30] stroke-[4px]" />
         </div>
+
+        {/* Dual Colored Plus Sign (Between boxes) */}
+        <DualPlus scrolled={scrolled} />
         
         {/* Version Keyboard Key Logo */}
         <div 
