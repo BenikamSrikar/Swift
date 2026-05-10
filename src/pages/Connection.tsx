@@ -248,7 +248,7 @@ export default function Connection() {
           type: 'broadcast',
           event: 'join-request',
           payload: {
-            targetUserId: activeRoom.host_id,
+            targetUserId: 'host',
             requester: {
               userId: user.id,
               name: profile.name,

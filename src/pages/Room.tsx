@@ -492,7 +492,9 @@ export default function Room() {
 
     channel.on('broadcast', { event: 'join-request' }, (payload) => {
       const { targetUserId, requester } = payload.payload;
-      if (targetUserId === userId) {
+      console.log('Received join request broadcast:', payload.payload);
+      if (targetUserId === userId || targetUserId === 'host') {
+        toast(`${requester.name} wants to join`, { icon: '👋' });
         setPendingBroadcastRequests(prev => {
           if (prev.find(r => r.userId === requester.userId)) return prev;
           return [...prev, requester];
@@ -1249,51 +1251,52 @@ export default function Room() {
                 
                 <TransferQueue transfers={queuedTransfers} />
 
-                <div className={`
-                  grid gap-6 w-full transition-all duration-500 ease-in-out
-                  ${chatOpen 
-                    ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' 
-                    : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
-                  }
-                `}>
+                <div className="flex flex-wrap justify-center items-center gap-4 w-full transition-all duration-500 ease-in-out p-4">
                   {/* Other Participants */}
                   {participants
                     .filter(p => p.user_id !== userId)
-                    .map((p, i) => (
-                      <div 
-                        key={p.user_id} 
-                        className={`animate-in fade-in zoom-in-95 duration-300 ${participants.filter(p => p.user_id !== userId).length === 1 ? 'w-full max-w-xl' : ''}`} 
-                        style={{ animationDelay: `${i * 100}ms` }}
-                      >
-                        <UserCard
-                          name={p.name}
-                          avatarUrl={p.avatar_url}
-                          isHost={p.user_id === room?.host_id}
-                          showHostControls={isHost}
-                          uploadProgress={remoteUploadProgress[p.user_id]}
-                          onRequestFile={() => {
-                            setUploadModal({ open: true, targetUserId: p.user_id, mode: 'file' });
-                            transferChannelRef.current?.send({
-                              type: 'broadcast',
-                              event: 'pre-transfer-alert',
-                              payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'file' },
-                            });
-                          }}
-                          onRequestFolder={() => {
-                            setUploadModal({ open: true, targetUserId: p.user_id, mode: 'folder' });
-                            transferChannelRef.current?.send({
-                              type: 'broadcast',
-                              event: 'pre-transfer-alert',
-                              payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'folder' },
-                            });
-                          }}
-                          onRemove={() => handleRemoveUser(p.user_id)}
-                        />
-                      </div>
-                    ))}
+                    .map((p, i) => {
+                      const otherCount = participants.filter(p => p.user_id !== userId).length;
+                      // Fluid sizing logic similar to Google Meet
+                      const basis = otherCount === 1 ? '100%' : otherCount === 2 ? 'calc(50% - 1rem)' : otherCount <= 4 ? 'calc(50% - 1rem)' : 'calc(33.333% - 1rem)';
+                      const maxW = otherCount === 1 ? '1000px' : '600px';
+                      const minW = '280px';
+                      return (
+                        <div 
+                          key={p.user_id} 
+                          className="animate-in fade-in zoom-in-95 duration-300 flex-grow"
+                          style={{ animationDelay: `${i * 100}ms`, flexBasis: basis, maxWidth: maxW, minWidth: minW }}
+                        >
+                          <UserCard
+                            name={p.name}
+                            avatarUrl={p.avatar_url}
+                            isHost={p.user_id === room?.host_id}
+                            showHostControls={isHost}
+                            uploadProgress={remoteUploadProgress[p.user_id]}
+                            onRequestFile={() => {
+                              setUploadModal({ open: true, targetUserId: p.user_id, mode: 'file' });
+                              transferChannelRef.current?.send({
+                                type: 'broadcast',
+                                event: 'pre-transfer-alert',
+                                payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'file' },
+                              });
+                            }}
+                            onRequestFolder={() => {
+                              setUploadModal({ open: true, targetUserId: p.user_id, mode: 'folder' });
+                              transferChannelRef.current?.send({
+                                type: 'broadcast',
+                                event: 'pre-transfer-alert',
+                                payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'folder' },
+                              });
+                            }}
+                            onRemove={() => handleRemoveUser(p.user_id)}
+                          />
+                        </div>
+                      );
+                    })}
 
                   {participants.filter(p => p.user_id !== userId).length === 0 && (
-                    <div className="col-span-full mt-12 flex flex-col items-center justify-center py-12 text-muted-foreground animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                    <div className="w-full mt-12 flex flex-col items-center justify-center py-12 text-muted-foreground animate-in fade-in slide-in-from-bottom-4 duration-1000">
                       <div className="w-12 h-12 bg-muted/20 rounded-full flex items-center justify-center mb-4 opacity-50">
                         {isHost ? <Copy className="h-5 w-5" /> : <div className="h-5 w-5 rounded-full border-2 border-current border-t-transparent animate-spin" />}
                       </div>
