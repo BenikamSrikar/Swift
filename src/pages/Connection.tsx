@@ -68,9 +68,7 @@ export default function Connection() {
   const [joining, setJoining] = useState(false);
   const [waitingApproval, setWaitingApproval] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hostedRooms, setHostedRooms] = useState<any[]>([]);
-  const [allProfiles, setAllProfiles] = useState<any[]>([]);
+  const [roomCodeInput, setRoomCodeInput] = useState('');
   const [loadingData, setLoadingData] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -91,67 +89,25 @@ export default function Connection() {
     if (!user) return;
     setLoadingData(true);
     try {
-      // 1. Fetch all profiles
-      const { data: profiles, error: pError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('name', { ascending: true });
-      
-      if (pError) throw pError;
-      setAllProfiles(profiles || []);
-
-      // 2. Fetch active rooms to know who is hosting
-      const { data: rooms, error: rError } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('status', 'active');
-      
-      if (rError) throw rError;
-
-      if (rooms && rooms.length > 0) {
-        const roomCodes = rooms.map(r => r.room_id);
-        const { data: participants } = await supabase
-          .from('room_participants')
-          .select('room_id, user_id')
-          .in('room_id', roomCodes);
-
-        // Only count rooms where the host is actually present
-        const liveRooms = rooms.filter(room => {
-          const roomParts = participants?.filter(p => p.room_id === room.room_id) || [];
-          return roomParts.some(p => p.user_id === room.host_id);
-        });
-        setHostedRooms(liveRooms);
-      } else {
-        setHostedRooms([]);
-      }
-    } catch (err) {
-      console.error('Error fetching data:', err);
-    } finally {
+      // Just mock loading to keep UI smooth, no longer fetching all profiles
+      setLoadingData(false);
+    } catch (error) {
+      console.error('Error fetching data:', error);
       setLoadingData(false);
     }
   };
 
   useEffect(() => {
-    if (!user || !profile) return;
     fetchData();
-
-    const channel = supabase.channel('public:sync')
+    const channel = supabase
+      .channel('public:system')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [user, profile]);
 
-  const filteredProfiles = useMemo(() => {
-    return allProfiles.filter(p => {
-      const search = searchQuery.toLowerCase();
-      const name = p.name?.toLowerCase() || '';
-      const email = p.email?.toLowerCase() || '';
-      return (name.includes(search) || email.includes(search)) && p.auth_user_id !== user?.id;
-    });
-  }, [allProfiles, searchQuery, user]);
+
 
   const handleCreateRoom = async () => {
     setCreating(true);
@@ -181,29 +137,31 @@ export default function Connection() {
     navigate(`/room/${roomId}`);
   };
 
-  const handleJoinHost = async (hostId: string) => {
-    setJoining(true);
-
-    // Check if this user has an active room
-    const activeRoom = hostedRooms.find(r => r.host_id === hostId);
-
-    if (!activeRoom) {
-      // No active room — show waiting, timeout after 10s
-      setWaitingApproval(true);
-      setTimeout(() => {
-        toast.error('This user has not created a room yet. Please try again later.', { duration: 4000 });
-        setWaitingApproval(false);
-        setJoining(false);
-      }, 10000);
+  const handleJoinRoomCode = async () => {
+    if (!roomCodeInput.trim() || roomCodeInput.length !== 6) {
+      toast.error('Please enter a valid 6-character room code');
       return;
     }
+    
+    setJoining(true);
+    const code = roomCodeInput.toUpperCase();
+    
+    const { data: room, error } = await supabase
+      .from('rooms')
+      .select('id, status')
+      .eq('room_id', code)
+      .single();
 
-    const rid = activeRoom.room_id;
+    if (error || !room) {
+      toast.error('Room not found or no longer active');
+      setJoining(false);
+      return;
+    }
 
     const { data: existing } = await supabase
       .from('room_participants')
       .select('status')
-      .eq('room_id', rid)
+      .eq('room_id', code)
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -213,52 +171,21 @@ export default function Connection() {
       return; 
     }
 
-    setWaitingApproval(true);
-
-    const channel = supabase.channel(`transfers-${rid}`, {
-      config: { broadcast: { self: false } },
+    await supabase.from('room_participants').delete().eq('room_id', code).eq('user_id', user.id);
+    const { error: insError } = await supabase.from('room_participants').insert({ 
+      room_id: code, 
+      user_id: user.id, 
+      status: 'accepted' 
     });
 
-    const timeout = setTimeout(() => {
-      channel.unsubscribe();
-      toast.error('Host did not respond. Redirecting...', { duration: 3000 });
-      setWaitingApproval(false);
+    if (insError) {
+      console.error('Join error:', insError);
+      toast.error('Failed to join room');
       setJoining(false);
-    }, 10000);
+      return;
+    }
 
-    channel.on('broadcast', { event: 'join-response' }, async (payload) => {
-      const { targetUserId, status } = payload.payload;
-      if (targetUserId === user.id) {
-        clearTimeout(timeout);
-        if (status === 'accepted') {
-          await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
-          await supabase.from('room_participants').insert({ room_id: rid, user_id: user.id, status: 'accepted' });
-          channel.unsubscribe();
-          navigate(`/room/${rid}`);
-        } else {
-          channel.unsubscribe();
-          toast.error('The host declined your request.');
-          setWaitingApproval(false);
-          setJoining(false);
-        }
-      }
-    }).subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        channel.send({
-          type: 'broadcast',
-          event: 'join-request',
-          payload: {
-            targetUserId: 'host',
-            requester: {
-              userId: user.id,
-              name: profile.name,
-              email: profile.email,
-              avatar_url: profile.avatar_url
-            }
-          }
-        });
-      }
-    });
+    navigate(`/room/${code}`);
   };
 
   const handleLogout = async () => {
@@ -328,58 +255,23 @@ export default function Connection() {
                 animate={{ opacity: 1 }}
                 className="w-full flex flex-col gap-6"
               >
-                <div className="flex flex-col gap-4">
-                  <div className="relative group">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                      <input 
-                        placeholder="Search host name or email..." 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full h-14 pl-12 pr-4 rounded-2xl text-base font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                        style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.1)' }}
-                      />
+                  <div className="flex gap-2 relative">
+                    <input 
+                      placeholder="Enter 6-digit room code" 
+                      value={roomCodeInput}
+                      onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
+                      maxLength={6}
+                      className="flex-1 h-12 pl-4 pr-4 rounded-xl text-center tracking-widest uppercase text-base font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                      style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.1)' }}
+                    />
+                    <Button 
+                      onClick={handleJoinRoomCode}
+                      disabled={joining || roomCodeInput.length !== 6}
+                      className="h-12 px-6 rounded-xl font-bold bg-[#FF3B30] hover:bg-[#E0342B] text-white"
+                    >
+                      {joining ? 'Joining...' : 'Join'}
+                    </Button>
                   </div>
-                </div>
-
-                {searchQuery && (
-                  <div className="flex-1 overflow-y-auto px-6 pb-24 custom-scrollbar">
-                    <div className="flex flex-col gap-2">
-                      {filteredProfiles.length === 0 ? (
-                        <div className="py-12 text-center text-white/50 font-medium">
-                          No host found
-                        </div>
-                      ) : (
-                        filteredProfiles.map(p => (
-                          <button
-                            key={p.auth_user_id}
-                            onClick={() => {
-                              setSearchQuery('');
-                              handleJoinHost(p.auth_user_id);
-                            }}
-                            disabled={joining}
-                            className="w-full flex items-center gap-4 p-3 rounded-[16px] hover:bg-white/10 active:scale-[0.98] transition-all text-left disabled:opacity-50"
-                            style={{ background: 'rgba(255,255,255,0.03)', border: '0.5px solid rgba(255,255,255,0.05)' }}
-                          >
-                            <div className="h-12 w-12 rounded-[12px] bg-[#FF3B30]/20 flex items-center justify-center shrink-0" style={{ boxShadow: '0 0 0 0.5px rgba(255,59,48,0.2) inset' }}>
-                              {p.avatar_url ? (
-                                <img src={p.avatar_url} alt={p.name} className="h-full w-full rounded-[12px] object-cover" />
-                              ) : (
-                                <span className="text-lg font-bold text-[#FF3B30]">{p.name?.charAt(0).toUpperCase()}</span>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-base font-semibold text-foreground truncate">{p.name}</p>
-                              <p className="text-sm text-muted-foreground truncate">{p.email}</p>
-                            </div>
-                            <div className="px-4 py-2 rounded-[10px] bg-[#FF3B30] text-white text-xs font-bold">
-                              Join
-                            </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {/* Floating Action Button for Mobile */}
                 <Button
@@ -436,63 +328,23 @@ export default function Connection() {
                       Discover active hosts and connect to their ongoing sessions.
                     </p>
                   </div>
-                  <div className="w-full mt-auto relative">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <input 
-                        placeholder="Search host name or email..." 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full h-[50px] pl-10 pr-4 rounded-[12px] text-[15px] font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                        style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.1)', boxShadow: '0 1px 2px rgba(0,0,0,0.05) inset' }}
-                      />
-                    </div>
-
-                    {/* Semantic Search Dropdown */}
-                    <AnimatePresence>
-                      {searchQuery && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: -5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -5 }}
-                          className="absolute top-full mt-3 left-0 w-full max-h-[260px] overflow-y-auto rounded-[16px] custom-scrollbar z-50 p-2 flex flex-col gap-1.5"
-                          style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'saturate(180%) blur(40px)', WebkitBackdropFilter: 'saturate(180%) blur(40px)', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 10px 40px rgba(0,0,0,0.15)' }}
-                        >
-                          {filteredProfiles.length === 0 ? (
-                            <div className="py-8 text-center text-[13px] text-muted-foreground/60 font-medium">
-                              No host found
-                            </div>
-                          ) : (
-                            filteredProfiles.map(p => (
-                              <button
-                                key={p.auth_user_id}
-                                onClick={() => {
-                                  setSearchQuery('');
-                                  handleJoinHost(p.auth_user_id);
-                                }}
-                                disabled={joining}
-                                className="w-full flex items-center gap-3 p-2.5 rounded-[12px] hover:bg-white/10 active:scale-[0.98] transition-all text-left disabled:opacity-50 group"
-                              >
-                                <div className="h-10 w-10 rounded-[10px] bg-[#FF3B30]/20 flex items-center justify-center shrink-0" style={{ boxShadow: '0 0 0 0.5px rgba(255,59,48,0.2) inset' }}>
-                                  {p.avatar_url ? (
-                                    <img src={p.avatar_url} alt={p.name} className="h-full w-full rounded-[10px] object-cover" />
-                                  ) : (
-                                    <span className="text-sm font-bold text-[#FF3B30]">{p.name?.charAt(0).toUpperCase()}</span>
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-[14px] font-semibold text-gray-900 truncate">{p.name}</p>
-                                  <p className="text-[11px] text-gray-500 truncate">{p.email}</p>
-                                </div>
-                                <div className="px-3 py-1.5 rounded-[8px] bg-[#FF3B30] text-white text-[11px] font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                                  Join
-                                </div>
-                              </button>
-                            ))
-                          )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                  <div className="w-full mt-auto flex flex-col gap-2">
+                    <input 
+                      placeholder="Enter 6-digit code..." 
+                      value={roomCodeInput}
+                      onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
+                      maxLength={6}
+                      className="w-full h-[50px] px-4 rounded-[12px] text-center tracking-widest uppercase text-[16px] font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                      style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.1)', boxShadow: '0 1px 2px rgba(0,0,0,0.05) inset' }}
+                    />
+                    <button 
+                      onClick={handleJoinRoomCode}
+                      disabled={joining || roomCodeInput.length !== 6}
+                      className="w-full h-[50px] rounded-[12px] text-[15px] font-semibold text-white bg-[#FF3B30] hover:bg-[#E0342B] active:opacity-70 active:scale-[0.97] transition-all duration-200 disabled:opacity-40"
+                      style={{ boxShadow: '0 1px 4px rgba(255,59,48,0.3), 0 0.5px 0 rgba(255,255,255,0.15) inset' }}
+                    >
+                      {joining ? 'Joining...' : 'Join Room'}
+                    </button>
                   </div>
                 </div>
               </motion.div>

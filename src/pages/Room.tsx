@@ -74,9 +74,6 @@ export default function Room() {
 
   const [room, setRoom] = useState<any>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
-  const [currentRequest, setCurrentRequest] = useState<PendingRequest | null>(null);
-  const [pendingBroadcastRequests, setPendingBroadcastRequests] = useState<PendingRequest[]>([]);
   const [transferRequest, setTransferRequest] = useState<TransferRequest | null>(null);
   const [copied, setCopied] = useState(false);
   const [queuedTransfers, setQueuedTransfers] = useState<QueuedTransfer[]>([]);
@@ -401,14 +398,6 @@ export default function Room() {
   }, [roomId, userId, room?.id, room?.host_id, isHost, navigate]);
 
   useEffect(() => {
-    if (pendingBroadcastRequests.length > 0 && !currentRequest) {
-      setCurrentRequest(pendingBroadcastRequests[0]);
-    } else if (pendingBroadcastRequests.length === 0) {
-      setCurrentRequest(null);
-    }
-  }, [pendingBroadcastRequests, currentRequest]);
-
-  useEffect(() => {
     if (roomId && room?.id) {
       loadParticipants();
       // Periodic fallback in case real-time fails
@@ -487,18 +476,6 @@ export default function Room() {
       const { targetUserId, fromUserId, fromName, type, transferId } = payload.payload;
       if (targetUserId === userId) {
         setTransferRequest({ fromUserId, fromName, type, transferId } as any);
-      }
-    });
-
-    channel.on('broadcast', { event: 'join-request' }, (payload) => {
-      const { targetUserId, requester } = payload.payload;
-      console.log('Received join request broadcast:', payload.payload);
-      if (targetUserId === userId || targetUserId === 'host') {
-        toast(`${requester.name} wants to join`, { icon: '👋' });
-        setPendingBroadcastRequests(prev => {
-          if (prev.find(r => r.userId === requester.userId)) return prev;
-          return [...prev, requester];
-        });
       }
     });
 
@@ -1511,47 +1488,9 @@ export default function Room() {
         )}
       </main>
 
-      {/* DEBUG OVERLAY */}
-      {isHost && (
-        <div className="fixed bottom-4 left-4 bg-black/80 text-white text-xs p-4 rounded-xl z-[9999] max-w-xs font-mono break-all pointer-events-none">
-          <p>isHost: {String(isHost)}</p>
-          <p>Pending Broadcasts: {pendingBroadcastRequests.length}</p>
-          <p>Current Req: {currentRequest ? currentRequest.name : 'None'}</p>
-        </div>
-      )}
 
-      <JoinRequestDialog
-        open={!!currentRequest && isHost}
-        requesterName={currentRequest?.name || ''}
-        requesterEmail={currentRequest?.email}
-        requesterAvatar={currentRequest?.avatar_url}
-        onAccept={async () => {
-          if (!currentRequest) return;
-          transferChannelRef.current?.send({
-            type: 'broadcast',
-            event: 'join-response',
-            payload: {
-              targetUserId: currentRequest.userId,
-              status: 'accepted'
-            }
-          });
-          setPendingBroadcastRequests(prev => prev.filter(r => r.userId !== currentRequest.userId));
-          setCurrentRequest(null);
-        }}
-        onReject={async () => {
-          if (!currentRequest) return;
-          transferChannelRef.current?.send({
-            type: 'broadcast',
-            event: 'join-response',
-            payload: {
-              targetUserId: currentRequest.userId,
-              status: 'blocked'
-            }
-          });
-          setPendingBroadcastRequests(prev => prev.filter(r => r.userId !== currentRequest.userId));
-          setCurrentRequest(null);
-        }}
-      />
+
+
 
       <TransferRequestDialog
         open={!!transferRequest}
