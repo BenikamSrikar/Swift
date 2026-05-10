@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoltsNavbar from '@/components/VoltsNavbar';
 import { Button } from '@/components/ui/button';
