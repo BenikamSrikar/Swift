@@ -420,8 +420,12 @@ export default function Connection() {
                 </div>
 
                 {/* Join Card */}
-                <div className="flex-1 max-w-sm rounded-[22px] p-8 flex flex-col items-center gap-6 group transition-all duration-300 relative overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', backdropFilter: 'saturate(180%) blur(20px)', WebkitBackdropFilter: 'saturate(180%) blur(20px)', border: '0.5px solid rgba(255,255,255,0.08)', boxShadow: '0 2px 12px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(255,255,255,0.04) inset' }}>
-                  <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-[#FF3B30]/8 blur-[100px] rounded-full" />
+                <div className="flex-1 max-w-sm rounded-[22px] p-8 flex flex-col items-center gap-6 group transition-all duration-300 relative" style={{ background: 'rgba(255,255,255,0.04)', backdropFilter: 'saturate(180%) blur(20px)', WebkitBackdropFilter: 'saturate(180%) blur(20px)', border: '0.5px solid rgba(255,255,255,0.08)', boxShadow: '0 2px 12px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(255,255,255,0.04) inset' }}>
+                  {/* Background layer for decorative glow */}
+                  <div className="absolute inset-0 overflow-hidden rounded-[22px] pointer-events-none">
+                    <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-[#FF3B30]/8 blur-[100px] rounded-full" />
+                  </div>
+
                   <div className="w-14 h-14 bg-[#FF3B30]/10 rounded-[16px] flex items-center justify-center transition-colors relative z-10" style={{ boxShadow: '0 0 0 0.5px rgba(255,59,48,0.15) inset' }}>
                     <LogIn className="h-7 w-7 text-[#FF3B30]" />
                   </div>
