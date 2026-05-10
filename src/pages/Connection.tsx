@@ -250,7 +250,7 @@ export default function Connection() {
         onHistoryClick={() => setHistoryOpen(true)} 
       />
 
-      <main className="flex-1 flex flex-col items-center justify-start lg:justify-center p-4 sm:p-6 lg:p-8 relative overflow-y-auto custom-scrollbar">
+      <main className="flex-1 flex flex-col items-center justify-start lg:justify-center p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24 relative overflow-y-auto custom-scrollbar">
         <div className="w-full max-w-5xl flex flex-col items-center z-10 pt-8 lg:pt-0">
           
           {/* Hero Profile Section (Hidden on mobile to save space if needed, but keeping for identity) */}

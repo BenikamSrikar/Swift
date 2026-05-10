@@ -179,7 +179,7 @@ export default function Index() {
       />
 
       {/* Hero */}
-      <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden">
+      <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden pt-20">
         {/* Mobile-only background wiggle animation */}
         <div className="lg:hidden absolute inset-0 z-0">
           <ParticleField />

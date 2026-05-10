@@ -1198,7 +1198,7 @@ export default function Room() {
         ))}
       </div>
 
-      <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative z-10">
+      <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative z-10 pt-20">
         {removedByHost ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4 animate-fade-in text-center">
             <p className="text-xl font-bold text-destructive">Room Access Revoked</p>
