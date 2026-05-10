@@ -1646,8 +1646,8 @@ export default function Room() {
       <HistoryModal
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
-        senderEmail={profile?.email || ''}
-        senderName={profile?.name || ''}
+        userId={userId || ''}
+        userName={userName || ''}
       />
     </div>
   );
