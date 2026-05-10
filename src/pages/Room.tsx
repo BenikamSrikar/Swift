@@ -82,6 +82,14 @@ export default function Room() {
   const [uploadModal, setUploadModal] = useState<{ open: boolean; targetUserId: string; mode: 'file' | 'folder' } | null>(null);
   const [fileConfirmModal, setFileConfirmModal] = useState<{ open: boolean; files: File[]; targetUserId: string } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   // Chat state
   const [chatOpen, setChatOpen] = useState(false);
@@ -1316,7 +1324,7 @@ export default function Room() {
                 
                 <TransferQueue transfers={queuedTransfers} />
 
-                <div className="flex-1 flex flex-wrap justify-center items-center gap-4 w-full transition-all duration-500 ease-in-out p-4 min-h-0">
+                <div className={`flex-1 flex ${isMobile ? 'flex-col overflow-y-auto pb-20' : 'flex-wrap justify-center items-center'} gap-4 w-full transition-all duration-500 ease-in-out p-4 min-h-0`}>
                   {/* Other Participants */}
                   {participants
                     .filter(p => p.user_id !== userId)
@@ -1324,16 +1332,16 @@ export default function Room() {
                       const otherCount = participants.filter(p => p.user_id !== userId).length;
                       // Fluid sizing logic similar to Google Meet
                       const isSingle = otherCount === 1;
-                      const basis = isSingle ? '100%' : otherCount === 2 ? 'calc(50% - 1rem)' : otherCount <= 4 ? 'calc(50% - 1rem)' : 'calc(33.333% - 1rem)';
-                      const maxW = isSingle ? '100%' : '600px';
-                      const minW = '280px';
+                      const basis = isMobile ? 'auto' : isSingle ? '100%' : otherCount === 2 ? 'calc(50% - 1rem)' : otherCount <= 4 ? 'calc(50% - 1rem)' : 'calc(33.333% - 1rem)';
+                      const maxW = isMobile ? '100%' : isSingle ? '100%' : '600px';
+                      const minW = isMobile ? '100%' : '280px';
                       return (
                         <div 
                           key={p.user_id} 
-                          className={`animate-in fade-in zoom-in-95 duration-300 flex-grow ${isSingle ? 'h-full flex items-center justify-center' : ''}`}
+                          className={`animate-in fade-in zoom-in-95 duration-300 flex-grow ${!isMobile && isSingle ? 'h-full flex items-center justify-center' : ''}`}
                           style={{ animationDelay: `${i * 100}ms`, flexBasis: basis, maxWidth: maxW, minWidth: minW }}
                         >
-                          <div className={isSingle ? 'w-full max-w-4xl max-h-[80vh] aspect-video' : 'w-full h-full'}>
+                          <div className={isMobile ? 'w-full aspect-[16/9]' : isSingle ? 'w-full max-w-4xl max-h-[80vh] aspect-video' : 'w-full h-full'}>
                             <UserCard
                               name={p.name}
                               avatarUrl={p.avatar_url}
