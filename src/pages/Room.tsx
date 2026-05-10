@@ -109,7 +109,7 @@ export default function Room() {
     metadata: any,
     isFinalizing: boolean,
     senderFinished: boolean,
-    thresholdMet: boolean
+    downloadingIndices: Set<number>
   }>>(new Map());
 
   const isHost = room?.host_id === userId;
@@ -204,12 +204,19 @@ export default function Room() {
               a.href = url;
               a.download = name;
               a.click();
-              URL.revokeObjectURL(url);
             }
           },
         },
         duration: 15000,
       });
+
+      // AUTO-TRIGGER DOWNLOAD for receiver
+      if (!isLink) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.click();
+      }
 
     } catch (err) {
       console.error('Finalization error:', err);
@@ -223,26 +230,32 @@ export default function Room() {
 
   const downloadSpecificChunk = useCallback(async (transferId: string, chunkIndex: number, chunkPath: string) => {
     const rec = receivingChunksRef.current.get(transferId);
-    if (!rec || rec.chunks[chunkIndex]) return;
+    if (!rec || rec.chunks[chunkIndex] || rec.downloadingIndices.has(chunkIndex)) return;
 
-    // BATCH TRIGGER: Only download if threshold is met or sender is finished
-    if (!rec.thresholdMet && !rec.senderFinished) {
+    // ONLY download if sender is finished
+    if (!rec.senderFinished) {
       return; 
     }
 
     try {
+      rec.downloadingIndices.add(chunkIndex);
+      
       const { data: chunkBlob, error: chunkErr } = await supabase.storage
         .from('swift-transfers')
         .download(chunkPath);
 
-      if (chunkErr || !chunkBlob) return;
+      if (chunkErr || !chunkBlob) {
+        rec.downloadingIndices.delete(chunkIndex);
+        return;
+      }
       
       rec.chunks[chunkIndex] = chunkBlob;
       rec.downloadedCount++;
+      rec.downloadingIndices.delete(chunkIndex);
 
       await supabase.storage.from('swift-transfers').remove([chunkPath]);
 
-      const pct = Math.round((rec.downloadedCount / rec.totalChunks) * 100);
+      const pct = Math.min(Math.round((rec.downloadedCount / rec.totalChunks) * 100), 100);
       setQueuedTransfers(prev => prev.map(t =>
         t.id === transferId ? { ...t, progress: pct } : t
       ));
@@ -253,6 +266,7 @@ export default function Room() {
         finalizeTransfer(transferId);
       }
     } catch (err) {
+      rec.downloadingIndices.delete(chunkIndex);
       console.error(`Error downloading chunk ${chunkIndex}:`, err);
     }
   }, [finalizeTransfer]);
@@ -260,7 +274,7 @@ export default function Room() {
   // Effect to process held chunks when sender index moves
   useEffect(() => {
     receivingChunksRef.current.forEach((rec, transferId) => {
-      if (rec.downloadedCount < rec.totalChunks) {
+      if (rec.downloadedCount < rec.totalChunks && rec.senderFinished) {
         for (let i = 0; i < rec.totalChunks; i++) {
           if (rec.chunks[i] === null) {
             const chunkPath = rec.totalChunks === 1 
@@ -569,7 +583,7 @@ export default function Room() {
           metadata: { name, size, type, fromUserId, fromName, batchStructure },
           isFinalizing: false,
           senderFinished: false,
-          thresholdMet: false
+          downloadingIndices: new Set<number>()
         };
         receivingChunksRef.current.set(transferId, rec);
         setStatusText(`Waiting for chunks: ${name}`);
@@ -583,13 +597,10 @@ export default function Room() {
         }
       }
 
-      // Update threshold if half-way point reached
-      if (chunkIndex >= Math.floor(rec.totalChunks / 2)) {
-        rec.thresholdMet = true;
-      }
 
-      // Download the chunk mentioned in broadcast (will return if threshold not met)
-      if (rec.thresholdMet || rec.senderFinished) {
+
+      // Download the chunk mentioned in broadcast (will return if senderFinished is true)
+      if (rec.senderFinished) {
         // Trigger backlog for all pending chunks
         for (let i = 0; i <= chunkIndex; i++) {
           if (!rec.chunks[i]) {
@@ -602,7 +613,7 @@ export default function Room() {
       }
 
       // Resilience: Periodically check for missed chunks
-      if (rec.downloadedCount < totalChunks && (rec.thresholdMet || rec.senderFinished)) {
+      if (rec.downloadedCount < totalChunks && rec.senderFinished) {
         const { data: files } = await supabase.storage
           .from('swift-transfers')
           .list(`${roomId}/${transferId}`);

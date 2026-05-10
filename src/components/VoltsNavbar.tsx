@@ -6,7 +6,7 @@ interface VoltsNavbarProps {
   logoutLabel?: string;
 }
 
-export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogout, logoutLabel = "Logout" }: VoltsNavbarProps) {
+export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogout, onDeleteAccount, logoutLabel = "Logout" }: VoltsNavbarProps) {
   return (
     <nav className="w-full border-b bg-card/40 backdrop-blur-xl px-6 py-4 flex items-center justify-center relative z-50 border-white/5">
       <div className="flex items-center gap-2 group cursor-pointer">
