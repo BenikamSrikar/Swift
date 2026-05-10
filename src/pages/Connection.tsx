@@ -72,7 +72,6 @@ export default function Connection() {
   const [hostedRooms, setHostedRooms] = useState<any[]>([]);
   const [allProfiles, setAllProfiles] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -183,7 +182,6 @@ export default function Connection() {
   };
 
   const handleJoinHost = async (hostId: string) => {
-    setIsJoinModalOpen(false);
     setJoining(true);
 
     // Check if this user has an active room
@@ -268,42 +266,7 @@ export default function Connection() {
     navigate('/');
   };
 
-  const ProfileCard = ({ p }: { p: any }) => (
-    <motion.div 
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl p-4 flex flex-col gap-4 relative overflow-hidden transition-all duration-300 group"
-      style={{
-        background: 'rgba(0,0,0,0.03)',
-        border: '0.5px solid rgba(0,0,0,0.06)',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-      }}
-    >
-      <div className="flex items-center gap-3">
-        <div className="h-11 w-11 rounded-[13px] bg-[#FF3B30]/10 flex items-center justify-center overflow-hidden shrink-0" style={{ boxShadow: '0 0 0 0.5px rgba(255,59,48,0.15) inset' }}>
-          {p.avatar_url ? (
-            <img src={p.avatar_url} alt={p.name} className="h-full w-full object-cover" />
-          ) : (
-            <span className="text-base font-semibold text-[#FF3B30]">{p.name?.charAt(0).toUpperCase()}</span>
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-semibold truncate tracking-tight text-gray-900">{p.name}</p>
-          <p className="text-[11px] font-normal text-gray-500 truncate">{p.email}</p>
-        </div>
-      </div>
 
-      <button 
-        onClick={() => handleJoinHost(p.auth_user_id)}
-        disabled={joining}
-        className="h-9 w-full rounded-[10px] text-[13px] font-semibold tracking-normal transition-all duration-200 bg-[#FF3B30] hover:bg-[#E0342B] text-white active:opacity-70 active:scale-[0.97] disabled:opacity-40"
-        style={{ boxShadow: '0 1px 3px rgba(255,59,48,0.3), 0 0.5px 0 rgba(255,255,255,0.15) inset' }}
-      >
-        Join Session
-      </button>
-    </motion.div>
-  );
 
   if (authLoading || !user || !profile) return null;
 
@@ -371,25 +334,51 @@ export default function Connection() {
                       placeholder="Search host by name or email..." 
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-12 pl-10 pr-4 rounded-2xl bg-muted/30 border-border/40 focus:bg-background/50 focus:border-primary/50 transition-all text-sm"
+                      className="w-full h-14 pl-12 pr-4 rounded-2xl text-base font-semibold text-white placeholder:text-white/40 focus:outline-none transition-all duration-200"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.1)', boxShadow: '0 0.5px 1px rgba(0,0,0,0.2) inset' }}
                     />
                   </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {filteredProfiles.length === 0 ? (
-                      <div className="col-span-full py-12 text-center text-muted-foreground text-sm font-medium">
-                        No profiles found matching "{searchQuery}"
-                      </div>
-                    ) : (
-                      filteredProfiles.map(p => (
-                        <ProfileCard 
-                          key={p.auth_user_id} 
-                          p={p} 
-                        />
-                      ))
-                    )}
-                  </div>
                 </div>
+
+                {searchQuery && (
+                  <div className="flex-1 overflow-y-auto px-6 pb-24 custom-scrollbar">
+                    <div className="flex flex-col gap-2">
+                      {filteredProfiles.length === 0 ? (
+                        <div className="py-12 text-center text-white/50 font-medium">
+                          No host found
+                        </div>
+                      ) : (
+                        filteredProfiles.map(p => (
+                          <button
+                            key={p.auth_user_id}
+                            onClick={() => {
+                              setSearchQuery('');
+                              handleJoinHost(p.auth_user_id);
+                            }}
+                            disabled={joining}
+                            className="w-full flex items-center gap-4 p-3 rounded-[16px] hover:bg-white/10 active:scale-[0.98] transition-all text-left disabled:opacity-50"
+                            style={{ background: 'rgba(255,255,255,0.03)', border: '0.5px solid rgba(255,255,255,0.05)' }}
+                          >
+                            <div className="h-12 w-12 rounded-[12px] bg-[#FF3B30]/20 flex items-center justify-center shrink-0" style={{ boxShadow: '0 0 0 0.5px rgba(255,59,48,0.2) inset' }}>
+                              {p.avatar_url ? (
+                                <img src={p.avatar_url} alt={p.name} className="h-full w-full rounded-[12px] object-cover" />
+                              ) : (
+                                <span className="text-lg font-bold text-[#FF3B30]">{p.name?.charAt(0).toUpperCase()}</span>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-base font-semibold text-white truncate">{p.name}</p>
+                              <p className="text-sm text-white/50 truncate">{p.email}</p>
+                            </div>
+                            <div className="px-4 py-2 rounded-[10px] bg-[#FF3B30] text-white text-xs font-bold">
+                              Join
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Floating Action Button for Mobile */}
                 <Button
@@ -442,99 +431,70 @@ export default function Connection() {
                       Discover active hosts and connect to their ongoing sessions.
                     </p>
                   </div>
-                  <button 
-                    onClick={() => setIsJoinModalOpen(true)}
-                    className="w-full h-[50px] rounded-[12px] text-[15px] font-semibold text-white bg-[#FF3B30] hover:bg-[#E0342B] active:opacity-70 active:scale-[0.97] transition-all duration-200 mt-auto"
-                    style={{ boxShadow: '0 1px 4px rgba(255,59,48,0.3), 0 0.5px 0 rgba(255,255,255,0.15) inset' }}
-                  >
-                    Find Hosts
-                  </button>
+                  <div className="w-full mt-auto relative">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+                      <input 
+                        placeholder="Search host name or email..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full h-[50px] pl-10 pr-4 rounded-[12px] text-[15px] font-semibold text-white placeholder:text-white/40 focus:outline-none transition-all duration-200"
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.1)', boxShadow: '0 0.5px 1px rgba(0,0,0,0.2) inset' }}
+                      />
+                    </div>
+
+                    {/* Semantic Search Dropdown */}
+                    <AnimatePresence>
+                      {searchQuery && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className="absolute bottom-full mb-3 left-0 w-full max-h-[260px] overflow-y-auto rounded-[16px] custom-scrollbar z-50 p-2 flex flex-col gap-1.5"
+                          style={{ background: 'rgba(30,30,30,0.85)', backdropFilter: 'saturate(180%) blur(40px)', WebkitBackdropFilter: 'saturate(180%) blur(40px)', border: '0.5px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.05) inset' }}
+                        >
+                          {filteredProfiles.length === 0 ? (
+                            <div className="py-8 text-center text-[13px] text-muted-foreground/60 font-medium">
+                              No host found
+                            </div>
+                          ) : (
+                            filteredProfiles.map(p => (
+                              <button
+                                key={p.auth_user_id}
+                                onClick={() => {
+                                  setSearchQuery('');
+                                  handleJoinHost(p.auth_user_id);
+                                }}
+                                disabled={joining}
+                                className="w-full flex items-center gap-3 p-2.5 rounded-[12px] hover:bg-white/10 active:scale-[0.98] transition-all text-left disabled:opacity-50 group"
+                              >
+                                <div className="h-10 w-10 rounded-[10px] bg-[#FF3B30]/20 flex items-center justify-center shrink-0" style={{ boxShadow: '0 0 0 0.5px rgba(255,59,48,0.2) inset' }}>
+                                  {p.avatar_url ? (
+                                    <img src={p.avatar_url} alt={p.name} className="h-full w-full rounded-[10px] object-cover" />
+                                  ) : (
+                                    <span className="text-sm font-bold text-[#FF3B30]">{p.name?.charAt(0).toUpperCase()}</span>
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[14px] font-semibold text-white truncate">{p.name}</p>
+                                  <p className="text-[11px] text-white/50 truncate">{p.email}</p>
+                                </div>
+                                <div className="px-3 py-1.5 rounded-[8px] bg-[#FF3B30] text-white text-[11px] font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                                  Join
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </main>
-
-      {/* Desktop Join Modal */}
-      <AnimatePresence>
-        {isJoinModalOpen && !isMobile && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsJoinModalOpen(false)}
-              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-              className="relative w-full max-w-3xl rounded-[20px] overflow-hidden flex flex-col max-h-[85vh]"
-              style={{ background: 'rgba(255,255,255,0.88)', backdropFilter: 'saturate(180%) blur(40px)', WebkitBackdropFilter: 'saturate(180%) blur(40px)', border: '0.5px solid rgba(0,0,0,0.08)', boxShadow: '0 25px 50px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(255,255,255,0.5) inset' }}
-            >
-              <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: '0.5px solid rgba(0,0,0,0.08)' }}>
-                <div>
-                  <h2 className="text-[17px] font-semibold tracking-tight text-gray-900">Discover Hosts</h2>
-                  <p className="text-[13px] text-gray-500 font-normal mt-0.5">Join an active session from the list below</p>
-                </div>
-                <button 
-                  onClick={() => setIsJoinModalOpen(false)}
-                  className="h-8 w-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:opacity-60"
-                  style={{ background: 'rgba(0,0,0,0.04)' }}
-                >
-                  <X className="w-4 h-4 text-gray-500" />
-                </button>
-              </div>
-
-              <div className="px-6 py-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input 
-                    placeholder="Search by name or email..." 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full h-[36px] pl-10 pr-4 rounded-[10px] text-[13px] font-normal text-gray-900 placeholder:text-gray-400 focus:outline-none transition-all"
-                    style={{ background: 'rgba(0,0,0,0.04)', border: '0.5px solid rgba(0,0,0,0.08)', boxShadow: '0 0.5px 1px rgba(0,0,0,0.06) inset' }}
-                  />
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-6 pb-4 custom-scrollbar">
-                <div className="grid grid-cols-2 gap-3">
-                  {loadingData ? (
-                    Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="h-32 rounded-[14px] animate-pulse" style={{ background: 'rgba(0,0,0,0.04)' }} />
-                    ))
-                  ) : filteredProfiles.length === 0 ? (
-                    <div className="col-span-full py-16 flex flex-col items-center justify-center text-center gap-3">
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.04)' }}>
-                        <User className="w-6 h-6 text-gray-300" />
-                      </div>
-                      <p className="text-[13px] font-normal text-gray-400">No users found</p>
-                    </div>
-                  ) : (
-                    filteredProfiles.map(p => (
-                      <ProfileCard 
-                        key={p.auth_user_id} 
-                        p={p} 
-                      />
-                    ))
-                  )}
-                </div>
-              </div>
-              
-              <div className="px-6 py-3 text-center" style={{ borderTop: '0.5px solid rgba(0,0,0,0.06)' }}>
-                <p className="text-[11px] font-normal text-gray-400">
-                  Click "Join Session" on any contact to connect
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <HistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} senderEmail={profile.email} senderName={profile.name} />
     </div>
