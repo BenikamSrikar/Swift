@@ -51,7 +51,7 @@ export default function HistoryModal({ open, onClose, userId, userName }: Histor
 
         const processed: HistoryRecord[] = (data || []).map((r: any) => ({
           ...r,
-          direction: r.sender_email === senderEmail ? 'sent' : 'received'
+          direction: r.sender_id === userId ? 'sent' : 'received'
         }));
         
         setRecords(processed);
@@ -63,7 +63,7 @@ export default function HistoryModal({ open, onClose, userId, userName }: Histor
     };
 
     fetchHistory();
-  }, [open, senderEmail, senderName]);
+  }, [open, userId, userName]);
 
   const groupByDay = (data: HistoryRecord[]) => {
     const groups: Record<string, HistoryRecord[]> = {};
