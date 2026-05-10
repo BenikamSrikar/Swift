@@ -74,6 +74,7 @@ export default function Room() {
 
   const [room, setRoom] = useState<any>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [pendingBroadcastRequests, setPendingBroadcastRequests] = useState<PendingRequest[]>([]);
   const [transferRequest, setTransferRequest] = useState<TransferRequest | null>(null);
   const [copied, setCopied] = useState(false);
   const [queuedTransfers, setQueuedTransfers] = useState<QueuedTransfer[]>([]);
@@ -476,6 +477,17 @@ export default function Room() {
       const { targetUserId, fromUserId, fromName, type, transferId } = payload.payload;
       if (targetUserId === userId) {
         setTransferRequest({ fromUserId, fromName, type, transferId } as any);
+      }
+    });
+
+    channel.on('broadcast', { event: 'join-request' }, (payload) => {
+      const { targetUserId, requester } = payload.payload;
+      if (targetUserId === userId || targetUserId === 'host') {
+        toast(`${requester.name} wants to join`, { icon: '👋' });
+        setPendingBroadcastRequests(prev => {
+          if (prev.find(r => r.userId === requester.userId)) return prev;
+          return [...prev, requester];
+        });
       }
     });
 
@@ -1184,10 +1196,75 @@ export default function Room() {
           </div>
         ) : (
           <div className="relative flex flex-row flex-1 min-h-0 overflow-hidden">
+            {/* Join Requests Sidebar (Left) */}
+            {isHost && pendingBroadcastRequests.length > 0 && (
+              <div className="w-[300px] border-r border-border/40 bg-background/95 backdrop-blur-2xl flex flex-col z-20 shadow-xl transition-all h-full">
+                <div className="p-4 border-b border-border/40 bg-muted/10">
+                  <h3 className="font-bold text-sm flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                    Join Requests
+                    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs ml-auto">
+                      {pendingBroadcastRequests.length}
+                    </span>
+                  </h3>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scrollbar">
+                  {pendingBroadcastRequests.map(req => (
+                    <div key={req.userId} className="bg-card border border-border/40 rounded-xl p-3 shadow-sm animate-in slide-in-from-left-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                          {req.avatar_url ? (
+                            <img src={req.avatar_url} alt={req.name} className="h-full w-full rounded-full object-cover" />
+                          ) : (
+                            <span className="text-sm font-bold text-primary">{req.name?.charAt(0).toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{req.name}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{req.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1 h-8 text-xs rounded-lg bg-destructive/5 hover:bg-destructive/10 hover:text-destructive border-transparent"
+                          onClick={() => {
+                            transferChannelRef.current?.send({
+                              type: 'broadcast',
+                              event: 'join-response',
+                              payload: { targetUserId: req.userId, status: 'blocked' }
+                            });
+                            setPendingBroadcastRequests(prev => prev.filter(r => r.userId !== req.userId));
+                          }}
+                        >
+                          Decline
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          className="flex-1 h-8 text-xs rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground"
+                          onClick={() => {
+                            transferChannelRef.current?.send({
+                              type: 'broadcast',
+                              event: 'join-response',
+                              payload: { targetUserId: req.userId, status: 'accepted' }
+                            });
+                            setPendingBroadcastRequests(prev => prev.filter(r => r.userId !== req.userId));
+                          }}
+                        >
+                          Accept
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar px-6 py-6 transition-all duration-500 ease-in-out">
-              <div className="max-w-6xl mx-auto w-full flex flex-col gap-8">
-                <div className="flex flex-row items-center justify-between gap-4 animate-fade-up">
+              <div className="max-w-7xl mx-auto w-full flex flex-col gap-8 h-full">
+                <div className="flex flex-row items-center justify-between gap-4 animate-fade-up shrink-0">
                   <div className="flex items-center gap-2 bg-muted/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-border/40 shadow-sm transition-all hover:bg-muted/30">
                     <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                     <span className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-wider">Room Code: {roomId}</span>
@@ -1228,46 +1305,49 @@ export default function Room() {
                 
                 <TransferQueue transfers={queuedTransfers} />
 
-                <div className="flex flex-wrap justify-center items-center gap-4 w-full transition-all duration-500 ease-in-out p-4">
+                <div className="flex-1 flex flex-wrap justify-center items-center gap-4 w-full transition-all duration-500 ease-in-out p-4 min-h-0">
                   {/* Other Participants */}
                   {participants
                     .filter(p => p.user_id !== userId)
                     .map((p, i) => {
                       const otherCount = participants.filter(p => p.user_id !== userId).length;
                       // Fluid sizing logic similar to Google Meet
-                      const basis = otherCount === 1 ? '100%' : otherCount === 2 ? 'calc(50% - 1rem)' : otherCount <= 4 ? 'calc(50% - 1rem)' : 'calc(33.333% - 1rem)';
-                      const maxW = otherCount === 1 ? '1000px' : '600px';
+                      const isSingle = otherCount === 1;
+                      const basis = isSingle ? '100%' : otherCount === 2 ? 'calc(50% - 1rem)' : otherCount <= 4 ? 'calc(50% - 1rem)' : 'calc(33.333% - 1rem)';
+                      const maxW = isSingle ? '100%' : '600px';
                       const minW = '280px';
                       return (
                         <div 
                           key={p.user_id} 
-                          className="animate-in fade-in zoom-in-95 duration-300 flex-grow"
+                          className={`animate-in fade-in zoom-in-95 duration-300 flex-grow ${isSingle ? 'h-full flex items-center justify-center' : ''}`}
                           style={{ animationDelay: `${i * 100}ms`, flexBasis: basis, maxWidth: maxW, minWidth: minW }}
                         >
-                          <UserCard
-                            name={p.name}
-                            avatarUrl={p.avatar_url}
-                            isHost={p.user_id === room?.host_id}
-                            showHostControls={isHost}
-                            uploadProgress={remoteUploadProgress[p.user_id]}
-                            onRequestFile={() => {
-                              setUploadModal({ open: true, targetUserId: p.user_id, mode: 'file' });
-                              transferChannelRef.current?.send({
-                                type: 'broadcast',
-                                event: 'pre-transfer-alert',
-                                payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'file' },
-                              });
-                            }}
-                            onRequestFolder={() => {
-                              setUploadModal({ open: true, targetUserId: p.user_id, mode: 'folder' });
-                              transferChannelRef.current?.send({
-                                type: 'broadcast',
-                                event: 'pre-transfer-alert',
-                                payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'folder' },
-                              });
-                            }}
-                            onRemove={() => handleRemoveUser(p.user_id)}
-                          />
+                          <div className={isSingle ? 'w-full max-w-4xl max-h-[80vh] aspect-video' : 'w-full h-full'}>
+                            <UserCard
+                              name={p.name}
+                              avatarUrl={p.avatar_url}
+                              isHost={p.user_id === room?.host_id}
+                              showHostControls={isHost}
+                              uploadProgress={remoteUploadProgress[p.user_id]}
+                              onRequestFile={() => {
+                                setUploadModal({ open: true, targetUserId: p.user_id, mode: 'file' });
+                                transferChannelRef.current?.send({
+                                  type: 'broadcast',
+                                  event: 'pre-transfer-alert',
+                                  payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'file' },
+                                });
+                              }}
+                              onRequestFolder={() => {
+                                setUploadModal({ open: true, targetUserId: p.user_id, mode: 'folder' });
+                                transferChannelRef.current?.send({
+                                  type: 'broadcast',
+                                  event: 'pre-transfer-alert',
+                                  payload: { targetUserId: p.user_id, fromUserId: userId, fromName: userName, mode: 'folder' },
+                                });
+                              }}
+                              onRemove={() => handleRemoveUser(p.user_id)}
+                            />
+                          </div>
                         </div>
                       );
                     })}

@@ -137,9 +137,8 @@ export default function Connection() {
     navigate(`/room/${roomId}`);
   };
 
-  const handleJoinRoomCode = async () => {
-    if (!roomCodeInput.trim() || roomCodeInput.length !== 6) {
-      toast.error('Please enter a valid 6-character room code');
+  const handleJoinRoomCode = useCallback(async () => {
+    if (!roomCodeInput.trim() || roomCodeInput.length !== 6 || joining || waitingApproval) {
       return;
     }
     
@@ -148,7 +147,7 @@ export default function Connection() {
     
     const { data: room, error } = await supabase
       .from('rooms')
-      .select('id, status')
+      .select('id, status, host_id')
       .eq('room_id', code)
       .single();
 
@@ -171,22 +170,59 @@ export default function Connection() {
       return; 
     }
 
-    await supabase.from('room_participants').delete().eq('room_id', code).eq('user_id', user.id);
-    const { error: insError } = await supabase.from('room_participants').insert({ 
-      room_id: code, 
-      user_id: user.id, 
-      status: 'accepted' 
+    setWaitingApproval(true);
+
+    const channel = supabase.channel(`transfers-${code}`, {
+      config: { broadcast: { self: false } },
     });
 
-    if (insError) {
-      console.error('Join error:', insError);
-      toast.error('Failed to join room');
+    const timeout = setTimeout(() => {
+      channel.unsubscribe();
+      toast.error('Host did not respond. Redirecting...', { duration: 3000 });
+      setWaitingApproval(false);
       setJoining(false);
-      return;
-    }
+    }, 10000);
 
-    navigate(`/room/${code}`);
-  };
+    channel.on('broadcast', { event: 'join-response' }, async (payload) => {
+      const { targetUserId, status } = payload.payload;
+      if (targetUserId === user.id) {
+        clearTimeout(timeout);
+        if (status === 'accepted') {
+          await supabase.from('room_participants').delete().eq('room_id', code).eq('user_id', user.id);
+          await supabase.from('room_participants').insert({ room_id: code, user_id: user.id, status: 'accepted' });
+          channel.unsubscribe();
+          navigate(`/room/${code}`);
+        } else {
+          channel.unsubscribe();
+          toast.error('The host declined your request.');
+          setWaitingApproval(false);
+          setJoining(false);
+        }
+      }
+    }).subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        channel.send({
+          type: 'broadcast',
+          event: 'join-request',
+          payload: {
+            targetUserId: 'host',
+            requester: {
+              userId: user.id,
+              name: profile.name,
+              email: profile.email,
+              avatar_url: profile.avatar_url
+            }
+          }
+        });
+      }
+    });
+  }, [roomCodeInput, joining, waitingApproval, user, profile, navigate]);
+
+  useEffect(() => {
+    if (roomCodeInput.length === 6 && !joining && !waitingApproval) {
+      handleJoinRoomCode();
+    }
+  }, [roomCodeInput, joining, waitingApproval, handleJoinRoomCode]);
 
   const handleLogout = async () => {
     await supabase.from('sessions').delete().eq('user_id', user.id);
@@ -255,22 +291,30 @@ export default function Connection() {
                 animate={{ opacity: 1 }}
                 className="w-full flex flex-col gap-6"
               >
-                  <div className="flex gap-2 relative">
+                  <div className="w-full mt-auto flex flex-col gap-3">
                     <input 
-                      placeholder="Enter 6-digit room code" 
+                      placeholder="Enter 6-digit code..." 
                       value={roomCodeInput}
                       onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
                       maxLength={6}
-                      className="flex-1 h-12 pl-4 pr-4 rounded-xl text-center tracking-widest uppercase text-base font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                      style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.1)' }}
+                      disabled={joining || waitingApproval}
+                      className="w-full h-[56px] px-4 rounded-[12px] text-center tracking-[0.2em] uppercase text-[18px] font-bold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                      style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.1)', boxShadow: '0 1px 2px rgba(0,0,0,0.05) inset' }}
                     />
-                    <Button 
-                      onClick={handleJoinRoomCode}
-                      disabled={joining || roomCodeInput.length !== 6}
-                      className="h-12 px-6 rounded-xl font-bold bg-[#FF3B30] hover:bg-[#E0342B] text-white"
-                    >
-                      {joining ? 'Joining...' : 'Join'}
-                    </Button>
+                    
+                    <AnimatePresence>
+                      {(joining || waitingApproval) && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="flex items-center justify-center gap-2 text-primary text-sm font-semibold mt-2"
+                        >
+                          <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                          {waitingApproval ? 'Waiting for Host Approval...' : 'Connecting...'}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                 {/* Floating Action Button for Mobile */}
