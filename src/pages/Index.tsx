@@ -95,7 +95,6 @@ export default function Index() {
   const { user, profile, loading: authLoading, signOut } = useAuth();
   const { refs: sectionRefs, revealedSet } = useElasticScrollReveal();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [feedback, setFeedback] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmationInput, setConfirmationInput] = useState('');
 
@@ -138,14 +137,9 @@ export default function Index() {
   };
 
   const confirmDeleteAccount = async () => {
-    const requiredText = `DELETE ${profile?.name}`;
-    if (confirmationInput !== requiredText) {
+    const requiredText = `DELETE ${profile?.name?.toUpperCase()}`;
+    if (confirmationInput.toUpperCase() !== requiredText) {
       toast.error(`Please type "${requiredText}" to confirm`);
-      return;
-    }
-    
-    if (!feedback.trim()) {
-      toast.error('Please share some feedback before leaving');
       return;
     }
     
@@ -338,26 +332,19 @@ export default function Index() {
               </div>
               
               <h2 className="text-2xl font-black tracking-tight mb-2">Delete Account?</h2>
-              <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
-                This will permanently remove your profile and active sessions. Please tell us why you are leaving so we can improve.
+              <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
+                This will permanently remove your profile and active sessions. This action cannot be undone.
               </p>
 
-              <textarea
-                placeholder="Your feedback..."
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                className="w-full h-24 p-4 rounded-xl bg-muted/50 border border-border/40 focus:outline-none focus:ring-2 focus:ring-destructive/20 transition-all text-sm resize-none mb-4 placeholder:text-muted-foreground/50"
-              />
-
-              <div className="space-y-2 mb-6">
+              <div className="space-y-2 mb-8">
                 <p className="text-[10px] font-black uppercase tracking-widest text-destructive/70">
                   To confirm, type <span className="text-destructive">DELETE {profile?.name}</span> below:
                 </p>
                 <Input
                   placeholder={`DELETE ${profile?.name}`}
                   value={confirmationInput}
-                  onChange={(e) => setConfirmationInput(e.target.value)}
-                  className="h-12 rounded-xl bg-muted/30 border-border/40 font-mono text-xs"
+                  onChange={(e) => setConfirmationInput(e.target.value.toUpperCase())}
+                  className="h-12 rounded-xl bg-muted/30 border-border/40 font-mono text-xs uppercase tracking-widest"
                 />
               </div>
 
@@ -377,7 +364,7 @@ export default function Index() {
                   variant="destructive" 
                   className="flex-1 h-12 rounded-xl font-bold shadow-lg shadow-destructive/20 disabled:opacity-30"
                   onClick={confirmDeleteAccount}
-                  disabled={isDeleting || confirmationInput !== `DELETE ${profile?.name}`}
+                  disabled={isDeleting || confirmationInput.toUpperCase() !== `DELETE ${profile?.name?.toUpperCase()}`}
                 >
                   {isDeleting ? 'Removing...' : 'Confirm Delete'}
                 </Button>
