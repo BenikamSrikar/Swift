@@ -7,6 +7,9 @@ import { supabase } from '@/integrations/supabase/client';
 import SwiftBirdsMap from '@/components/SwiftBirdsMap';
 import ParticleField from '@/components/ParticleField';
 import { SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 const SWIFT_ITEMS = [
   {
@@ -89,8 +92,12 @@ function useElasticScrollReveal() {
 export default function Index() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading, signOut } = useAuth();
   const { refs: sectionRefs, revealedSet } = useElasticScrollReveal();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmationInput, setConfirmationInput] = useState('');
 
   // We no longer automatically redirect to /connection
   // Instead we let the user choose "Go to Dashboard"
@@ -130,9 +137,52 @@ export default function Index() {
     }
   };
 
+  const confirmDeleteAccount = async () => {
+    const requiredText = `DELETE ${profile?.name}`;
+    if (confirmationInput !== requiredText) {
+      toast.error(`Please type "${requiredText}" to confirm`);
+      return;
+    }
+    
+    if (!feedback.trim()) {
+      toast.error('Please share some feedback before leaving');
+      return;
+    }
+    
+    setIsDeleting(true);
+    try {
+      // Actually remove account data
+      await supabase.from('rooms').delete().eq('host_id', user!.id);
+      await supabase.from('room_participants').delete().eq('user_id', user!.id);
+      await supabase.from('sessions').delete().eq('user_id', user!.id);
+      
+      // Remove profile record
+      const { error } = await supabase.from('profiles').delete().eq('auth_user_id', user!.id);
+      
+      if (error) throw error;
+
+      toast.success('Account and profile removed successfully.');
+      
+      setTimeout(async () => {
+        await signOut();
+        setShowDeleteModal(false);
+        setConfirmationInput('');
+      }, 1500);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to fully remove account records');
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="bg-background">
-      <VoltsNavbar />
+      <VoltsNavbar 
+        onLogout={signOut}
+        onDeleteAccount={() => setShowDeleteModal(true)}
+        showDeleteAccount={!!user}
+        showActions={!!user}
+      />
 
       {/* Hero */}
       <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden">
@@ -260,6 +310,82 @@ export default function Index() {
           </p>
         </div>
       </footer>
+
+      {/* Delete Account Feedback Modal */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDeleteModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-card border border-border/40 rounded-[24px] p-8 shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-destructive/20">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: '100%' }}
+                  transition={{ duration: 0.5 }}
+                  className="h-full bg-destructive"
+                />
+              </div>
+              
+              <h2 className="text-2xl font-black tracking-tight mb-2">Delete Account?</h2>
+              <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
+                This will permanently remove your profile and active sessions. Please tell us why you are leaving so we can improve.
+              </p>
+
+              <textarea
+                placeholder="Your feedback..."
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                className="w-full h-24 p-4 rounded-xl bg-muted/50 border border-border/40 focus:outline-none focus:ring-2 focus:ring-destructive/20 transition-all text-sm resize-none mb-4 placeholder:text-muted-foreground/50"
+              />
+
+              <div className="space-y-2 mb-6">
+                <p className="text-[10px] font-black uppercase tracking-widest text-destructive/70">
+                  To confirm, type <span className="text-destructive">DELETE {profile?.name}</span> below:
+                </p>
+                <Input
+                  placeholder={`DELETE ${profile?.name}`}
+                  value={confirmationInput}
+                  onChange={(e) => setConfirmationInput(e.target.value)}
+                  className="h-12 rounded-xl bg-muted/30 border-border/40 font-mono text-xs"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  className="flex-1 h-12 rounded-xl font-bold"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setConfirmationInput('');
+                  }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  className="flex-1 h-12 rounded-xl font-bold shadow-lg shadow-destructive/20 disabled:opacity-30"
+                  onClick={confirmDeleteAccount}
+                  disabled={isDeleting || confirmationInput !== `DELETE ${profile?.name}`}
+                >
+                  {isDeleting ? 'Removing...' : 'Confirm Delete'}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

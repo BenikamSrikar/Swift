@@ -6,6 +6,7 @@ interface VoltsNavbarProps {
   onHistoryClick?: () => void;
   onLogout?: () => void;
   onDeleteAccount?: () => void;
+  showDeleteAccount?: boolean;
   logoutLabel?: string;
 }
 
@@ -26,7 +27,14 @@ function DualPlus({ scrolled }: { scrolled: boolean }) {
   );
 }
 
-export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogout, onDeleteAccount, logoutLabel = "Logout" }: VoltsNavbarProps) {
+export default function VoltsNavbar({ 
+  showActions = true, 
+  onHistoryClick, 
+  onLogout, 
+  onDeleteAccount, 
+  showDeleteAccount = false,
+  logoutLabel = "Logout" 
+}: VoltsNavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
 
@@ -101,16 +109,18 @@ export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogo
             >
               Switch Account
             </button>
-            <button
-              onClick={onDeleteAccount || onLogout}
-              className={`h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border ${
-                scrolled
-                  ? 'bg-destructive/20 text-[#FF3B30] border-[#FF3B30]/30 hover:bg-destructive hover:text-white shadow-[0_0_15px_rgba(255,59,48,0.2)]'
-                  : 'bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive hover:text-white'
-              }`}
-            >
-              Delete Account
-            </button>
+            {showDeleteAccount && (
+              <button
+                onClick={onDeleteAccount || onLogout}
+                className={`h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border ${
+                  scrolled
+                    ? 'bg-destructive/20 text-[#FF3B30] border-[#FF3B30]/30 hover:bg-destructive hover:text-white shadow-[0_0_15px_rgba(255,59,48,0.2)]'
+                    : 'bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive hover:text-white'
+                }`}
+              >
+                Delete Account
+              </button>
+            )}
           </>
         )}
       </div>
