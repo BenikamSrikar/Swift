@@ -76,6 +76,7 @@ export default function Room() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [currentRequest, setCurrentRequest] = useState<PendingRequest | null>(null);
+  const [pendingBroadcastRequests, setPendingBroadcastRequests] = useState<PendingRequest[]>([]);
   const [transferRequest, setTransferRequest] = useState<TransferRequest | null>(null);
   const [copied, setCopied] = useState(false);
   const [queuedTransfers, setQueuedTransfers] = useState<QueuedTransfer[]>([]);
@@ -364,14 +365,10 @@ export default function Room() {
     }
 
     const accepted = parts.filter((p) => p.status === 'accepted');
-    const pending = parts.filter((p) => p.status === 'pending');
 
-    // Removed Ghost Detection: deleting participants based on session lag caused accidental kicks.
-
-    const userIds = [...accepted, ...pending].map((p) => p.user_id);
+    const userIds = accepted.map((p) => p.user_id);
     if (userIds.length === 0) {
       setParticipants([]);
-      setPendingRequests([]);
       return;
     }
 
@@ -401,28 +398,15 @@ export default function Room() {
       })
     );
 
-    const newPending = pending.map((p) => {
-      const prof = profileMap.get(p.user_id);
-      return {
-        userId: p.user_id,
-        name: prof?.name || sessionMap.get(p.user_id) || 'Unknown',
-        email: prof?.email,
-        avatar_url: prof?.avatar_url,
-      };
-    });
+  }, [roomId, userId, room?.id, room?.host_id, isHost, navigate]);
 
-    console.log('loadParticipants - newPending:', newPending);
-
-    setPendingRequests(newPending);
-    if (newPending.length > 0) {
-      setCurrentRequest((prev) => {
-        const stillInList = newPending.find(np => np.userId === prev?.userId);
-        return stillInList ? prev : newPending[0];
-      });
-    } else {
+  useEffect(() => {
+    if (pendingBroadcastRequests.length > 0 && !currentRequest) {
+      setCurrentRequest(pendingBroadcastRequests[0]);
+    } else if (pendingBroadcastRequests.length === 0) {
       setCurrentRequest(null);
     }
-  }, [roomId, userId, room?.id, room?.host_id, isHost, navigate]);
+  }, [pendingBroadcastRequests, currentRequest]);
 
   useEffect(() => {
     if (roomId && room?.id) {
@@ -503,6 +487,16 @@ export default function Room() {
       const { targetUserId, fromUserId, fromName, type, transferId } = payload.payload;
       if (targetUserId === userId) {
         setTransferRequest({ fromUserId, fromName, type, transferId } as any);
+      }
+    });
+
+    channel.on('broadcast', { event: 'join-request' }, (payload) => {
+      const { targetUserId, requester } = payload.payload;
+      if (targetUserId === userId) {
+        setPendingBroadcastRequests(prev => {
+          if (prev.find(r => r.userId === requester.userId)) return prev;
+          return [...prev, requester];
+        });
       }
     });
 
@@ -1516,9 +1510,9 @@ export default function Room() {
 
       {/* DEBUG OVERLAY */}
       {isHost && (
-        <div className="fixed bottom-4 left-4 bg-black/80 text-white text-xs p-4 rounded-xl z-[9999] max-w-xs font-mono break-all">
+        <div className="fixed bottom-4 left-4 bg-black/80 text-white text-xs p-4 rounded-xl z-[9999] max-w-xs font-mono break-all pointer-events-none">
           <p>isHost: {String(isHost)}</p>
-          <p>Pending Count: {pendingRequests.length}</p>
+          <p>Pending Broadcasts: {pendingBroadcastRequests.length}</p>
           <p>Current Req: {currentRequest ? currentRequest.name : 'None'}</p>
         </div>
       )}
@@ -1530,13 +1524,29 @@ export default function Room() {
         requesterAvatar={currentRequest?.avatar_url}
         onAccept={async () => {
           if (!currentRequest) return;
-          await supabase.from('room_participants').update({ status: 'accepted' }).eq('room_id', roomId!).eq('user_id', currentRequest.userId);
-          loadParticipants();
+          transferChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'join-response',
+            payload: {
+              targetUserId: currentRequest.userId,
+              status: 'accepted'
+            }
+          });
+          setPendingBroadcastRequests(prev => prev.filter(r => r.userId !== currentRequest.userId));
+          setCurrentRequest(null);
         }}
         onReject={async () => {
           if (!currentRequest) return;
-          await supabase.from('room_participants').update({ status: 'blocked' }).eq('room_id', roomId!).eq('user_id', currentRequest.userId);
-          loadParticipants();
+          transferChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'join-response',
+            payload: {
+              targetUserId: currentRequest.userId,
+              status: 'blocked'
+            }
+          });
+          setPendingBroadcastRequests(prev => prev.filter(r => r.userId !== currentRequest.userId));
+          setCurrentRequest(null);
         }}
       />
 

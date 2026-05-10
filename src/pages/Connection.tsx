@@ -213,51 +213,52 @@ export default function Connection() {
       return; 
     }
 
-    await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
-    const { error: insError } = await supabase.from('room_participants').insert({ 
-      room_id: rid, 
-      user_id: user.id, 
-      status: 'pending' 
-    });
-
-    if (insError) {
-      console.error('Join insert error:', insError);
-      toast.error('Failed to send join request. Please try again.');
-      setJoining(false);
-      return;
-    }
-
     setWaitingApproval(true);
 
-    // 10-second timeout — if host doesn't respond, redirect back
+    const channel = supabase.channel(`transfers-${rid}`, {
+      config: { broadcast: { self: false } },
+    });
+
     const timeout = setTimeout(() => {
       channel.unsubscribe();
       toast.error('Host did not respond. Redirecting...', { duration: 3000 });
-      supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id).then(() => {});
       setWaitingApproval(false);
       setJoining(false);
     }, 10000);
-    
-    const channel = supabase.channel(`join-${user.id}`)
-      .on('postgres_changes', { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'room_participants', 
-        filter: `user_id=eq.${user.id}` 
-      }, (payload) => {
-        if (payload.new.status === 'accepted') { 
-          clearTimeout(timeout);
-          channel.unsubscribe(); 
-          navigate(`/room/${rid}`); 
+
+    channel.on('broadcast', { event: 'join-response' }, async (payload) => {
+      const { targetUserId, status } = payload.payload;
+      if (targetUserId === user.id) {
+        clearTimeout(timeout);
+        if (status === 'accepted') {
+          await supabase.from('room_participants').delete().eq('room_id', rid).eq('user_id', user.id);
+          await supabase.from('room_participants').insert({ room_id: rid, user_id: user.id, status: 'accepted' });
+          channel.unsubscribe();
+          navigate(`/room/${rid}`);
+        } else {
+          channel.unsubscribe();
+          toast.error('The host declined your request.');
+          setWaitingApproval(false);
+          setJoining(false);
         }
-        else if (payload.new.status === 'blocked') { 
-          clearTimeout(timeout);
-          channel.unsubscribe(); 
-          toast.error(`The host declined your request.`); 
-          setWaitingApproval(false); 
-          setJoining(false); 
-        }
-      }).subscribe();
+      }
+    }).subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        channel.send({
+          type: 'broadcast',
+          event: 'join-request',
+          payload: {
+            targetUserId: activeRoom.host_id,
+            requester: {
+              userId: user.id,
+              name: profile.name,
+              email: profile.email,
+              avatar_url: profile.avatar_url
+            }
+          }
+        });
+      }
+    });
   };
 
   const handleLogout = async () => {
