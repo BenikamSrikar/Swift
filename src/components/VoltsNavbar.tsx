@@ -11,10 +11,16 @@ interface VoltsNavbarProps {
 
 export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogout, onDeleteAccount, logoutLabel = "Logout" }: VoltsNavbarProps) {
   const [scrolled, setScrolled] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
 
   useEffect(() => {
     const handleScroll = () => {
-      setScrolled(window.scrollY > 10);
+      const currentScroll = window.scrollY;
+      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = (currentScroll / totalHeight) * 100;
+      
+      setScrollProgress(progress);
+      setScrolled(currentScroll > 10);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
@@ -88,6 +94,14 @@ export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogo
             </button>
           </>
         )}
+      </div>
+
+      {/* Red Scroll Progress Bar */}
+      <div className="absolute bottom-0 left-0 w-full h-[3px] bg-transparent overflow-hidden">
+        <div 
+          className="h-full bg-[#FF3B30] transition-all duration-150 ease-out shadow-[0_0_10px_rgba(255,59,48,0.5)]"
+          style={{ width: `${scrollProgress}%` }}
+        />
       </div>
     </nav>
   );

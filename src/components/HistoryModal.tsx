@@ -27,16 +27,16 @@ interface HistoryRecord {
 interface HistoryModalProps {
   open: boolean;
   onClose: () => void;
-  senderEmail: string;
-  senderName: string;
+  userId: string;
+  userName: string;
 }
 
-export default function HistoryModal({ open, onClose, senderEmail, senderName }: HistoryModalProps) {
+export default function HistoryModal({ open, onClose, userId, userName }: HistoryModalProps) {
   const [records, setRecords] = useState<HistoryRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!open || !senderEmail) return;
+    if (!open || !userId) return;
 
     const fetchHistory = async () => {
       setLoading(true);
@@ -44,7 +44,7 @@ export default function HistoryModal({ open, onClose, senderEmail, senderName }:
         const { data, error } = await supabase
           .from('transfer_history')
           .select('*')
-          .or(`sender_email.eq.${senderEmail},recipient_name.eq."${senderName}"`)
+          .or(`sender_id.eq.${userId},recipient_name.eq."${userName}"`)
           .order('transferred_at', { ascending: false });
 
         if (error) throw error;
@@ -104,7 +104,7 @@ export default function HistoryModal({ open, onClose, senderEmail, senderName }:
         td { font-size: 13px; }
       </style></head><body>
       <h1>SWIFT — Transfer History</h1>
-      <p class="subtitle">User: ${senderName} (${senderEmail}) · Exported: ${new Date().toLocaleString()}</p>
+      <p class="subtitle">User: ${userName} · Exported: ${new Date().toLocaleString()}</p>
       <table><thead><tr><th>Direction</th><th>From/To</th><th>File / Folder</th><th>Type</th><th>Date</th></tr></thead>
       <tbody>${rows}</tbody></table></body></html>`;
 
