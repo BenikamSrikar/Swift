@@ -2,6 +2,7 @@ interface VoltsNavbarProps {
   showActions?: boolean;
   onHistoryClick?: () => void;
   onLogout?: () => void;
+  onDeleteAccount?: () => void;
   logoutLabel?: string;
 }
 
@@ -28,9 +29,15 @@ export default function VoltsNavbar({ showActions = true, onHistoryClick, onLogo
             </button>
             <button
               onClick={onLogout}
+              className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-all active:scale-95 border border-border/40"
+            >
+              Switch Account
+            </button>
+            <button
+              onClick={onDeleteAccount || onLogout}
               className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all active:scale-95 border border-destructive/20"
             >
-              {logoutLabel}
+              Delete Account
             </button>
           </>
         )}

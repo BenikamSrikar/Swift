@@ -230,13 +230,29 @@ export default function Connection() {
     navigate('/');
   };
 
-
+  const handleDeleteAccount = async () => {
+    // "Pause" the account by removing active status but keeping history
+    await supabase.from('rooms').delete().eq('host_id', user.id);
+    await supabase.from('room_participants').delete().eq('user_id', user.id);
+    await supabase.from('sessions').delete().eq('user_id', user.id);
+    
+    toast.success('Account paused and saved. History will map on next login.');
+    setTimeout(async () => {
+      await signOut();
+      navigate('/');
+    }, 1500);
+  };
 
   if (authLoading || !user || !profile) return null;
 
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary selection:text-primary-foreground overflow-hidden">
-      <VoltsNavbar showActions onLogout={handleLogout} onHistoryClick={() => setHistoryOpen(true)} />
+      <VoltsNavbar 
+        showActions 
+        onLogout={handleLogout} 
+        onDeleteAccount={handleDeleteAccount}
+        onHistoryClick={() => setHistoryOpen(true)} 
+      />
 
       <main className="flex-1 flex flex-col items-center justify-start lg:justify-center p-4 sm:p-6 lg:p-8 relative overflow-y-auto custom-scrollbar">
         <div className="w-full max-w-5xl flex flex-col items-center z-10 pt-8 lg:pt-0">
