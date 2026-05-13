@@ -429,49 +429,9 @@ export default function Room() {
     }
   }, [roomId, room?.id, loadParticipants]);
 
-  // ── Cleanup on tab close / navigation away ──
-  useEffect(() => {
-    if (!userId || !roomId) return;
+  // ── Cleanup logic removed to prevent data loss on reload ──
+  // Connection state will persist across refreshes, and cleanup will only happen on explicit Leave Meeting.
 
-    const cleanup = () => {
-      // Use sendBeacon for reliable fire-and-forget on unload
-      // Supabase REST: DELETE /rest/v1/room_participants?room_id=eq.X&user_id=eq.Y
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/room_participants?room_id=eq.${encodeURIComponent(roomId)}&user_id=eq.${encodeURIComponent(userId)}`;
-      const blob = new Blob([], { type: 'application/json' });
-      // Include auth headers via fetch (best-effort, non-blocking)
-      navigator.sendBeacon(url, blob);
-
-      // Also kick off a normal delete as a backup (may not complete on unload)
-      supabase
-        .from('room_participants')
-        .delete()
-        .eq('user_id', userId)
-        .eq('room_id', roomId)
-        .then(() => {}, () => {});
-
-      if (room?.host_id === userId) {
-        supabase.from('rooms').update({ status: 'locked' }).eq('id', room.id).then(() => {}, () => {});
-      }
-
-      supabase
-        .from('sessions')
-        .delete()
-        .eq('user_id', userId)
-        .then(() => {}, () => {});
-    };
-
-    const handleVisibility = () => {
-      // Intentionally empty to prevent kicking users on tab switch
-    };
-
-    window.addEventListener('beforeunload', cleanup);
-    // document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      window.removeEventListener('beforeunload', cleanup);
-      // document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [userId, roomId]);
 
   // Realtime participant changes
   useEffect(() => {
@@ -1157,6 +1117,7 @@ export default function Room() {
       // 2. Perform table cleanup
       if (userId) {
         await supabase.from('room_participants').delete().eq('user_id', userId).eq('room_id', roomId!);
+        await supabase.from('sessions').delete().eq('user_id', userId);
         if (isHost) {
           await supabase.from('rooms').update({ status: 'locked' }).eq('room_id', roomId!);
         }
