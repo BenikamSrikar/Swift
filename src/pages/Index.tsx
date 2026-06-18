@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import VoltsNavbar from '@/components/VoltsNavbar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -678,12 +678,12 @@ export default function Index() {
           </span>
           <div className="flex items-center gap-6">
             <div className="flex gap-4">
-              <button onClick={() => navigate('/privacy')} className="text-xs" style={{ color: 'hsl(0 0% 40%)' }}>
+              <Link to="/privacy" className="text-xs hover:text-[#FF3B30] transition-colors" style={{ color: 'hsl(0 0% 40%)' }}>
                 Privacy
-              </button>
-              <button onClick={() => navigate('/terms')} className="text-xs" style={{ color: 'hsl(0 0% 40%)' }}>
+              </Link>
+              <Link to="/terms" className="text-xs hover:text-[#FF3B30] transition-colors" style={{ color: 'hsl(0 0% 40%)' }}>
                 Terms
-              </button>
+              </Link>
             </div>
             <p className="text-xs" style={{ color: 'hsl(0 0% 35%)' }}>
               &copy; {new Date().getFullYear()} SWIFT. All rights reserved.

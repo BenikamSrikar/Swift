@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
 export default function PrivacyPolicy() {
@@ -9,13 +9,13 @@ export default function PrivacyPolicy() {
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
-          <button
-            onClick={() => navigate('/')}
+          <Link
+            to="/"
             className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to SWIFT
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -61,6 +61,11 @@ export default function PrivacyPolicy() {
               <li>We do <strong className="text-foreground/80">not</strong> use cookies for advertising or tracking purposes</li>
               <li>We do <strong className="text-foreground/80">not</strong> sell, share, or monetize your personal data in any way</li>
             </ul>
+
+            <h3 className="text-base font-semibold mb-2 mt-6 text-foreground/90">2.3 Google API Services User Data Policy Compliance</h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              SWIFT's use and transfer of information received from Google APIs to any other app will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Google API Services User Data Policy</a>, including the Limited Use requirements.
+            </p>
           </section>
 
           {/* How Files Are Transferred */}
@@ -177,9 +182,9 @@ export default function PrivacyPolicy() {
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-sm font-bold text-primary">SWIFT</span>
           <div className="flex items-center gap-6">
-            <button onClick={() => navigate('/terms')} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <Link to="/terms" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               Terms of Service
-            </button>
+            </Link>
             <span className="text-xs text-muted-foreground">
               &copy; {new Date().getFullYear()} SWIFT. All rights reserved.
             </span>

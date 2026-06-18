@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
 export default function TermsOfService() {
@@ -9,13 +9,13 @@ export default function TermsOfService() {
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
-          <button
-            onClick={() => navigate('/')}
+          <Link
+            to="/"
             className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to SWIFT
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -145,9 +145,9 @@ export default function TermsOfService() {
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-sm font-bold text-primary">SWIFT</span>
           <div className="flex items-center gap-6">
-            <button onClick={() => navigate('/privacy')} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <Link to="/privacy" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               Privacy Policy
-            </button>
+            </Link>
             <span className="text-xs text-muted-foreground">
               &copy; {new Date().getFullYear()} SWIFT. All rights reserved.
             </span>
