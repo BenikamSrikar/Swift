@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoltsNavbar from '@/components/VoltsNavbar';
 import { Button } from '@/components/ui/button';
@@ -7,10 +7,18 @@ import { supabase } from '@/integrations/supabase/client';
 import SwiftBirdsMap from '@/components/SwiftBirdsMap';
 import ParticleField from '@/components/ParticleField';
 import { SecureIcon, WidebandIcon, InstantIcon, FilesIcon, TransferIcon } from '@/components/ShiftIcons';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import {
+  Shield, Zap, Globe, Lock, ArrowRight,
+  UserPlus, Link2, Upload, Download,
+  Eye, EyeOff, Server, Wifi
+} from 'lucide-react';
 
+/* ═══════════════════════════════════════════════════════
+   SWIFT letter data (preserved from original)
+   ═══════════════════════════════════════════════════════ */
 const SWIFT_ITEMS = [
   {
     letter: 'S',
@@ -59,12 +67,82 @@ const SECTION_STYLES = [
   { anim: 'anim-rise' },
 ];
 
+/* ═══════════════════════════════════════════════════════
+   How It Works steps
+   ═══════════════════════════════════════════════════════ */
+const HOW_IT_WORKS_STEPS = [
+  {
+    step: 1,
+    title: 'Sign In with Google',
+    description: 'One-tap Google sign-in. No passwords, no email verification, no accounts to manage. Your Google identity is used solely for authentication.',
+    icon: UserPlus,
+    gradient: 'from-blue-500 to-cyan-400',
+    bgGlow: 'rgba(59,130,246,0.15)',
+  },
+  {
+    step: 2,
+    title: 'Create or Join a Room',
+    description: 'Create a transfer room with one click and share the 6-character room code with the recipient. Or join an existing room by entering their code.',
+    icon: Link2,
+    gradient: 'from-violet-500 to-purple-400',
+    bgGlow: 'rgba(139,92,246,0.15)',
+  },
+  {
+    step: 3,
+    title: 'Select & Send Files',
+    description: 'Drag and drop or browse to select any files — documents, images, videos, entire folders. Files are transferred peer-to-peer with real-time progress tracking.',
+    icon: Upload,
+    gradient: 'from-emerald-500 to-green-400',
+    bgGlow: 'rgba(16,185,129,0.15)',
+  },
+  {
+    step: 4,
+    title: 'Receive & Download',
+    description: 'The recipient instantly sees incoming files with a live progress bar. Downloads happen automatically — no waiting, no email links, no expiring URLs.',
+    icon: Download,
+    gradient: 'from-orange-500 to-amber-400',
+    bgGlow: 'rgba(249,115,22,0.15)',
+  },
+];
+
+/* ═══════════════════════════════════════════════════════
+   Privacy features for the trust section
+   ═══════════════════════════════════════════════════════ */
+const PRIVACY_FEATURES = [
+  {
+    icon: EyeOff,
+    title: 'No File Storage',
+    description: 'Files are never stored on any server. They travel directly from sender to receiver via WebRTC.',
+  },
+  {
+    icon: Lock,
+    title: 'End-to-End Encrypted',
+    description: 'WebRTC data channels use DTLS encryption. Only the sender and receiver can access the file data.',
+  },
+  {
+    icon: Server,
+    title: 'No Server Relay',
+    description: 'Your files never pass through our servers. We only facilitate the initial connection handshake.',
+  },
+  {
+    icon: Eye,
+    title: 'No Tracking or Logging',
+    description: 'We don\'t log file names, sizes, or transfer activity. Your transfer history is stored only in your browser.',
+  },
+];
+
+/* ═══════════════════════════════════════════════════════
+   Scroll-reveal hook (preserved from original)
+   ═══════════════════════════════════════════════════════ */
 function useElasticScrollReveal() {
   const refs = useRef<(HTMLDivElement | null)[]>([]);
   const [revealedSet, setRevealedSet] = useState<Set<number>>(new Set());
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
+  // Use a ref to avoid re-creating observer on every render
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  if (!observerRef.current && typeof window !== 'undefined') {
+    observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
@@ -78,28 +156,148 @@ function useElasticScrollReveal() {
       },
       { threshold: 0.12 }
     );
+  }
 
-    refs.current.forEach((ref) => {
-      if (ref) observer.observe(ref);
-    });
+  const setRef = (index: number) => (el: HTMLDivElement | null) => {
+    refs.current[index] = el;
+    if (el && observerRef.current) {
+      observerRef.current.observe(el);
+    }
+  };
 
-    return () => observer.disconnect();
-  }, []);
-
-  return { refs, revealedSet };
+  return { setRef, revealedSet };
 }
 
+/* ═══════════════════════════════════════════════════════
+   Animated section wrapper using framer-motion useInView
+   ═══════════════════════════════════════════════════════ */
+function ScrollReveal({
+  children,
+  className = '',
+  delay = 0,
+  direction = 'up',
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+  direction?: 'up' | 'down' | 'left' | 'right';
+}) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: '-80px' });
+
+  const dirMap = {
+    up: { y: 60, x: 0 },
+    down: { y: -60, x: 0 },
+    left: { x: -80, y: 0 },
+    right: { x: 80, y: 0 },
+  };
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, ...dirMap[direction] }}
+      animate={isInView ? { opacity: 1, x: 0, y: 0 } : {}}
+      transition={{
+        duration: 0.7,
+        delay,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Step Card Component with scroll animation
+   ═══════════════════════════════════════════════════════ */
+function StepCard({
+  step,
+  title,
+  description,
+  icon: Icon,
+  gradient,
+  bgGlow,
+  index,
+}: {
+  step: number;
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  gradient: string;
+  bgGlow: string;
+  index: number;
+}) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: '-60px' });
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 80, scale: 0.9 }}
+      animate={isInView ? { opacity: 1, y: 0, scale: 1 } : {}}
+      transition={{
+        duration: 0.8,
+        delay: index * 0.15,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+      className="group relative"
+    >
+      {/* Connecting line to next step */}
+      {index < 3 && (
+        <div className="hidden lg:block absolute top-1/2 -right-8 w-16 h-[2px]">
+          <motion.div
+            initial={{ scaleX: 0 }}
+            animate={isInView ? { scaleX: 1 } : {}}
+            transition={{ duration: 0.6, delay: index * 0.15 + 0.5 }}
+            className="h-full bg-gradient-to-r from-border to-transparent origin-left"
+          />
+        </div>
+      )}
+
+      <div
+        className="relative overflow-hidden rounded-2xl border border-border/50 p-6 sm:p-8 transition-all duration-500 hover:border-border hover:shadow-xl hover:-translate-y-1"
+        style={{ background: `radial-gradient(ellipse at top left, ${bgGlow}, transparent 70%)` }}
+      >
+        {/* Step number badge */}
+        <div className="flex items-center gap-4 mb-5">
+          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
+            <Icon className="w-6 h-6 text-white" strokeWidth={2} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-black uppercase tracking-[0.2em] bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}>
+              Step {step}
+            </span>
+          </div>
+        </div>
+
+        <h3 className="text-xl font-bold mb-3 text-foreground group-hover:text-primary transition-colors duration-300">
+          {title}
+        </h3>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {description}
+        </p>
+
+        {/* Decorative corner accent */}
+        <div className={`absolute -bottom-4 -right-4 w-24 h-24 rounded-full bg-gradient-to-br ${gradient} opacity-[0.04] group-hover:opacity-[0.08] transition-opacity duration-500`} />
+      </div>
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Main Index Component
+   ═══════════════════════════════════════════════════════ */
 export default function Index() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { user, profile, loading: authLoading, signOut } = useAuth();
-  const { refs: sectionRefs, revealedSet } = useElasticScrollReveal();
+  const { setRef: setSectionRef, revealedSet } = useElasticScrollReveal();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmationInput, setConfirmationInput] = useState('');
 
-  // We no longer automatically redirect to /connection
-  // Instead we let the user choose "Go to Dashboard"
   const handleGoogleSignIn = async () => {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
@@ -108,11 +306,9 @@ export default function Index() {
         redirectTo: window.location.origin,
       },
     });
-
     if (error) {
       console.error('Google sign-in failed:', error);
       setLoading(false);
-      return;
     }
   };
 
@@ -123,16 +319,12 @@ export default function Index() {
       provider: 'google',
       options: {
         redirectTo: window.location.origin,
-        queryParams: {
-          prompt: 'select_account',
-        },
+        queryParams: { prompt: 'select_account' },
       },
     });
-
     if (error) {
       console.error('Switch account failed:', error);
       setLoading(false);
-      return;
     }
   };
 
@@ -142,21 +334,14 @@ export default function Index() {
       toast.error(`Please type "${requiredText}" to confirm`);
       return;
     }
-    
     setIsDeleting(true);
     try {
-      // Actually remove account data
       await supabase.from('rooms').delete().eq('host_id', user!.id);
       await supabase.from('room_participants').delete().eq('user_id', user!.id);
       await supabase.from('sessions').delete().eq('user_id', user!.id);
-      
-      // Remove profile record
       const { error } = await supabase.from('profiles').delete().eq('auth_user_id', user!.id);
-      
       if (error) throw error;
-
       toast.success('Account and profile removed successfully.');
-      
       setTimeout(async () => {
         await signOut();
         setShowDeleteModal(false);
@@ -171,30 +356,52 @@ export default function Index() {
 
   return (
     <div className="bg-background">
-      <VoltsNavbar 
+      <VoltsNavbar
         onLogout={signOut}
         onDeleteAccount={() => setShowDeleteModal(true)}
         showDeleteAccount={!!user}
         showActions={!!user}
       />
 
-      {/* Hero */}
+      {/* ═══════════════════════════════════════════
+          HERO SECTION
+          ═══════════════════════════════════════════ */}
       <section className="min-h-screen flex items-center px-4 sm:px-8 lg:px-16 relative overflow-hidden pt-20">
-        {/* Mobile-only background wiggle animation */}
+        {/* Mobile-only background */}
         <div className="lg:hidden absolute inset-0 z-0">
           <ParticleField />
         </div>
 
         <div className="w-full max-w-7xl mx-auto relative z-10 flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
-          <div className="flex-1 animate-fade-up" style={{ animationDelay: '100ms' }}>
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4">
-              <span className="text-primary">SWIFT</span>
-            </h1>
-            <p className="text-base lg:text-lg text-muted-foreground leading-relaxed max-w-md mb-8">
-              Peer-to-peer file transfer built for speed and privacy. No accounts, no cloud — just a direct connection between you and the recipient.
-            </p>
+          <div className="flex-1">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/20 bg-primary/5 mb-6">
+                <Wifi className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold text-primary tracking-wide">Peer-to-Peer • End-to-End Encrypted</span>
+              </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 items-start">
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4">
+                <span className="text-primary">SWIFT</span>
+              </h1>
+              <p className="text-lg lg:text-xl font-medium text-foreground/80 mb-2">
+                Secure Wideband Instant File Transfer
+              </p>
+              <p className="text-base lg:text-lg text-muted-foreground leading-relaxed max-w-lg mb-8">
+                Transfer files directly between devices using WebRTC — no servers, no cloud storage, no file size limits. 
+                Sign in with Google, create a room, share the code, and start sending.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.3 }}
+              className="flex flex-col sm:flex-row gap-4 items-start"
+            >
               {user ? (
                 <>
                   <Button
@@ -202,6 +409,7 @@ export default function Index() {
                     className="h-12 px-8 text-base font-semibold volts-gradient hover:opacity-90 transition-all shadow-lg shadow-primary/20"
                   >
                     Go to Dashboard
+                    <ArrowRight className="ml-2 w-4 h-4" />
                   </Button>
                   <Button
                     onClick={handleSwitchAccount}
@@ -227,11 +435,18 @@ export default function Index() {
                   {loading ? 'Signing in…' : 'Sign in with Google'}
                 </Button>
               )}
-            </div>
+            </motion.div>
 
-            <p className="text-xs text-muted-foreground mt-6">
-              {user ? `Logged in as ${profile?.email || user.email}` : 'Sign in to create or join rooms. Your transfer history persists across sessions.'}
-            </p>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="text-xs text-muted-foreground mt-6"
+            >
+              {user
+                ? `Logged in as ${profile?.email || user.email}`
+                : 'Sign in to create or join rooms. Your transfer history persists across sessions.'}
+            </motion.p>
           </div>
 
           {/* Desktop-only world map animation */}
@@ -249,7 +464,115 @@ export default function Index() {
         </div>
       </section>
 
-      {/* SWIFT Sections */}
+      {/* ═══════════════════════════════════════════
+          WHAT IS SWIFT — Purpose Section (for Google branding)
+          ═══════════════════════════════════════════ */}
+      <section className="py-24 sm:py-32 px-4 sm:px-8 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-background via-primary/[0.02] to-background" />
+        <div className="max-w-5xl mx-auto relative z-10">
+          <ScrollReveal>
+            <div className="text-center mb-16">
+              <span className="inline-block text-xs font-black uppercase tracking-[0.3em] text-primary/60 mb-4">
+                About SWIFT
+              </span>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-6">
+                What is <span className="text-primary">SWIFT</span>?
+              </h2>
+              <p className="text-base sm:text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+                SWIFT (<strong>Secure Wideband Instant File Transfer</strong>) is a free, open web application 
+                that lets you transfer files of any size directly between devices — without uploading to any cloud server. 
+                It uses <strong>WebRTC peer-to-peer technology</strong> to create a direct encrypted connection 
+                between the sender and receiver.
+              </p>
+            </div>
+          </ScrollReveal>
+
+          <div className="grid sm:grid-cols-3 gap-6 sm:gap-8">
+            {[
+              {
+                icon: Globe,
+                title: 'Works Everywhere',
+                desc: 'Runs in any modern browser — Chrome, Firefox, Safari, Edge. No downloads or installations required.',
+              },
+              {
+                icon: Shield,
+                title: 'Privacy-First',
+                desc: 'Files travel directly between devices. We never see, store, or process your files. Only connection metadata is temporarily stored.',
+              },
+              {
+                icon: Zap,
+                title: 'Blazing Fast',
+                desc: 'Direct peer-to-peer connections mean maximum speed. No upload-wait-download cycle — files stream in real time.',
+              },
+            ].map((item, i) => (
+              <ScrollReveal key={i} delay={i * 0.12} direction={i === 0 ? 'left' : i === 2 ? 'right' : 'up'}>
+                <div className="text-center p-6 rounded-2xl border border-border/30 bg-card/50 hover:border-border/60 hover:bg-card transition-all duration-300 group">
+                  <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4 group-hover:bg-primary/15 group-hover:scale-110 transition-all duration-300">
+                    <item.icon className="w-7 h-7 text-primary" />
+                  </div>
+                  <h3 className="font-bold text-lg mb-2">{item.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════
+          HOW IT WORKS — Scroll-triggered Steps
+          ═══════════════════════════════════════════ */}
+      <section className="py-24 sm:py-32 px-4 sm:px-8 relative">
+        <div className="max-w-6xl mx-auto">
+          <ScrollReveal>
+            <div className="text-center mb-16">
+              <span className="inline-block text-xs font-black uppercase tracking-[0.3em] text-primary/60 mb-4">
+                Getting Started
+              </span>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-6">
+                How It <span className="text-primary">Works</span>
+              </h2>
+              <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+                Start transferring files in under 30 seconds. No setup, no configuration — just follow these four simple steps.
+              </p>
+            </div>
+          </ScrollReveal>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-4">
+            {HOW_IT_WORKS_STEPS.map((step, i) => (
+              <StepCard key={i} index={i} {...step} />
+            ))}
+          </div>
+
+          {/* CTA after steps */}
+          <ScrollReveal delay={0.5}>
+            <div className="mt-16 text-center">
+              {user ? (
+                <Button
+                  onClick={() => navigate('/connection')}
+                  className="h-14 px-10 text-base font-bold volts-gradient hover:opacity-90 transition-all shadow-xl shadow-primary/25 rounded-xl"
+                >
+                  Start Transferring Now
+                  <ArrowRight className="ml-2 w-5 h-5" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleGoogleSignIn}
+                  disabled={loading || authLoading}
+                  className="h-14 px-10 text-base font-bold volts-gradient hover:opacity-90 transition-all shadow-xl shadow-primary/25 rounded-xl"
+                >
+                  Get Started — It's Free
+                  <ArrowRight className="ml-2 w-5 h-5" />
+                </Button>
+              )}
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════
+          SWIFT LETTER SECTIONS (preserved from original)
+          ═══════════════════════════════════════════ */}
       {SWIFT_ITEMS.map(({ letter, word, brief, description }, i) => {
         const style = SECTION_STYLES[i];
         const IconComponent = SWIFT_ICON_COMPONENTS[i];
@@ -258,7 +581,7 @@ export default function Index() {
         return (
           <section
             key={letter}
-            ref={(el: HTMLDivElement | null) => { sectionRefs.current[i] = el; }}
+            ref={setSectionRef(i)}
             className={`scroll-section ${style.anim} min-h-screen flex items-center justify-center px-6 sm:px-12 bg-background`}
           >
             <div
@@ -287,11 +610,65 @@ export default function Index() {
         );
       })}
 
+      {/* ═══════════════════════════════════════════
+          PRIVACY & TRUST SECTION
+          ═══════════════════════════════════════════ */}
+      <section className="py-24 sm:py-32 px-4 sm:px-8 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-background via-primary/[0.015] to-background" />
+        <div className="max-w-5xl mx-auto relative z-10">
+          <ScrollReveal>
+            <div className="text-center mb-16">
+              <span className="inline-block text-xs font-black uppercase tracking-[0.3em] text-primary/60 mb-4">
+                Your Privacy Matters
+              </span>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-6">
+                Built for <span className="text-primary">Trust</span>
+              </h2>
+              <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+                SWIFT is designed with privacy as a core principle. Here's exactly how your data is handled.
+              </p>
+            </div>
+          </ScrollReveal>
+
+          <div className="grid sm:grid-cols-2 gap-6">
+            {PRIVACY_FEATURES.map((feature, i) => (
+              <ScrollReveal key={i} delay={i * 0.1} direction={i % 2 === 0 ? 'left' : 'right'}>
+                <div className="flex gap-5 p-6 rounded-2xl border border-border/30 bg-card/50 hover:border-border/60 hover:bg-card transition-all duration-300 group">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/15 group-hover:scale-110 transition-all duration-300">
+                    <feature.icon className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base mb-1.5">{feature.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                  </div>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+
+          {/* Data usage summary */}
+          <ScrollReveal delay={0.4}>
+            <div className="mt-12 p-6 sm:p-8 rounded-2xl border border-primary/10 bg-primary/[0.03] text-center">
+              <h3 className="font-bold text-lg mb-3">What SWIFT Uses Google Sign-In For</h3>
+              <p className="text-sm text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+                SWIFT uses Google Sign-In solely for <strong>authentication</strong> — to identify you to other users in a transfer room. 
+                We access only your <strong>name, email, and profile picture</strong> to display your identity during file transfers. 
+                We do not access your Google Drive, contacts, calendar, or any other Google services. 
+                You can delete your account and all associated data at any time from the landing page.
+              </p>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════
+          FOOTER
+          ═══════════════════════════════════════════ */}
       <footer className="py-12 px-6" style={{ backgroundColor: 'hsl(0 0% 4%)' }}>
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="text-center sm:text-left">
             <span className="text-xl font-bold text-primary">SWIFT</span>
-            <span className="text-xs font-mono ml-2" style={{ color: 'hsl(0 0% 50%)' }}>v1.3</span>
+            <span className="text-xs font-mono ml-2" style={{ color: 'hsl(0 0% 50%)' }}>v1.5</span>
             <p className="text-xs mt-1" style={{ color: 'hsl(0 0% 45%)' }}>
               Secure Wideband Instant File Transfer
             </p>
@@ -305,32 +682,34 @@ export default function Index() {
         </div>
       </footer>
 
-      {/* Delete Account Feedback Modal */}
+      {/* ═══════════════════════════════════════════
+          DELETE ACCOUNT MODAL (preserved from original)
+          ═══════════════════════════════════════════ */}
       <AnimatePresence>
         {showDeleteModal && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowDeleteModal(false)}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="relative w-full max-w-md bg-card border border-border/40 rounded-[24px] p-8 shadow-2xl overflow-hidden"
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-destructive/20">
-                <motion.div 
+                <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: '100%' }}
                   transition={{ duration: 0.5 }}
                   className="h-full bg-destructive"
                 />
               </div>
-              
+
               <h2 className="text-2xl font-black tracking-tight mb-2">Delete Account?</h2>
               <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
                 This will permanently remove your profile and active sessions. This action cannot be undone.
@@ -349,8 +728,8 @@ export default function Index() {
               </div>
 
               <div className="flex gap-3">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="flex-1 h-12 rounded-xl font-bold"
                   onClick={() => {
                     setShowDeleteModal(false);
@@ -360,8 +739,8 @@ export default function Index() {
                 >
                   Cancel
                 </Button>
-                <Button 
-                  variant="destructive" 
+                <Button
+                  variant="destructive"
                   className="flex-1 h-12 rounded-xl font-bold shadow-lg shadow-destructive/20 disabled:opacity-30"
                   onClick={confirmDeleteAccount}
                   disabled={isDeleting || confirmationInput.toUpperCase() !== `DELETE ${profile?.name?.toUpperCase()}`}
