@@ -51,7 +51,7 @@ export default function ConfirmTransferModal({ open, files, targetName, onConfir
             Are you sure you want to transfer {files.length === 1 ? 'this file' : 'these items as a zipped package'}?
           </p>
           <div className="flex gap-3">
-            <button 
+            <button
               onClick={onCancel}
               className="flex-1 h-11 px-4 text-xs font-bold uppercase tracking-widest rounded-xl border border-border hover:bg-muted transition-all active:scale-95"
             >

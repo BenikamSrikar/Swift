@@ -676,9 +676,19 @@ export default function Index() {
           <span className="text-xs" style={{ color: 'hsl(0 0% 40%)' }}>
             No data stored &bull; Peer-to-peer &bull; Ephemeral sessions
           </span>
-          <p className="text-xs" style={{ color: 'hsl(0 0% 35%)' }}>
-            &copy; {new Date().getFullYear()} SWIFT. All rights reserved.
-          </p>
+          <div className="flex items-center gap-6">
+            <div className="flex gap-4">
+              <button onClick={() => navigate('/privacy')} className="text-xs" style={{ color: 'hsl(0 0% 40%)' }}>
+                Privacy
+              </button>
+              <button onClick={() => navigate('/terms')} className="text-xs" style={{ color: 'hsl(0 0% 40%)' }}>
+                Terms
+              </button>
+            </div>
+            <p className="text-xs" style={{ color: 'hsl(0 0% 35%)' }}>
+              &copy; {new Date().getFullYear()} SWIFT. All rights reserved.
+            </p>
+          </div>
         </div>
       </footer>
 
